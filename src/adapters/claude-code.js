@@ -164,11 +164,17 @@ function parseSessionFile(filePath) {
   const thinkingToOutputRatio = totalOutputTokens > 0
     ? totalThinkingChars / totalOutputTokens : null;
 
+  // Compute parallel tool call detection:
+  // A turn with 3+ distinct tool types is a strong signal of agentic/parallel behaviour.
+  const parallelToolCalls = turns.filter(t => (t.tools_used || []).length >= 3).length;
+
   // Attach session-level code stats
   turns._codeStats = {
     totalLinesAdded: turns.reduce((s, t) => s + (t.code_lines_added || 0), 0),
     totalLinesRemoved: turns.reduce((s, t) => s + (t.code_lines_removed || 0), 0),
     totalFilesTouched: totalFiles,
+    filesEdited: [...fileEditCounts.keys()],   // full list for task classification
+    parallelToolCalls,
     firstAttemptPct,
     avgThinkingLength,
     errorCount: sessionErrorCount,
@@ -269,6 +275,8 @@ function buildSession(filename, turns, projectDir) {
     raw: {
       project: projectDir,
       thinking_to_output_ratio: codeStats.thinkingToOutputRatio ?? null,
+      filesEdited: codeStats.filesEdited || [],
+      parallelToolCalls: codeStats.parallelToolCalls || 0,
     },
   };
 }

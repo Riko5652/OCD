@@ -69,11 +69,40 @@ function initSSE() {
   const es = new EventSource('/api/live');
   es.onopen = () => { S.sse = true; uLive(); };
   es.addEventListener('refresh', () => refreshAll());
+  es.addEventListener('coach', (e) => {
+    try {
+      const nudges = JSON.parse(e.data);
+      if (Array.isArray(nudges) && nudges.length) showCoachNudges(nudges);
+    } catch { /* malformed */ }
+  });
   es.onerror = () => { S.sse = false; uLive(); setTimeout(initSSE, 5000); };
 }
 function uLive() {
   $('dot').classList.toggle('on', S.sse);
   $('dtxt').textContent = S.sse ? 'Live' : 'Disconnected';
+}
+function showCoachNudges(nudges) {
+  let container = document.getElementById('coach-nudges');
+  if (!container) {
+    container = document.createElement('div');
+    container.id = 'coach-nudges';
+    container.style.cssText = 'position:fixed;bottom:1rem;right:1rem;z-index:9999;display:flex;flex-direction:column;gap:.5rem;max-width:360px';
+    document.body.appendChild(container);
+  }
+  for (const nudge of nudges) {
+    const key = `coach-dismissed-${nudge.id}`;
+    if (sessionStorage.getItem(key)) continue;
+    const color = nudge.severity === 'warning' ? 'var(--status-warning,#f59e0b)' : 'var(--primary,#6366f1)';
+    const toast = document.createElement('div');
+    toast.style.cssText = `background:var(--surface-light,#f8f8f8);border:1px solid var(--border-light,#e0e0e0);border-left:4px solid ${color};border-radius:var(--radius-card,8px);padding:.75rem 1rem;box-shadow:var(--shadow-float,0 4px 12px rgba(0,0,0,.1));font-size:.85rem;color:var(--text-main,#111)`;
+    toast.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem"><span>${nudge.message}</span><button style="background:none;border:none;cursor:pointer;color:var(--text-secondary,#666);font-size:1.1rem;line-height:1;flex-shrink:0" data-key="${key}">×</button></div>`;
+    toast.querySelector('button').onclick = function () {
+      sessionStorage.setItem(this.dataset.key, '1');
+      toast.remove();
+    };
+    container.appendChild(toast);
+    setTimeout(() => toast.remove(), 30000);
+  }
 }
 
 // ---- Tab navigation ----

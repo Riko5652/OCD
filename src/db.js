@@ -209,7 +209,8 @@ function migrate(db) {
       link_type TEXT NOT NULL,
       quality_score REAL,
       shared_files INTEGER DEFAULT 0,
-      detected_at INTEGER NOT NULL
+      detected_at INTEGER NOT NULL,
+      UNIQUE(session_a, session_b)
     );
     CREATE INDEX IF NOT EXISTS idx_sl_session_a ON session_links(session_a);
     CREATE INDEX IF NOT EXISTS idx_sl_session_b ON session_links(session_b);

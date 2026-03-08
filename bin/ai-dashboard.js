@@ -13,7 +13,12 @@ if (major < 18) {
 
 // ── Parse CLI flags ──────────────────────────────────────────────────────────
 const args = process.argv.slice(2);
-const PORT = parseInt(process.env.PORT || '3030');
+
+// --port <n> takes precedence over PORT env var
+const portFlagIdx = args.findIndex(a => a === '--port' || a === '-p');
+const PORT = portFlagIdx !== -1 && args[portFlagIdx + 1]
+  ? parseInt(args[portFlagIdx + 1], 10)
+  : parseInt(process.env.PORT || '3030', 10);
 
 if (args.includes('--help') || args.includes('-h')) {
   console.log(`

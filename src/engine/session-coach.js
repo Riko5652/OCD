@@ -22,8 +22,12 @@ const COACH_RULES = [
   {
     id: 'stale-session',
     check: (s) => {
-      const idleMs = Date.now() - (s.last_activity_at || s.started_at || 0);
-      return idleMs > 15 * 60 * 1000 && (s.total_turns || 0) > 0;
+      // Use ended_at (last known turn timestamp) as the most recent activity signal.
+      // A session is "stale" if its last turn was more than 15 minutes ago but it
+      // was started within the last 2 hours (still contextually relevant to coach).
+      const lastActivityMs = s.ended_at || s.started_at || 0;
+      const idleMs = Date.now() - lastActivityMs;
+      return idleMs > 15 * 60 * 1000 && idleMs < 2 * 60 * 60 * 1000 && (s.total_turns || 0) > 0;
     },
     message: (_s) => `Session has been idle for over 15 minutes. If you're stuck, try the routing recommendation at /api/routing/recommend.`,
     severity: 'tip',
