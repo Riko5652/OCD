@@ -10,10 +10,10 @@ import {
   getRecommendations, getOverview,
   getCachedInsight, setCachedInsight,
 } from './db.js';
-import { adapter as claudeAdapter } from './adapters/claude-code.js';
-import { adapter as cursorAdapter } from './adapters/cursor.js';
-import { adapter as antigravityAdapter } from './adapters/antigravity.js';
-import { register, getAdapter } from './adapters/registry.js';
+import './adapters/claude-code.js';    // self-registers via registry
+import './adapters/cursor.js';         // self-registers via registry
+import './adapters/antigravity.js';    // self-registers via registry
+import { getAdapters, getAdapter } from './adapters/registry.js';
 import { computeOverview, computeToolComparison, computeModelUsage, computeCodeGeneration, computeInsights, computeCostAnalysis, computePersonalInsights, rebuildDailyStats } from './engine/analytics.js';
 import { runOptimizer } from './engine/optimizer.js';
 import { scoreAndSave } from './engine/scorer.js';
@@ -29,8 +29,7 @@ import { config, printConfig } from './config.js';
 
 const app = express();
 const PORT = config.port;
-const adapters = [claudeAdapter, cursorAdapter, antigravityAdapter];
-adapters.forEach(register);
+// Adapters self-register via their import above — use getAdapters() to access them
 
 // ---- SSE live push ----
 const sseClients = new Set();
@@ -121,7 +120,7 @@ function cached(key, fn) {
 async function ingestAll() {
   console.log('[ingest] Starting full ingestion...');
   const start = Date.now();
-  for (const adapter of adapters) {
+  for (const adapter of getAdapters()) {
     await ingestAdapter(adapter);
   }
   rebuildDailyStats();
