@@ -17,7 +17,8 @@
     "node": ">=18.0.0"
   },
   "bin": {
-    "ai-dashboard": "./bin/ai-dashboard.js"
+    "ai-dashboard": "./bin/ai-dashboard.js",
+    "ai-dashboard-mcp": "./src/mcp-handoff.js"
   },
   "files": [
     "bin/",
@@ -29,10 +30,12 @@
     "LICENSE"
   ],
   "scripts": {
-    "start": "node src/server.js",
-    "dev": "node --watch src/server.js"
+    "start": "node --env-file=.env src/server.js",
+    "dev": "node --env-file=.env --watch src/server.js",
+    "mcp": "node src/mcp-handoff.js"
   },
   "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.27.1",
     "better-sqlite3": "^11.7.0",
     "chokidar": "^4.0.0",
     "express": "^4.21.0"
