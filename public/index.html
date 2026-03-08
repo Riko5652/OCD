@@ -78,6 +78,12 @@
     .cb .seg{transition:width .3s}
     .tool-dots{display:flex;gap:6px;align-items:center;font-size:.75rem;color:var(--text-s);margin-top:6px}
     .tool-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+    #issue-banner{display:none;position:sticky;top:50px;z-index:90;padding:8px 24px;font-size:.8rem;align-items:center;gap:10px;border-bottom:1px solid}
+    #issue-banner.has-warn{background:rgba(245,158,11,0.08);border-color:#f59e0b;color:#92400e;display:flex}
+    #issue-banner.has-crit{background:rgba(239,68,68,0.08);border-color:#ef4444;color:#b91c1c;display:flex}
+    #issue-banner .ib-msg{flex:1}
+    #issue-banner .ib-link{color:inherit;font-weight:600;cursor:pointer;text-decoration:underline;background:none;border:none;font-size:.8rem}
+    #issue-banner .ib-close{background:none;border:none;cursor:pointer;color:inherit;font-size:1rem;padding:0 4px;line-height:1;margin-left:4px}
     @media(max-width:768px){.kpi{grid-template-columns:repeat(2,1fr)}.g2,.g3{grid-template-columns:1fr}.rg{grid-template-columns:1fr}}
   </style>
 </head>
@@ -95,6 +101,12 @@
     <button class="tb" data-t="personal">Personal</button>
     <button class="tb" data-t="optimize">Optimization</button>
   </nav>
+
+  <div id="issue-banner" role="alert" aria-live="polite">
+    <span class="ib-msg" id="ib-msg"></span>
+    <button class="ib-link" id="ib-link">View all →</button>
+    <button class="ib-close" id="ib-close" aria-label="Dismiss">✕</button>
+  </div>
 
   <!-- OVERVIEW -->
   <section id="t-overview" class="tp a">

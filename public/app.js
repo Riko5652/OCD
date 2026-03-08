@@ -44,6 +44,20 @@ function toolChip(id) {
 }
 function parseJSON(s) { try { return JSON.parse(s); } catch { return []; } }
 
+// ---- Issue Banner ----
+let bannerDismissed = false;
+
+function renderIssueBanner(recs) {
+  const banner = $('issue-banner');
+  if (!banner || bannerDismissed) return;
+  const active = (recs || []).filter(r => !r.dismissed && (r.severity === 'critical' || r.severity === 'warning'));
+  if (active.length === 0) { banner.className = ''; return; }
+  const hasCrit = active.some(r => r.severity === 'critical');
+  const top2 = active.slice(0, 2).map(r => r.title).join(' · ');
+  $('ib-msg').textContent = `⚠ ${active.length} active issue${active.length > 1 ? 's' : ''} — ${top2}`;
+  banner.className = hasCrit ? 'has-crit' : 'has-warn';
+}
+
 // ---- Fetch ----
 async function fJ(url) {
   try { const r = await fetch(url); return r.ok ? await r.json() : null; } catch { return null; }
@@ -73,6 +87,12 @@ function initTabs() {
   }));
 }
 function onTab(t) {
+  // Refresh banner on every tab switch
+  if (!S.recs) {
+    fJ('/api/recommendations?all=true').then(r => { S.recs = r; renderIssueBanner(r); });
+  } else {
+    renderIssueBanner(S.recs);
+  }
   if (t === 'overview') rOv();
   if (t === 'sessions') rSess();
   if (t === 'tokens') rTok();
@@ -1176,6 +1196,12 @@ document.addEventListener('DOMContentLoaded', () => {
   initSSE();
   refreshAll();
   setInterval(refreshAll, 30000);
+
+  // Issue banner buttons
+  const ibc = $('ib-close');
+  if (ibc) ibc.onclick = () => { bannerDismissed = true; const b = $('issue-banner'); if(b) b.className = ''; };
+  const ibl = $('ib-link');
+  if (ibl) ibl.onclick = () => onTab('insights');
 
   // Session controls
   $('s-search').addEventListener('input', e => { sFilt = e.target.value; rSess(); });
