@@ -212,6 +212,7 @@ function migrate(db) {
   upsert.run('antigravity', 'Antigravity');
   upsert.run('aider', 'Aider');
   upsert.run('windsurf', 'Windsurf');
+  upsert.run('copilot', 'GitHub Copilot');
 }
 
 // ---- Query helpers ----
