@@ -5,6 +5,7 @@ const S = {
   overview: null, sessions: null, compare: null, models: null,
   recs: null, efficiency: null, commits: null, cursorDaily: null,
   codeGen: null, insights: null, costs: null, personal: null,
+  insProfile: null, insTrends: null, insPrompt: null, insLlmStatus: null,
   details: {}, tab: 'overview', sse: false, charts: {},
 };
 
@@ -103,12 +104,14 @@ function onTab(t) {
   if (t === 'costs') rCosts();
   if (t === 'personal') rPersonal();
   if (t === 'optimize') rOpt();
+  if (t === 'insights') rIns();
 }
 
 async function refreshAll() {
   // Clear cached data so tabs re-fetch fresh data
   S.compare = null; S.models = null; S.recs = null; S.efficiency = null;
   S.commits = null; S.cursorDaily = null; S.codeGen = null; S.insights = null; S.costs = null; S.personal = null;
+  S.insProfile = null; S.insTrends = null; S.insPrompt = null; S.insLlmStatus = null;
 
   const [ov, sr] = await Promise.all([fJ('/api/overview'), fJ('/api/sessions?limit=500')]);
   if (ov) S.overview = ov;
@@ -1184,6 +1187,128 @@ window.dismissRec = async function(ids) {
   S.recs = null; // force reload
   rOpt();
 };
+
+// ---- Insights Tab ----
+
+async function rIns() {
+  if (!S.insProfile) S.insProfile = await fJ('/api/insights/profile');
+  if (!S.insTrends) S.insTrends = await fJ('/api/insights/trends');
+  if (!S.insPrompt) S.insPrompt = await fJ('/api/insights/prompt-metrics');
+  if (!S.insLlmStatus) S.insLlmStatus = await fJ('/api/ollama/status');
+  rInsProfile(S.insProfile);
+  rInsTrends(S.insTrends);
+  rInsActions(S.insPrompt, S.insLlmStatus);
+}
+
+function rInsProfile(p) {
+  if (!p) { $('ins-profile-kpi').innerHTML = '<p style="color:var(--text-s);font-size:.82rem">No data yet — run a few sessions first.</p>'; return; }
+  const h12 = h => `${h % 12 || 12}${h < 12 ? 'am' : 'pm'}`;
+  $('ins-profile-kpi').innerHTML = [
+    kpi(fmt(p.medianTurns), 'Median Turns', '--primary'),
+    kpi(p.medianDurationMin + 'm', 'Median Duration', '--c-output'),
+    kpi(p.primaryTool || '--', 'Primary Tool', '--t-claude'),
+    kpi(h12(p.peakHour || 0), 'Peak Hour', '--lv-good'),
+    kpi(fmt(p.sessionCount), 'Sessions Analyzed', '--text-s'),
+  ].join('');
+
+  const breakdown = p.toolBreakdown || [];
+  const max = breakdown[0]?.count || 1;
+  $('ins-tool-breakdown').innerHTML = breakdown.length
+    ? breakdown.map(t => `<div class="br"><div class="bl">${t.name}</div><div class="bt"><div class="bf" style="width:${t.count/max*100}%;background:var(--primary)"></div></div><div class="bv">${fmt(t.count)} <span style="color:var(--text-s);font-size:.7rem">(${t.pct}%)</span></div></div>`).join('')
+    : '<p style="color:var(--text-s);font-size:.8rem">No Claude Code sessions yet.</p>';
+
+  const b = p.firstTurnBuckets || {};
+  mc('ins-first-turn-chart', {
+    type: 'bar',
+    data: { labels: Object.keys(b), datasets: [{ label: 'Sessions', data: Object.values(b), backgroundColor: 'rgba(241,90,43,0.7)', borderRadius: 4 }] },
+    options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+  });
+
+  $('ins-start-patterns').innerHTML = `<div class="g3">
+    <div class="rc tip"><div class="rc-cat">Prompt Habit</div><div class="rc-t">${p.fileContextRate}% include file context</div><div class="rc-d">Sessions with a file path in turn 1 avg quality <strong>${p.avgQWithFile || '--'}</strong> vs <strong>${p.avgQWithoutFile || '--'}</strong> without.</div></div>
+    <div class="rc tip"><div class="rc-cat">Prompt Habit</div><div class="rc-t">${p.constrainedRate}% use constraints</div><div class="rc-d">Adding scoping words (only, don't, must, avoid) in turn 1 keeps sessions more focused.</div></div>
+    <div class="rc tip"><div class="rc-cat">Workflow</div><div class="rc-t">Peak hour: ${h12(p.peakHour || 0)}</div><div class="rc-d">Most sessions start around this hour — schedule complex AI work here.</div></div>
+  </div>`;
+}
+
+function rInsTrends(t) {
+  if (!t) return;
+  const lineOpts = (color, baseline) => ({
+    type: 'line',
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { ticks: { maxTicksLimit: 6, font: { size: 10 } } },
+        y: { beginAtZero: false }
+      },
+      elements: { point: { radius: 0 }, line: { tension: 0.3, borderWidth: 2, borderColor: color, backgroundColor: color + '18', fill: true } }
+    }
+  });
+  const ds = (arr, color) => ({
+    labels: arr.map(r => r.date),
+    datasets: [{ data: arr.map(r => r.value != null ? Math.round(r.value * 10) / 10 : null), borderColor: color, backgroundColor: color + '18', fill: true, spanGaps: true }]
+  });
+  mc('ins-cache-trend', { ...lineOpts('#10b981'), data: ds(t.cacheHit || [], '#10b981') });
+  mc('ins-quality-trend', { ...lineOpts('#F15A2B'), data: ds(t.quality || [], '#F15A2B') });
+  mc('ins-reask-trend', { ...lineOpts('#8b5cf6'), data: ds(t.reaskRate || [], '#8b5cf6') });
+  mc('ins-error-trend', { ...lineOpts('#ef4444'), data: ds(t.errorRate || [], '#ef4444') });
+}
+
+const FIX_GUIDES = {
+  'Poor prompt caching': 'Keep CLAUDE.md stable between sessions. Avoid volatile content at top of system prompts. Use targeted file reads rather than broad greps.',
+  'Bash overuse for file reads': 'Replace <code>Bash cat file.ts</code> with the Read tool. Replace <code>Bash grep pattern</code> with Grep. These cache better.',
+  'No subagent usage in long session': 'For tasks touching 3+ files, prefix: "Use parallel subagents for each file." Reduces turns and improves quality.',
+  'Long session detected': 'After 100 turns, start a fresh session with a summary. Prefix: "Continuing from: [summary]".',
+  'AI authorship declining': 'Review recent commits — if AI% dropped, check if prompt scope became too vague or if you\'re manually editing AI output more.',
+};
+
+function rInsActions(prompt, llmStatus) {
+  const corrs = prompt?.correlations || [];
+  $('ins-prompt-correlations').innerHTML = corrs.length ? `
+    <h2 style="font-size:.88rem;margin-bottom:10px">Prompt Signals vs Session Quality</h2>
+    <div class="rg">${corrs.map(c => {
+      const diff = (c.with != null && c.without != null) ? (c.with - c.without).toFixed(1) : null;
+      const col = diff > 0 ? 'var(--lv-good)' : diff < 0 ? 'var(--lv-warn)' : 'var(--text-s)';
+      return `<div class="rc tip"><div class="rc-cat">Prompt Signal</div><div class="rc-t">${c.signal}</div><div class="rc-d">
+        ${c.withLabel}: avg quality <strong>${c.with ?? '--'}</strong><br>
+        ${c.withoutLabel}: avg quality <strong>${c.without ?? '--'}</strong>
+        ${diff != null ? `<br><span style="color:${col}">${diff > 0 ? '+' : ''}${diff} pts difference</span>` : ''}
+        <br><span style="color:var(--text-s)">${c.rate}% of sessions use this</span>
+      </div></div>`;
+    }).join('')}</div>
+    ${prompt.avgTurnsToFirstEdit != null ? `<p style="font-size:.8rem;color:var(--text-s);margin-top:6px">Avg turns before first code edit: <strong>${prompt.avgTurnsToFirstEdit}</strong></p>` : ''}
+  ` : '';
+
+  const btn = $('ins-deep-btn');
+  const statusEl = $('ins-llm-status');
+  if (btn && statusEl) {
+    if (llmStatus?.available) {
+      btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
+      statusEl.textContent = `${llmStatus.provider} · ${llmStatus.model} · results cached 24h`;
+    } else {
+      btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed';
+      statusEl.innerHTML = 'No LLM — set <code>OLLAMA_HOST</code>, <code>OPENAI_API_KEY</code>, or <code>ANTHROPIC_API_KEY</code>';
+    }
+  }
+
+  const recs = (S.recs || []).filter(r => !r.dismissed);
+  const grouped = {};
+  for (const r of recs) { if (!grouped[r.title]) grouped[r.title] = []; grouped[r.title].push(r); }
+  $('ins-recs-enhanced').innerHTML = Object.entries(grouped)
+    .sort((a, b) => ({ critical: 0, warning: 1, info: 2 }[a[1][0].severity] || 2) - ({ critical: 0, warning: 1, info: 2 }[b[1][0].severity] || 2))
+    .map(([title, items]) => {
+      const r = items[0];
+      const guide = FIX_GUIDES[title] || '';
+      return `<div class="rc ${r.severity}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div><div class="rc-cat">${r.category} · ${items.length} session${items.length > 1 ? 's' : ''}</div><div class="rc-t">${title}</div></div>
+          <span style="font-size:.7rem;padding:2px 7px;border-radius:var(--radius-pill);background:rgba(0,0,0,.06);color:var(--text-s);white-space:nowrap">${r.severity}</span>
+        </div>
+        <div class="rc-d" style="margin-top:6px">${r.description}</div>
+        ${guide ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:.76rem;font-weight:600;color:var(--text-s)">How to fix ▸</summary><div style="margin-top:6px;font-size:.78rem;line-height:1.6;color:var(--text-m)">${guide}</div></details>` : ''}
+      </div>`;
+    }).join('') || '<p style="color:var(--text-s);font-size:.8rem">No active recommendations.</p>';
+}
 
 // ---- PWA ----
 if ('serviceWorker' in navigator) {
