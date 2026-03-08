@@ -1,8 +1,8 @@
 {
   "name": "ai-productivity-dashboard",
-  "version": "2.1.0",
+  "version": "3.0.0",
   "type": "module",
-  "description": "Local dashboard that tracks Claude Code, Cursor, and Gemini/Antigravity \u2013 and uses your patterns to make every future prompt smarter",
+  "description": "Universal Brain for AI-assisted coding — tracks Claude Code, Cursor, Aider, Windsurf, Copilot & Gemini, benchmarks tools+models, routes tasks to your best combo, and exposes a live MCP server for any AI agent",
   "author": {
     "name": "Dor Lipetz",
     "url": "https://github.com/Riko5652"
@@ -24,6 +24,8 @@
     "bin/",
     "src/",
     "public/",
+    "Dockerfile",
+    "docker-compose.yml",
     "seed-mock.mjs",
     ".env.example",
     "README.md",
@@ -32,7 +34,10 @@
   "scripts": {
     "start": "node --env-file=.env src/server.js",
     "dev": "node --env-file=.env --watch src/server.js",
-    "mcp": "node src/mcp-handoff.js"
+    "mcp": "node src/mcp-handoff.js",
+    "docker:build": "docker build -t ai-dashboard .",
+    "docker:up": "docker compose up",
+    "docker:down": "docker compose down"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
@@ -46,12 +51,20 @@
     "dashboard",
     "claude-code",
     "cursor",
+    "aider",
+    "windsurf",
+    "copilot",
     "gemini",
     "analytics",
     "developer-tools",
     "prompt-optimization",
     "llm",
+    "mcp",
+    "model-context-protocol",
     "sqlite",
-    "local-first"
+    "local-first",
+    "docker",
+    "vibe-coding",
+    "agentic-coding"
   ]
 }
