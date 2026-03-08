@@ -149,6 +149,22 @@ function migrate(db) {
       efficiency REAL,
       description TEXT
     );
+
+    CREATE TABLE IF NOT EXISTS prompt_metrics (
+      session_id TEXT PRIMARY KEY REFERENCES sessions(id),
+      first_turn_tokens INTEGER,
+      reask_rate REAL,
+      has_file_context INTEGER DEFAULT 0,
+      constraint_count INTEGER DEFAULT 0,
+      turns_to_first_edit INTEGER,
+      created_at INTEGER
+    );
+
+    CREATE TABLE IF NOT EXISTS insight_cache (
+      key TEXT PRIMARY KEY,
+      result TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    );
   `);
 
   // Seed tools
@@ -368,4 +384,34 @@ export function getOverview() {
   ).all(today);
 
   return { totals, today: todayStats };
+}
+
+export function upsertPromptMetrics(m) {
+  getDb().prepare(`
+    INSERT INTO prompt_metrics
+      (session_id, first_turn_tokens, reask_rate, has_file_context, constraint_count, turns_to_first_edit, created_at)
+    VALUES (@session_id, @first_turn_tokens, @reask_rate, @has_file_context, @constraint_count, @turns_to_first_edit, @created_at)
+    ON CONFLICT(session_id) DO UPDATE SET
+      first_turn_tokens=excluded.first_turn_tokens, reask_rate=excluded.reask_rate,
+      has_file_context=excluded.has_file_context, constraint_count=excluded.constraint_count,
+      turns_to_first_edit=excluded.turns_to_first_edit
+  `).run({ ...m, created_at: Date.now() });
+}
+
+export function getCachedInsight(key) {
+  const ttl = 24 * 60 * 60 * 1000;
+  const row = getDb().prepare(`SELECT result, created_at FROM insight_cache WHERE key=?`).get(key);
+  if (!row) return null;
+  if (Date.now() - row.created_at > ttl) {
+    getDb().prepare(`DELETE FROM insight_cache WHERE key=?`).run(key);
+    return null;
+  }
+  return row.result;
+}
+
+export function setCachedInsight(key, result) {
+  getDb().prepare(`
+    INSERT INTO insight_cache (key, result, created_at) VALUES (?,?,?)
+    ON CONFLICT(key) DO UPDATE SET result=excluded.result, created_at=excluded.created_at
+  `).run(key, result, Date.now());
 }
