@@ -211,6 +211,7 @@ function migrate(db) {
   upsert.run('cursor', 'Cursor');
   upsert.run('antigravity', 'Antigravity');
   upsert.run('aider', 'Aider');
+  upsert.run('windsurf', 'Windsurf');
 }
 
 // ---- Query helpers ----
