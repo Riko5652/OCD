@@ -1320,7 +1320,9 @@ function rInsActions(prompt, llmStatus) {
       btn.disabled = true;
       if (statusEl) statusEl.textContent = 'Connecting…';
 
-      const url = '/api/insights/deep-analyze';
+      const url = btn._hasResult
+        ? '/api/insights/deep-analyze?refresh=1'
+        : '/api/insights/deep-analyze';
       const es = new EventSource(url);
       let fullText = '';
 
@@ -1345,8 +1347,9 @@ function rInsActions(prompt, llmStatus) {
           if (data.done) {
             es.close();
             btn.disabled = false;
+            btn._hasResult = true;
             const src = data.cached ? 'cached' : `${data.provider} · ${data.model}`;
-            if (statusEl) statusEl.textContent = `Done (${src}) · cached 24h · add ?refresh=1 to regenerate`;
+            if (statusEl) statusEl.textContent = `Done (${src}) · cached 24h · click again to regenerate`;
             S.insLlmStatus = null; // re-fetch status on next render
           }
         } catch { /* malformed chunk */ }
