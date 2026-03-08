@@ -218,6 +218,30 @@ function buildSession(filename, turns, projectDir) {
   // Code generation stats from parsed Write/Edit tool calls
   const codeStats = turns._codeStats || {};
 
+  // Group turns by model for per-model performance tracking
+  const byModel = {};
+  for (const t of turns) {
+    const m = t.model || primaryModel || 'unknown';
+    if (!byModel[m]) byModel[m] = { turns: 0, input: 0, output: 0, cache: 0, latencies: [], errors: 0 };
+    byModel[m].turns++;
+    byModel[m].input  += t.input_tokens  || 0;
+    byModel[m].output += t.output_tokens || 0;
+    byModel[m].cache  += t.cache_read    || 0;
+    if (t.latency_ms != null && t.latency_ms > 0) byModel[m].latencies.push(t.latency_ms);
+    if (t.stop_reason === 'error' || t.label === 'error') byModel[m].errors++;
+  }
+  const _modelPerf = Object.entries(byModel).map(([model, s]) => ({
+    model,
+    turns: s.turns,
+    input_tokens:  s.input,
+    output_tokens: s.output,
+    cache_read:    s.cache,
+    avg_latency_ms: s.latencies.length
+      ? s.latencies.reduce((a, b) => a + b, 0) / s.latencies.length
+      : null,
+    error_count: s.errors,
+  }));
+
   return {
     id,
     tool_id: TOOL_IDS.CLAUDE_CODE,
@@ -241,6 +265,7 @@ function buildSession(filename, turns, projectDir) {
     avg_thinking_length: codeStats.avgThinkingLength || null,
     error_count: codeStats.errorCount || 0,
     error_recovery_pct: codeStats.errorRecoveryPct ?? null,
+    _modelPerf,
     raw: {
       project: projectDir,
       thinking_to_output_ratio: codeStats.thinkingToOutputRatio ?? null,
