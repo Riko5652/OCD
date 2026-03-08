@@ -16,6 +16,7 @@ import { computeOverview, computeToolComparison, computeModelUsage, computeCodeG
 import { runOptimizer } from './engine/optimizer.js';
 import { scoreAndSave } from './engine/scorer.js';
 import { startWatchers, stopWatchers } from './watcher.js';
+import { analyzePromptMetrics } from './engine/prompt-analyzer.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -69,6 +70,7 @@ async function ingestAdapter(adapter) {
       const turns = await adapter.getTurns(session.id);
       if (turns.length > 0) {
         insertTurns(session.id, turns);
+        analyzePromptMetrics(session.id);
         // Update session with aggregated turn data
         const totalInput = turns.reduce((s, t) => s + (t.input_tokens || 0), 0);
         const totalOutput = turns.reduce((s, t) => s + (t.output_tokens || 0), 0);
