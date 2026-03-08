@@ -1,0 +1,8 @@
+node_modules/
+data/
+cursor-imports/
+*.db-shm
+*.db-wal
+.env
+.DS_Store
+Thumbs.db

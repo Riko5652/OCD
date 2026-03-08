@@ -1,0 +1,280 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#1d1d1b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>AI Productivity Dashboard</title>
+  <link rel="manifest" href="/manifest.json">
+  <script src="/lib/chart.umd.min.js"></script>
+  <style>
+    :root {
+      --bg-body:#f4f6f8; --bg-card:#fff; --bg-header:#1d1d1b;
+      --text-h:#1a1a1a; --text-m:#3f444b; --text-s:#64748b; --text-on-dark:#fff;
+      --primary:#F15A2B; --primary-light:rgba(241,90,43,0.08);
+      --c-input:#3b82f6; --c-cache-read:#10b981; --c-cache-create:#8b5cf6; --c-output:#f59e0b;
+      --lv-good:#10b981; --lv-good-bg:rgba(16,185,129,0.08);
+      --lv-ok:#f59e0b; --lv-ok-bg:rgba(245,158,11,0.08);
+      --lv-warn:#ef4444; --lv-warn-bg:rgba(239,68,68,0.08);
+      --lv-tip:#3b82f6; --lv-tip-bg:rgba(59,130,246,0.08);
+      --radius:12px; --radius-sm:8px; --radius-pill:50px;
+      --shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.03);
+      /* Tool colors */
+      --t-claude:#d97706; --t-cursor:#8b5cf6; --t-antigravity:#06b6d4;
+    }
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg-body);color:var(--text-m)}
+    #hdr{position:sticky;top:0;z-index:100;background:var(--bg-header);color:var(--text-on-dark);height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 24px}
+    #hdr h1{font-size:1.05rem;font-weight:700;letter-spacing:-.3px}
+    .hdr-r{display:flex;align-items:center;gap:14px;font-size:.78rem;color:#aaa}
+    #dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;background:#ef4444;vertical-align:middle}
+    #dot.on{background:var(--lv-good);animation:pulse 1.5s infinite alternate}
+    @keyframes pulse{from{box-shadow:0 0 0 0 rgba(16,185,129,.5)}to{box-shadow:0 0 0 4px rgba(16,185,129,0)}}
+    #nav{display:flex;gap:4px;padding:12px 24px 0;flex-wrap:wrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
+    .tb{border:none;padding:7px 18px;border-radius:var(--radius-pill);background:0;cursor:pointer;font-size:.83rem;color:var(--text-s);font-weight:500;transition:.15s;white-space:nowrap}
+    .tb:hover{background:rgba(0,0,0,.04)}.tb.a{background:var(--primary);color:#fff;font-weight:600}
+    .tp{display:none;padding:16px 24px 40px;max-width:1400px;margin:0 auto}.tp.a{display:block}
+    .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
+    .kc{background:var(--bg-card);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);border-left:4px solid var(--primary)}
+    .kv{font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text-h)}
+    .kl{font-size:.74rem;color:var(--text-s);margin-top:3px}
+    .card{background:var(--bg-card);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
+    .card h2{font-size:.92rem;font-weight:600;color:var(--text-h);margin-bottom:12px}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
+    .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px}
+    table{width:100%;border-collapse:collapse;font-size:.8rem}
+    th{background:#f8f9fa;padding:8px 10px;text-align:left;font-weight:600;color:var(--text-s);border-bottom:2px solid #eee;white-space:nowrap}
+    td{padding:8px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
+    tr:last-child td{border-bottom:0}tbody tr:hover td{background:var(--primary-light)}
+    .sr{cursor:pointer}.num{text-align:right;font-variant-numeric:tabular-nums}
+    .ea{display:inline-block;transition:transform .2s;font-size:.65rem;color:#aaa}.ea.open{transform:rotate(90deg)}
+    .td-cell{padding:0!important;border-bottom:0!important}
+    .td-wrap{background:var(--bg-body);padding:10px 14px;border-radius:0 0 var(--radius-sm) var(--radius-sm)}
+    .td-wrap table{font-size:.76rem}.td-wrap th{background:#eef0f3}
+    .ts{display:flex;height:9px;border-radius:5px;overflow:hidden;min-width:60px}
+    .ts-i{background:var(--c-input)}.ts-cr{background:var(--c-cache-read)}.ts-cc{background:var(--c-cache-create)}.ts-o{background:var(--c-output)}
+    .chip{display:inline-block;background:#e8f0fe;color:#1a56db;border-radius:4px;padding:1px 5px;font-size:.68rem;margin:1px;white-space:nowrap}
+    .chip.tool-claude{background:rgba(217,119,6,.1);color:var(--t-claude)}
+    .chip.tool-cursor{background:rgba(139,92,246,.1);color:var(--t-cursor)}
+    .chip.tool-antigravity{background:rgba(6,182,212,.1);color:var(--t-antigravity)}
+    .br{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:.8rem}
+    .bl{min-width:130px;color:var(--text-s)}.bt{flex:1;height:14px;background:#f0f0f0;border-radius:7px;overflow:hidden}
+    .bf{height:100%;border-radius:7px;transition:width .4s}.bv{min-width:80px;text-align:right;color:var(--text-h);font-weight:500;font-size:.78rem}
+    .rg{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px;margin-bottom:18px}
+    .rc{border-left:4px solid;border-radius:var(--radius-sm);padding:14px 18px;background:var(--bg-card);box-shadow:var(--shadow)}
+    .rc.good,.rc.info{border-color:var(--lv-good);background:var(--lv-good-bg)}
+    .rc.ok,.rc.warning{border-color:var(--lv-ok);background:var(--lv-ok-bg)}
+    .rc.warn,.rc.critical{border-color:var(--lv-warn);background:var(--lv-warn-bg)}
+    .rc.tip{border-color:var(--lv-tip);background:var(--lv-tip-bg)}
+    .rc-cat{display:inline-block;font-size:.66rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:var(--radius-pill);margin-bottom:5px;background:rgba(0,0,0,.06);color:var(--text-s)}
+    .rc-t{font-weight:600;font-size:.87rem;color:var(--text-h);margin-bottom:5px}
+    .rc-d{font-size:.8rem;color:var(--text-m);line-height:1.5}
+    .sc{display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
+    .sc input{padding:6px 12px;border:1px solid #ddd;border-radius:var(--radius-sm);font-size:.82rem;width:220px}
+    .sc select{padding:6px 8px;border:1px solid #ddd;border-radius:var(--radius-sm);font-size:.82rem;background:#fff}
+    .snip{max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-s);font-size:.76rem}
+    .cb{display:flex;height:24px;border-radius:var(--radius-sm);overflow:hidden;margin:4px 0}
+    .cb .seg{transition:width .3s}
+    .tool-dots{display:flex;gap:6px;align-items:center;font-size:.75rem;color:var(--text-s);margin-top:6px}
+    .tool-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+    @media(max-width:768px){.kpi{grid-template-columns:repeat(2,1fr)}.g2,.g3{grid-template-columns:1fr}.rg{grid-template-columns:1fr}}
+  </style>
+</head>
+<body>
+  <header id="hdr"><h1>AI Productivity Dashboard</h1><div class="hdr-r"><span><span id="dot"></span><span id="dtxt">Connecting...</span></span><span id="upd"></span></div></header>
+  <nav id="nav">
+    <button class="tb a" data-t="overview">Overview</button>
+    <button class="tb" data-t="sessions">Sessions</button>
+    <button class="tb" data-t="tokens">Token Deep Dive</button>
+    <button class="tb" data-t="compare">Compare Tools</button>
+    <button class="tb" data-t="commits">Code Authorship</button>
+    <button class="tb" data-t="codegen">Code Gen</button>
+    <button class="tb" data-t="analytics">Analytics</button>
+    <button class="tb" data-t="costs">Costs</button>
+    <button class="tb" data-t="personal">Personal</button>
+    <button class="tb" data-t="optimize">Optimization</button>
+  </nav>
+
+  <!-- OVERVIEW -->
+  <section id="t-overview" class="tp a">
+    <div class="kpi" id="k-ov"></div>
+    <div id="ov-recs" class="rg" style="margin-bottom:18px"></div>
+    <div class="sc" style="margin-bottom:8px">
+      <select id="ov-range">
+        <option value="30">Last 30 days</option>
+        <option value="90">Last 90 days</option>
+        <option value="180" selected>Last 6 months</option>
+        <option value="365">Last year</option>
+      </select>
+    </div>
+    <div class="g2">
+      <div class="card"><h2>Daily Turns by Tool</h2><canvas id="c-daily-turns"></canvas></div>
+      <div class="card"><h2>Daily Output Tokens</h2><canvas id="c-daily-output"></canvas></div>
+    </div>
+    <div class="card"><h2>Tool Distribution</h2><div id="tool-bars"></div></div>
+  </section>
+
+  <!-- SESSIONS -->
+  <section id="t-sessions" class="tp">
+    <div class="sc">
+      <input id="s-search" type="text" placeholder="Search sessions...">
+      <select id="s-sort"><option value="date-desc">Newest</option><option value="date-asc">Oldest</option><option value="turns-desc">Most turns</option><option value="cache-asc">Lowest cache</option><option value="output-desc">Most output</option></select>
+      <select id="s-tool"><option value="">All tools</option><option value="claude-code">Claude Code</option><option value="cursor">Cursor</option><option value="antigravity">Antigravity</option></select>
+    </div>
+    <div style="overflow-x:auto">
+      <table><thead><tr>
+        <th>Tool</th><th>Date</th><th class="num">Turns</th><th class="num">Output</th><th class="num">Cache Hit</th><th class="num">Latency</th><th>Model</th><th>Top Tools</th><th style="width:24px"></th>
+      </tr></thead><tbody id="s-body"></tbody></table>
+    </div>
+  </section>
+
+  <!-- TOKEN DEEP DIVE -->
+  <section id="t-tokens" class="tp">
+    <div class="kpi" id="k-tok"></div>
+    <div class="g2">
+      <div class="card"><h2>Aggregate Token Breakdown</h2><div id="t-bars"></div></div>
+      <div class="card"><h2>Token Mix per Session (top 20)</h2><canvas id="c-mix"></canvas></div>
+    </div>
+  </section>
+
+  <!-- COMPARE TOOLS -->
+  <section id="t-compare" class="tp">
+    <div class="kpi" id="k-compare"></div>
+    <div class="card"><h2>Session Distribution</h2><div id="compare-bar"></div></div>
+    <div class="g2">
+      <div class="card"><h2>Sessions by Tool</h2><canvas id="c-tool-doughnut"></canvas></div>
+      <div class="card"><h2>Metrics Comparison</h2><div id="compare-table"></div></div>
+    </div>
+  </section>
+
+  <!-- CODE AUTHORSHIP -->
+  <section id="t-commits" class="tp">
+    <div class="kpi" id="k-commits"></div>
+    <div class="sc" style="margin-bottom:8px">
+      <select id="commit-tool-filter">
+        <option value="">All tools</option>
+        <option value="claude-code">Claude Code</option>
+        <option value="cursor">Cursor</option>
+      </select>
+    </div>
+    <div class="g2">
+      <div class="card"><h2>Cursor Daily Lines (Composer + Tab)</h2><canvas id="c-cursor-daily"></canvas></div>
+      <div class="card"><h2>AI Authorship Distribution</h2><canvas id="c-ai-hist"></canvas></div>
+    </div>
+    <div class="card"><h2>Scored Commits</h2>
+      <div style="overflow-x:auto">
+        <table><thead><tr>
+          <th>Tool</th><th>Commit</th><th>Branch</th><th>Message</th><th class="num">AI %</th><th class="num">AI Lines</th><th class="num">Human Lines</th><th class="num">Total</th>
+        </tr></thead><tbody id="commit-body"></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- CODE GENERATION -->
+  <section id="t-codegen" class="tp">
+    <div class="kpi" id="k-cg"></div>
+    <div class="g2">
+      <div class="card"><h2>Lines Added by Tool</h2><canvas id="c-cg-bytool"></canvas></div>
+      <div class="card"><h2>First-Attempt Success by Model</h2><canvas id="c-cg-fa"></canvas></div>
+    </div>
+    <div class="g2">
+      <div class="card"><h2>Thinking Depth Trend (weekly)</h2><canvas id="c-think-trend"></canvas></div>
+      <div class="card"><h2>Error Rate Trend (weekly)</h2><canvas id="c-error-trend"></canvas></div>
+    </div>
+    <div class="card"><h2>Top Sessions by Code Output</h2>
+      <div style="overflow-x:auto">
+        <table><thead><tr>
+          <th>Tool</th><th>Date</th><th>Model</th><th class="num">Lines +</th><th class="num">Lines -</th>
+          <th class="num">Files</th><th class="num">First Attempt</th><th>Title</th>
+        </tr></thead><tbody id="cg-body"></tbody></table>
+      </div>
+    </div>
+    <div class="card"><h2>Model Quality Comparison</h2>
+      <div style="overflow-x:auto">
+        <table><thead><tr>
+          <th>Model</th><th class="num">Sessions</th><th class="num">Error Recovery</th>
+          <th class="num">Suggestion Accept</th><th class="num">Thinking Depth</th><th class="num">Lint Improvement</th>
+        </tr></thead><tbody id="cg-model-body"></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ANALYTICS -->
+  <section id="t-analytics" class="tp">
+    <div class="kpi" id="k-ana"></div>
+    <div class="g2">
+      <div class="card"><h2>Model Usage</h2><canvas id="c-model" style="max-height:260px"></canvas><div id="model-tbl" style="margin-top:14px"></div></div>
+      <div class="card"><h2>Turns / Day (30 days)</h2><canvas id="c-reqday"></canvas></div>
+    </div>
+    <div class="card"><h2>Efficiency Trend (O x Q x S)</h2><canvas id="c-efficiency"></canvas></div>
+  </section>
+
+  <!-- COSTS -->
+  <section id="t-costs" class="tp">
+    <div class="kpi" id="k-costs"></div>
+    <div class="g2">
+      <div class="card"><h2>Cost by Tool</h2><canvas id="c-cost-tool"></canvas></div>
+      <div class="card"><h2>Cost by Model</h2><canvas id="c-cost-model"></canvas></div>
+    </div>
+    <div class="card"><h2>Model Cost Breakdown</h2>
+      <div style="overflow-x:auto">
+        <table><thead><tr>
+          <th>Model</th><th class="num">Sessions</th><th class="num">Total Tokens</th>
+          <th class="num">Cost</th><th class="num">$/Session</th>
+        </tr></thead><tbody id="cost-body"></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- PERSONAL INSIGHTS -->
+  <section id="t-personal" class="tp">
+    <!-- Hero -->
+    <div id="pi-hero" style="background:linear-gradient(135deg,var(--bg-header),#2d2d2b);border-radius:var(--radius);padding:28px 32px;color:var(--text-on-dark);margin-bottom:16px;position:relative;overflow:hidden">
+      <div style="display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+        <div id="pi-level-badge" style="width:80px;height:80px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:2rem;font-weight:800;border:3px solid rgba(255,255,255,.2)"></div>
+        <div style="flex:1;min-width:200px">
+          <div style="display:flex;align-items:baseline;gap:10px"><span id="pi-rank" style="font-size:1.3rem;font-weight:700"></span><span id="pi-xp-text" style="font-size:.78rem;opacity:.7"></span></div>
+          <div style="background:rgba(255,255,255,.12);border-radius:var(--radius-pill);height:12px;margin:8px 0;overflow:hidden"><div id="pi-xp-bar" style="height:100%;background:var(--primary);border-radius:var(--radius-pill);transition:width .5s"></div></div>
+          <div style="display:flex;gap:18px;flex-wrap:wrap;font-size:.78rem;opacity:.85">
+            <span id="pi-streak"></span>
+            <span id="pi-longest-streak"></span>
+          </div>
+        </div>
+      </div>
+      <div class="kpi" id="pi-quick-stats" style="margin-top:18px"></div>
+    </div>
+
+    <!-- Weekly Challenge -->
+    <div id="pi-challenge" class="card" style="border-left:4px solid var(--lv-tip)"></div>
+
+    <!-- Achievements -->
+    <div class="card"><h2>Achievements</h2><div id="pi-achievements" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:10px"></div></div>
+
+    <!-- Productivity Patterns -->
+    <div class="card"><h2>Activity Heatmap</h2><div id="pi-heatmap" style="overflow-x:auto"></div><div id="pi-golden" style="margin-top:10px;font-size:.8rem;color:var(--text-s)"></div></div>
+    <div class="g2">
+      <div class="card"><h2>Flow State Trend</h2><canvas id="c-flow-trend"></canvas></div>
+      <div class="card"><h2>Session Duration Sweet Spot</h2><canvas id="c-duration-buckets"></canvas></div>
+    </div>
+    <div class="g2">
+      <div class="card"><h2>Deep vs Shallow Sessions</h2><canvas id="c-deep-shallow"></canvas></div>
+      <div class="card"><h2>Tool Comparison Radar</h2><canvas id="c-radar"></canvas></div>
+    </div>
+
+    <!-- Personal Records -->
+    <div class="card"><h2>Personal Records</h2>
+      <div style="overflow-x:auto">
+        <table><thead><tr><th>Record</th><th class="num">Value</th><th>Tool</th><th>Date</th></tr></thead><tbody id="pi-records"></tbody></table>
+      </div>
+    </div>
+  </section>
+
+  <!-- OPTIMIZATION -->
+  <section id="t-optimize" class="tp">
+    <div class="rg" id="rec-g"></div>
+  </section>
+
+<script src="/app.js"></script>
+</body>
+</html>
