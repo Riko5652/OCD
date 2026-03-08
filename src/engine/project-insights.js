@@ -58,13 +58,15 @@ export function computeAllProjects() {
 export function computeProjectInsights(projectName) {
   const db = getDb();
 
+  // Escape LIKE wildcards so a project name containing % or _ doesn't match everything.
+  const escapedName = projectName.replace(/[\\%_]/g, '\\$&');
   const sessions = db.prepare(`
     SELECT tool_id, primary_model, total_turns, first_attempt_pct,
            cache_hit_pct, quality_score, error_count
     FROM sessions
-    WHERE raw_data LIKE ?
+    WHERE raw_data LIKE ? ESCAPE '\\'
     ORDER BY started_at DESC LIMIT 200
-  `).all(`%${projectName}%`);
+  `).all(`%${escapedName}%`);
 
   if (!sessions.length) return null;
 

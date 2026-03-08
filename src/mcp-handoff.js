@@ -20,17 +20,10 @@ import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprot
 import { getDb } from './db.js';
 import { getRoutingRecommendation, computeToolModelWinRates } from './engine/cross-tool-router.js';
 import { computeAllProjects } from './engine/project-insights.js';
+import { sanitizeForPrompt } from './lib/sanitize.js';
 
-// ── Sanitize DB text before LLM/tool exposure ──────────────────────────────
-function sanitize(str, maxLen = 300) {
-  if (!str || typeof str !== 'string') return '';
-  return str
-    .replace(/<[^>]+>/g, '')
-    .replace(/\[INST\]|\[\/INST\]|<\|im_start\|>|<\|im_end\|>/g, '')
-    .replace(/ignore (all |previous |prior )?instructions?/gi, '[filtered]')
-    .replace(/system:/gi, '[filtered]')
-    .slice(0, maxLen);
-}
+// Alias for backwards compat within this file
+const sanitize = (str, maxLen = 300) => sanitizeForPrompt(str, maxLen);
 
 const server = new Server(
   { name: 'ai-productivity-brain', version: '3.0.0' },
@@ -271,7 +264,8 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
 
     // ── push_handoff_note ───────────────────────────────────────────────────
     if (name === 'push_handoff_note') {
-      const tool = args?.tool || 'claude-code';
+      const KNOWN_TOOLS = ['claude-code', 'cursor', 'aider', 'windsurf', 'copilot', 'antigravity', 'continue'];
+      const tool = KNOWN_TOOLS.includes(args?.tool) ? args.tool : 'claude-code';
       const last = db.prepare(`
         SELECT id, raw_data FROM sessions WHERE tool_id = ?
         ORDER BY ended_at DESC LIMIT 1

@@ -44,6 +44,23 @@ const PORT = config.port;
 // Global history window: how many days back to show in charts and stats by default.
 // 0 = all time. Override via HISTORY_DAYS env var or ?days=N query param per request.
 const HISTORY_DAYS = process.env.HISTORY_DAYS ? parseInt(process.env.HISTORY_DAYS) : 365;
+
+// ---- Simple rate limiter for LLM-triggering endpoints ----
+// Prevents accidental or malicious repeated calls that consume cloud API quota.
+const llmCallTimestamps = new Map();
+function llmRateLimit(windowMs = 60_000) {
+  return (req, res, next) => {
+    const key = req.ip || 'local';
+    const now = Date.now();
+    const last = llmCallTimestamps.get(key) || 0;
+    if (now - last < windowMs) {
+      const retryIn = Math.ceil((windowMs - (now - last)) / 1000);
+      return res.status(429).json({ error: `Rate limited — wait ${retryIn}s before retrying.` });
+    }
+    llmCallTimestamps.set(key, now);
+    next();
+  };
+}
 // Adapters self-register via their import above — use getAdapters() to access them
 
 // ---- SSE live push ----
@@ -304,7 +321,7 @@ app.get('/api/ollama/status', async (_req, res) => {
   catch (e) { res.json({ available: false, error: e.message }); }
 });
 
-app.get('/api/insights/deep-analyze', (req, res) => {
+app.get('/api/insights/deep-analyze', llmRateLimit(60_000), (req, res) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
@@ -457,7 +474,7 @@ app.get('/api/insights/daily-pick', (req, res) => {
 });
 
 // Route: force-regenerate daily pick
-app.post('/api/insights/daily-pick/refresh', async (req, res) => {
+app.post('/api/insights/daily-pick/refresh', llmRateLimit(60_000), async (req, res) => {
   getDb().prepare(`DELETE FROM insight_cache WHERE key=?`).run(DAILY_PICK_KEY);
   generateDailyPick().catch(e => console.error('[daily-pick] refresh error:', e.message));
   res.json({ ok: true });
