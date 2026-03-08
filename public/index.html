@@ -100,6 +100,7 @@
     <button class="tb" data-t="costs">Costs</button>
     <button class="tb" data-t="personal">Personal</button>
     <button class="tb" data-t="optimize">Optimization</button>
+    <button class="tb" data-t="insights">Insights</button>
   </nav>
 
   <div id="issue-banner" role="alert" aria-live="polite">
@@ -285,6 +286,64 @@
   <!-- OPTIMIZATION -->
   <section id="t-optimize" class="tp">
     <div class="rg" id="rec-g"></div>
+  </section>
+
+  <!-- INSIGHTS -->
+  <section id="t-insights" class="tp">
+    <!-- Panel A: Profile -->
+    <div class="card" id="ins-profile-card">
+      <h2>How You Work</h2>
+      <div class="kpi" id="ins-profile-kpi"></div>
+      <div class="g2" style="margin-top:14px">
+        <div class="card" style="margin:0;padding:14px">
+          <h2>Tool Call Breakdown <span style="font-weight:400;color:var(--text-s)">(Claude Code)</span></h2>
+          <div id="ins-tool-breakdown" style="margin-top:8px"></div>
+        </div>
+        <div class="card" style="margin:0;padding:14px">
+          <h2>First-Turn Prompt Length</h2>
+          <canvas id="ins-first-turn-chart" height="160"></canvas>
+        </div>
+      </div>
+      <div id="ins-start-patterns" style="margin-top:14px"></div>
+    </div>
+
+    <!-- Panel B: Trends -->
+    <div class="card" id="ins-trends-card">
+      <h2>Getting Better or Worse?</h2>
+      <div class="g2">
+        <div>
+          <p style="font-size:.8rem;font-weight:600;margin-bottom:8px;color:var(--text-s)">Cache Hit Rate — 7-day rolling</p>
+          <canvas id="ins-cache-trend" height="140"></canvas>
+        </div>
+        <div>
+          <p style="font-size:.8rem;font-weight:600;margin-bottom:8px;color:var(--text-s)">Session Quality Score — 7-day rolling</p>
+          <canvas id="ins-quality-trend" height="140"></canvas>
+        </div>
+      </div>
+      <div class="g2" style="margin-top:14px">
+        <div>
+          <p style="font-size:.8rem;font-weight:600;margin-bottom:8px;color:var(--text-s)">Re-ask Rate — lower is better</p>
+          <canvas id="ins-reask-trend" height="140"></canvas>
+        </div>
+        <div>
+          <p style="font-size:.8rem;font-weight:600;margin-bottom:8px;color:var(--text-s)">Error Rate Trend</p>
+          <canvas id="ins-error-trend" height="140"></canvas>
+        </div>
+      </div>
+    </div>
+
+    <!-- Panel C: Actions + Deep Analyze -->
+    <div class="card" id="ins-actions-card">
+      <h2>Actions &amp; Prompt Analysis</h2>
+      <div id="ins-prompt-correlations" style="margin-bottom:16px"></div>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px;flex-wrap:wrap">
+        <button id="ins-deep-btn" style="background:var(--primary);color:#fff;border:none;padding:8px 20px;border-radius:var(--radius-pill);cursor:pointer;font-size:.84rem;font-weight:600;transition:.15s">🔍 Deep Analyze</button>
+        <span id="ins-llm-status" style="font-size:.76rem;color:var(--text-s)"></span>
+      </div>
+      <div id="ins-deep-output" style="display:none;background:#f8f9fa;border-radius:var(--radius-sm);padding:14px;font-size:.82rem;line-height:1.7;white-space:pre-wrap;max-height:400px;overflow-y:auto;border:1px solid #e5e7eb;margin-bottom:16px"></div>
+      <h2 style="margin-bottom:12px">Recommendations</h2>
+      <div id="ins-recs-enhanced" class="rg"></div>
+    </div>
   </section>
 
 <footer style="text-align:center;padding:24px 16px 32px;color:var(--text-s);font-size:12px;border-top:1px solid var(--border,#e5e7eb);margin-top:32px;">
