@@ -57,18 +57,23 @@ export function scoreAllSessions() {
   return sessions.length;
 }
 
-export function getAgenticLeaderboard({ days = 90 } = {}) {
+export function getAgenticLeaderboard({ days = null } = {}) {
   const db = getDb();
-  const since = Date.now() - days * 86400000;
-  return db.prepare(`
+  // days=null means all history
+  let sql = `
     SELECT tool_id, primary_model,
            COUNT(*) as sessions,
            AVG(agentic_score) as avg_agentic,
            MAX(agentic_score) as peak_agentic,
            AVG(total_turns) as avg_turns
     FROM sessions
-    WHERE started_at > ? AND agentic_score IS NOT NULL
-    GROUP BY tool_id, primary_model
-    ORDER BY avg_agentic DESC
-  `).all(since);
+    WHERE agentic_score IS NOT NULL
+  `;
+  const params = [];
+  if (days != null) {
+    sql += ' AND started_at > ?';
+    params.push(Date.now() - days * 86400000);
+  }
+  sql += ' GROUP BY tool_id, primary_model ORDER BY avg_agentic DESC';
+  return db.prepare(sql).all(...params);
 }

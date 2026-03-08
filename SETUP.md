@@ -123,6 +123,26 @@ CONTINUE_SESSIONS_DIR=/home/yourname/.config/continue/sessions
 
 ---
 
+## History window — how much data to show
+
+By default the dashboard shows **all available history** (up to 1 year in charts, all sessions in analytics). You can tune this:
+
+```env
+# Show everything from the past 90 days only
+HISTORY_DAYS=90
+
+# Show all time (default)
+HISTORY_DAYS=365
+
+# Any API endpoint also accepts ?days=N to override per request:
+# http://localhost:3030/api/daily?days=30
+# http://localhost:3030/api/models/performance?days=90
+```
+
+The first time you run the dashboard it will scan **all** your existing session history — not just recent sessions. If you have years of Claude Code sessions, they all get imported. Subsequent runs only process new or changed files.
+
+---
+
 ## MCP Server setup (connect to Claude Code, Cursor, etc.)
 
 The dashboard includes an MCP server that lets any AI agent query your live productivity data.

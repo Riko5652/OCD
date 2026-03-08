@@ -404,7 +404,7 @@ export function upsertDailyStats(date, toolId, stats) {
 
 // ---- Read queries ----
 
-export function getAllSessions(toolId, limit = 100) {
+export function getAllSessions(toolId, limit = 5000) {
   const db = getDb();
   let sql = 'SELECT * FROM sessions';
   const params = [];
@@ -424,7 +424,7 @@ export function getTurnsForSession(sessionId) {
   ).all(sessionId);
 }
 
-export function getDailyStatsRange(days = 30) {
+export function getDailyStatsRange(days = 365) {
   const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
   return getDb().prepare(
     'SELECT * FROM daily_stats WHERE date >= ? ORDER BY date, tool_id'
@@ -513,17 +513,21 @@ export function upsertModelPerformance(rows) {
   insertMany(rows);
 }
 
-export function getModelPerformance({ tool, model, days = 90 } = {}) {
+export function getModelPerformance({ tool, model, days = null } = {}) {
   const db = getDb();
-  const since = Date.now() - days * 86400000;
+  // Default: all history. Pass days to restrict (e.g. days=90 for last 3 months).
   let sql = `
     SELECT mp.*, s.primary_model, s.cache_hit_pct
     FROM model_performance mp
     JOIN sessions s ON s.id = mp.session_id
-    WHERE s.started_at > ?
   `;
-  const params = [since];
-  if (tool)  { sql += ` AND mp.tool_id = ?`;  params.push(tool); }
-  if (model) { sql += ` AND mp.model = ?`;    params.push(model); }
+  const params = [];
+  const conditions = [];
+  if (days != null) conditions.push(`s.started_at > ${Date.now() - days * 86400000}`);
+  if (tool)  conditions.push(`mp.tool_id = ?`);
+  if (model) conditions.push(`mp.model = ?`);
+  if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+  if (tool)  params.push(tool);
+  if (model) params.push(model);
   return db.prepare(sql).all(...params);
 }

@@ -41,6 +41,9 @@ import { config, printConfig } from './config.js';
 
 const app = express();
 const PORT = config.port;
+// Global history window: how many days back to show in charts and stats by default.
+// 0 = all time. Override via HISTORY_DAYS env var or ?days=N query param per request.
+const HISTORY_DAYS = process.env.HISTORY_DAYS ? parseInt(process.env.HISTORY_DAYS) : 365;
 // Adapters self-register via their import above — use getAdapters() to access them
 
 // ---- SSE live push ----
@@ -109,12 +112,16 @@ async function ingestAdapter(adapter) {
       }
     }
 
-    // Ingest turns for recent sessions (last 50)
-    const recent = sessions
-      .sort((a, b) => (b.started_at || 0) - (a.started_at || 0))
-      .slice(0, 50);
+    // Ingest turns for sessions that don't have turns stored yet.
+    // This ensures all history is captured, not just the most recent 50.
+    // We check the DB first to avoid re-reading files for already-ingested sessions.
+    const db = getDb();
+    const sessionsNeedingTurns = sessions.filter(s => {
+      const count = db.prepare('SELECT COUNT(*) as c FROM turns WHERE session_id = ?').get(s.id);
+      return (count?.c || 0) === 0;
+    });
 
-    for (const session of recent) {
+    for (const session of sessionsNeedingTurns) {
       const turns = await adapter.getTurns(session.id);
       if (turns.length > 0) {
         insertTurns(session.id, turns);
@@ -236,9 +243,9 @@ app.get('/api/sessions/:id', (req, res) => {
   res.json({ ...session, turns });
 });
 
-// Daily stats (30-day default)
+// Daily stats — defaults to HISTORY_DAYS; pass ?days=90 to restrict
 app.get('/api/daily', (req, res) => {
-  const days = parseInt(req.query.days) || 180;
+  const days = req.query.days ? parseInt(req.query.days) : HISTORY_DAYS;
   res.json(cached(`daily:${days}`, () => getDailyStatsRange(days)));
 });
 
@@ -282,7 +289,7 @@ app.get('/api/insights/profile', (_req, res) => {
 });
 
 app.get('/api/insights/trends', (req, res) => {
-  const days = parseInt(req.query.days) || 90;
+  const days = req.query.days ? parseInt(req.query.days) : HISTORY_DAYS;
   try { res.json(cached(`ins:trends:${days}`, () => computeTrends(days))); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -462,7 +469,7 @@ app.get('/api/models/performance', (req, res) => {
     const rows = getModelPerformance({
       tool:  req.query.tool,
       model: req.query.model,
-      days:  parseInt(req.query.days || '90'),
+      days:  req.query.days ? parseInt(req.query.days) : null, // null = all history
     });
 
     // Aggregate by model across all sessions
@@ -553,7 +560,7 @@ app.get('/api/cross-tool', (req, res) => {
 // Agentic session leaderboard
 app.get('/api/agentic/scores', (req, res) => {
   try {
-    const days = parseInt(req.query.days || '90');
+    const days = req.query.days ? parseInt(req.query.days) : null; // null = all history
     const leaderboard = getAgenticLeaderboard({ days });
     res.json({ leaderboard });
   } catch (err) {

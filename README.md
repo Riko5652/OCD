@@ -27,15 +27,34 @@ It also runs an MCP server so any AI agent (Claude Code, Cursor, Aider) can quer
 
 ---
 
+## Screenshots
+
+| Overview | Personal Insights |
+|----------|------------------|
+| ![Overview](screenshots/01-overview.png) | ![Personal](screenshots/02-personal.png) |
+
+| Compare Tools | Session History |
+|--------------|----------------|
+| ![Compare](screenshots/03-compare-tools.png) | ![Sessions](screenshots/04-sessions.png) |
+
+---
+
 ## Quick start
 
 ```bash
-# No install — just run
+# No install — just run (zero config)
 npx ai-productivity-dashboard
 
 # Or install globally
 npm install -g ai-productivity-dashboard
 ai-dashboard
+
+# Clone and run
+git clone https://github.com/Riko5652/ai-productivity-dashboard
+cd ai-productivity-dashboard
+cp .env.example .env   # optional — everything works without changes
+npm install
+npm start
 
 # Docker
 git clone https://github.com/Riko5652/ai-productivity-dashboard
