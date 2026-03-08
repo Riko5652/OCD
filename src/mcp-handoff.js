@@ -305,6 +305,28 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: 'text', text }] };
     }
 
+    // ── get_topic_summary ───────────────────────────────────────────────────
+    if (name === 'get_topic_summary') {
+      const { getTopicSummary, getTopicBreakdown } = await import('./engine/topic-segmenter.js');
+      const summaryData = await getTopicSummary(args.project, args.topic);
+      const breakdown = getTopicBreakdown(args.project);
+      const group = breakdown[args.topic];
+
+      if (!group || group.sessions.length === 0) {
+        return { content: [{ type: 'text', text: `No ${args.topic} sessions found in project ${args.project}.` }] };
+      }
+
+      const text = [
+        `## ${args.topic} Topic Summary — ${args.project}`,
+        summaryData.summary || 'Summary not available.',
+        ``,
+        `Sessions: ${group.sessions.length} | Tokens: ${group.total_tokens.toLocaleString()}`,
+        group.low_relevance_count > 0 ? `⚠ ${group.low_relevance_count} session(s) may not be project-related` : '',
+      ].filter(Boolean).join('\n');
+
+      return { content: [{ type: 'text', text }] };
+    }
+
     throw new Error(`Unknown tool: ${name}`);
 
   } catch (err) {
