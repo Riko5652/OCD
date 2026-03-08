@@ -14,3 +14,6 @@ ai_learnings.json
 ai_best_practices.md
 *.csv
 *.log
+
+# Git worktrees
+.worktrees/
