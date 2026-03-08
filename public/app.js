@@ -105,6 +105,8 @@ function onTab(t) {
   if (t === 'personal') rPersonal();
   if (t === 'optimize') rOpt();
   if (t === 'insights') rIns();
+  if (t === 'projects') rProjects();
+  if (t === 'models') rModels();
 }
 
 async function refreshAll() {
@@ -112,6 +114,7 @@ async function refreshAll() {
   S.compare = null; S.models = null; S.recs = null; S.efficiency = null;
   S.commits = null; S.cursorDaily = null; S.codeGen = null; S.insights = null; S.costs = null; S.personal = null;
   S.insProfile = null; S.insTrends = null; S.insPrompt = null; S.insLlmStatus = null;
+  projectsData = null; modelsData = null; winRatesData = null;
 
   const [ov, sr] = await Promise.all([fJ('/api/overview'), fJ('/api/sessions?limit=500')]);
   if (ov) S.overview = ov;
@@ -1198,6 +1201,8 @@ async function rIns() {
   rInsProfile(S.insProfile);
   rInsTrends(S.insTrends);
   rInsActions(S.insPrompt, S.insLlmStatus);
+  loadDailyPick();
+  bindDailyPickRefresh();
 }
 
 function rInsProfile(p) {
@@ -1287,7 +1292,7 @@ function rInsActions(prompt, llmStatus) {
       statusEl.textContent = `${llmStatus.provider} · ${llmStatus.model} · results cached 24h`;
     } else {
       if (!btn._streaming) { btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; }
-      statusEl.innerHTML = 'No LLM — set <code>OLLAMA_HOST</code>, <code>OPENAI_API_KEY</code>, or <code>ANTHROPIC_API_KEY</code>';
+      statusEl.textContent = 'No LLM configured — check server .env';
     }
   }
 
@@ -1334,7 +1339,7 @@ function rInsActions(prompt, llmStatus) {
           const data = JSON.parse(e.data);
           if (data.error) {
             out.textContent = data.error === 'no_provider'
-              ? 'No LLM provider configured. Set OLLAMA_HOST, OPENAI_API_KEY, or ANTHROPIC_API_KEY and restart.'
+              ? 'No LLM provider configured — check your server .env and restart.'
               : `Error: ${data.error}`;
             es.close();
             btn.disabled = false;
@@ -1368,6 +1373,254 @@ function rInsActions(prompt, llmStatus) {
       };
     });
   }
+}
+
+// ---- Daily Pick (Automation Recommender) ----
+
+async function loadDailyPick() {
+  const out = $('ins-daily-pick-output');
+  const meta = $('ins-daily-pick-meta');
+  if (!out) return;
+  try {
+    const d = await fJ('/api/insights/daily-pick');
+    if (d.text) {
+      out.textContent = d.text;
+      if (meta) meta.textContent = `Generated ${d.date}${d.provider ? ' · ' + d.provider : ''}`;
+    } else {
+      out.textContent = 'No recommendation yet — the server will generate one shortly. Check back in a minute.';
+      if (meta) meta.textContent = '';
+    }
+  } catch {
+    if (out) out.textContent = 'Could not load daily pick.';
+  }
+}
+
+function bindDailyPickRefresh() {
+  const btn = $('ins-pick-refresh-btn');
+  if (!btn || btn._bound) return;
+  btn._bound = true;
+  btn.addEventListener('click', async () => {
+    const out = $('ins-daily-pick-output');
+    const meta = $('ins-daily-pick-meta');
+    btn.disabled = true;
+    if (out) out.textContent = 'Generating new recommendation…';
+    try {
+      await fetch('/api/insights/daily-pick/refresh', { method: 'POST' });
+      // Poll until new result appears (max 60s)
+      let attempts = 0;
+      const poll = setInterval(async () => {
+        attempts++;
+        const d = await fJ('/api/insights/daily-pick');
+        if (d.text) {
+          clearInterval(poll);
+          if (out) out.textContent = d.text;
+          if (meta) meta.textContent = `Generated ${d.date}${d.provider ? ' · ' + d.provider : ''}`;
+          btn.disabled = false;
+        } else if (attempts > 30) {
+          clearInterval(poll);
+          if (out) out.textContent = 'Timed out — try again in a moment.';
+          btn.disabled = false;
+        }
+      }, 2000);
+    } catch {
+      if (out) out.textContent = 'Error triggering refresh.';
+      btn.disabled = false;
+    }
+  });
+}
+
+// ==============================================================
+// PROJECTS TAB
+// ==============================================================
+
+const TOOL_COLORS_EXT = {
+  'claude-code': '#d97706', cursor: '#8b5cf6', antigravity: '#06b6d4',
+  aider: '#10b981', windsurf: '#6366f1', copilot: '#24292f',
+};
+
+function toolChipExt(id) {
+  const colors = { 'claude-code':'claude', cursor:'cursor', antigravity:'antigravity', aider:'aider', windsurf:'windsurf', copilot:'copilot' };
+  const cls = colors[id] ? `tool-${colors[id]}` : '';
+  return `<span class="chip ${cls}" style="${!cls ? 'background:#f1f5f9;color:#475569' : ''}">${id}</span>`;
+}
+
+let projectsData = null;
+
+async function rProjects() {
+  if (!projectsData) {
+    const r = await fJ('/api/projects');
+    if (r) projectsData = r.projects || [];
+  }
+  const projects = projectsData || [];
+
+  $('k-projects').innerHTML = [
+    kpi(fmt(projects.length), 'Projects Tracked', '--primary'),
+    kpi(fmt(projects.reduce((s, p) => s + p.session_count, 0)), 'Total Sessions', '--c-input'),
+    kpi(fmt(projects.reduce((s, p) => s + p.total_tokens, 0)), 'Total Tokens', '--c-output'),
+    kpi(fmt(projects.reduce((s, p) => s + p.total_lines_added, 0)), 'Lines Added', '--lv-good'),
+  ].join('');
+
+  const grid = $('projects-grid');
+  if (!projects.length) {
+    grid.innerHTML = '<div class="card" style="grid-column:1/-1;text-align:center;padding:40px;color:var(--text-s)">No project data yet — start a session in a project directory to see stats here.</div>';
+    return;
+  }
+
+  grid.innerHTML = projects.map(p => `
+    <div class="card project-card" data-project="${encodeURIComponent(p.name)}" style="cursor:pointer;transition:.15s;border-top:3px solid ${TOOL_COLORS_EXT[p.dominant_tool] || '#cbd5e1'}">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:10px">
+        <h3 style="font-size:.95rem;font-weight:700;color:var(--text-h)">${p.name}</h3>
+        <span style="font-size:.68rem;color:var(--text-s);background:#f1f5f9;padding:2px 7px;border-radius:var(--radius-pill)">${p.session_count} session${p.session_count !== 1 ? 's' : ''}</span>
+      </div>
+      <div class="kpi" style="grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px">
+        <div class="kc" style="padding:10px 12px;border-left-color:var(--c-output)"><div class="kv" style="font-size:1.1rem">${fmt(p.total_tokens)}</div><div class="kl">Tokens</div></div>
+        <div class="kc" style="padding:10px 12px;border-left-color:var(--lv-good)"><div class="kv" style="font-size:1.1rem">${fmt(p.total_lines_added)}</div><div class="kl">Lines Added</div></div>
+        <div class="kc" style="padding:10px 12px;border-left-color:var(--primary)"><div class="kv" style="font-size:1.1rem">${Object.keys(p.tool_breakdown || {}).length}</div><div class="kl">Tools</div></div>
+      </div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        ${Object.entries(p.tool_breakdown || {}).sort((a,b) => b[1]-a[1]).map(([t,c]) => `${toolChipExt(t)}<span style="font-size:.68rem;color:var(--text-s)">${c}</span>`).join(' ')}
+      </div>
+      ${p.dominant_model ? `<div style="margin-top:8px;font-size:.74rem;color:var(--text-s)">Primary model: <strong style="color:var(--text-m)">${p.dominant_model}</strong></div>` : ''}
+    </div>
+  `).join('');
+
+  document.querySelectorAll('.project-card').forEach(card => {
+    card.addEventListener('click', () => loadProjectDrilldown(decodeURIComponent(card.dataset.project)));
+  });
+}
+
+async function loadProjectDrilldown(name) {
+  const panel = $('project-drilldown');
+  const content = $('drilldown-content');
+  $('drilldown-title').textContent = name;
+  panel.style.display = 'block';
+  content.innerHTML = '<span style="color:var(--text-s)">Loading insights...</span>';
+  panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  const data = await fJ(`/api/projects/${encodeURIComponent(name)}/insights`);
+  if (!data) {
+    content.innerHTML = '<span style="color:var(--lv-warn)">Failed to load insights.</span>';
+    return;
+  }
+
+  const stats = data.tool_model_stats || [];
+  content.innerHTML = `
+    <div class="kpi" style="margin-bottom:14px">
+      <div class="kc" style="border-left-color:var(--primary)"><div class="kv">${fmt(data.total_tokens)}</div><div class="kl">Total Tokens</div></div>
+      <div class="kc" style="border-left-color:var(--lv-good)"><div class="kv">${fmt(data.total_lines_added)}</div><div class="kl">Lines Added</div></div>
+      <div class="kc" style="border-left-color:var(--c-input)"><div class="kv">${data.session_count}</div><div class="kl">Sessions</div></div>
+      <div class="kc" style="border-left-color:var(--c-output)"><div class="kv">${data.dominant_model || '—'}</div><div class="kl">Primary Model</div></div>
+    </div>
+    ${stats.length ? `
+    <h3 style="font-size:.86rem;font-weight:600;margin-bottom:10px;color:var(--text-s)">Tool + Model Performance (sorted by avg turns)</h3>
+    <div style="overflow-x:auto"><table><thead><tr>
+      <th>Tool</th><th>Model</th><th class="num">Sessions</th><th class="num">Avg Turns</th><th class="num">Cache Hit</th><th class="num">Quality</th>
+    </tr></thead><tbody>
+      ${stats.map(s => `<tr>
+        <td>${toolChipExt(s.tool)}</td>
+        <td style="font-size:.78rem">${s.model || '—'}</td>
+        <td class="num">${s.sessions}</td>
+        <td class="num">${(s.avg_turns || 0).toFixed(1)}</td>
+        <td class="num">${(s.avg_cache_hit || 0).toFixed(1)}%</td>
+        <td class="num">${Math.round(s.avg_quality || 0)}</td>
+      </tr>`).join('')}
+    </tbody></table></div>` : ''}
+    ${data.suggestions ? `
+    <div style="margin-top:14px;background:#f8f9fa;border-radius:var(--radius-sm);padding:14px;font-size:.82rem;line-height:1.7;border:1px solid #e5e7eb">
+      <strong style="font-size:.8rem;text-transform:uppercase;letter-spacing:.5px;color:var(--text-s)">AI Suggestions</strong>
+      <div style="margin-top:8px;white-space:pre-wrap">${data.suggestions}</div>
+    </div>` : ''}
+  `;
+
+  $('drilldown-close').onclick = () => {
+    panel.style.display = 'none';
+  };
+}
+
+// ==============================================================
+// MODELS TAB
+// ==============================================================
+
+let modelsData = null;
+let winRatesData = null;
+
+async function rModels() {
+  if (!modelsData || !winRatesData) {
+    [modelsData, winRatesData] = await Promise.all([
+      fJ('/api/models/performance'),
+      fJ('/api/routing/win-rates'),
+    ]);
+  }
+
+  const models = modelsData?.models || [];
+  const winRates = winRatesData?.win_rates || [];
+
+  // KPIs
+  const totalSessions = models.reduce((s, m) => s + m.sessions, 0);
+  const avgLatency = models.filter(m => m.avg_latency_ms).reduce((s, m, _, a) => s + m.avg_latency_ms / a.length, 0);
+  $('k-models').innerHTML = [
+    kpi(models.length, 'Models Tracked', '--primary'),
+    kpi(fmt(totalSessions), 'Total Sessions', '--c-input'),
+    kpi(winRates.length, 'Task Type Combos', '--c-cache-read'),
+    kpi(avgLatency > 0 ? Math.round(avgLatency) + 'ms' : '--', 'Avg Latency', '--c-output'),
+  ].join('');
+
+  // Model performance table
+  const perfBody = $('models-perf-body');
+  if (!models.length) {
+    perfBody.innerHTML = '<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-s)">No model performance data yet. Complete more sessions to see stats.</td></tr>';
+  } else {
+    perfBody.innerHTML = models.map(m => `<tr>
+      <td><strong>${m.model}</strong></td>
+      <td style="font-size:.75rem">${(m.tools || []).map(t => toolChipExt(t)).join('')}</td>
+      <td class="num">${m.sessions}</td>
+      <td class="num">${(m.avg_turns || 0).toFixed(1)}</td>
+      <td class="num">${(m.cache_hit_pct || 0).toFixed(1)}%</td>
+      <td class="num">${m.avg_latency_ms ? Math.round(m.avg_latency_ms) + 'ms' : '—'}</td>
+      <td class="num" style="color:${(m.error_rate || 0) > 0.1 ? 'var(--lv-warn)' : 'var(--text-m)'}">${((m.error_rate || 0) * 100).toFixed(1)}%</td>
+    </tr>`).join('');
+  }
+
+  // Win rates table
+  const wrBody = $('models-winrate-body');
+  if (!winRates.length) {
+    wrBody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-s)">Not enough data yet. Need 2+ sessions per tool/model/task combination.</td></tr>';
+  } else {
+    wrBody.innerHTML = winRates.slice(0, 25).map(r => `<tr>
+      <td>${toolChipExt(r.tool_id)}</td>
+      <td style="font-size:.78rem">${r.model}</td>
+      <td><span style="background:#f1f5f9;padding:2px 8px;border-radius:4px;font-size:.72rem">${r.task_type}</span></td>
+      <td class="num"><strong style="color:${r.win_rate >= 70 ? 'var(--lv-good)' : r.win_rate >= 40 ? 'var(--lv-ok)' : 'var(--text-m)'}">${r.win_rate}%</strong></td>
+      <td class="num">${(r.avg_turns || 0).toFixed(1)}</td>
+      <td class="num">${r.sessions}</td>
+    </tr>`).join('');
+  }
+
+  // Routing recommendation button
+  $('routing-btn').onclick = async () => {
+    const task = $('routing-task-input').value.trim();
+    if (!task) return;
+    const result = $('routing-result');
+    result.innerHTML = '<span style="color:var(--text-s)">Analyzing your historical data...</span>';
+    const data = await fJ(`/api/routing/recommend?task=${encodeURIComponent(task)}`);
+    if (!data) { result.innerHTML = '<span style="color:var(--lv-warn)">Failed to get recommendation.</span>'; return; }
+    if (data.recommendation) {
+      result.innerHTML = `
+        <div style="background:var(--lv-good-bg);border-left:4px solid var(--lv-good);padding:12px 16px;border-radius:var(--radius-sm);margin-bottom:10px">
+          <strong style="font-size:.9rem">Use: ${toolChipExt(data.recommendation.tool)} with <strong>${data.recommendation.model}</strong></strong>
+          <p style="margin-top:6px;color:var(--text-m)">${data.reason}</p>
+        </div>
+        ${data.win_rates?.length ? `<div style="font-size:.78rem;color:var(--text-s);margin-top:8px">
+          <strong>Top alternatives:</strong><br>
+          ${data.win_rates.slice(1, 5).map(r => `${toolChipExt(r.tool_id)} ${r.model} — ${r.win_rate}% win rate, avg ${r.avg_turns?.toFixed(1)} turns`).join('<br>')}
+        </div>` : ''}
+      `;
+    } else {
+      result.innerHTML = `<div style="background:#f8f9fa;padding:12px 16px;border-radius:var(--radius-sm);color:var(--text-m)">${data.reason}</div>`;
+    }
+  };
+
+  $('routing-task-input').addEventListener('keydown', e => { if (e.key === 'Enter') $('routing-btn').click(); });
 }
 
 // ---- PWA ----

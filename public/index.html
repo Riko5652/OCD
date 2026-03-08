@@ -22,6 +22,7 @@
       --shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.03);
       /* Tool colors */
       --t-claude:#d97706; --t-cursor:#8b5cf6; --t-antigravity:#06b6d4;
+      --t-aider:#10b981; --t-windsurf:#6366f1; --t-copilot:#24292f;
     }
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg-body);color:var(--text-m)}
@@ -101,6 +102,8 @@
     <button class="tb" data-t="personal">Personal</button>
     <button class="tb" data-t="optimize">Optimization</button>
     <button class="tb" data-t="insights">Insights</button>
+    <button class="tb" data-t="projects">Projects</button>
+    <button class="tb" data-t="models">Models</button>
   </nav>
 
   <div id="issue-banner" role="alert" aria-live="polite">
@@ -332,6 +335,18 @@
       </div>
     </div>
 
+    <!-- Panel B2: Daily Pick (Claude Automation Recommender) -->
+    <div class="card" id="ins-daily-pick-card" style="border-left:3px solid var(--primary)">
+      <div style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px;flex-wrap:wrap">
+        <h2 style="margin:0">🤖 Today's Automation Pick</h2>
+        <button id="ins-pick-refresh-btn" title="Regenerate" style="background:none;border:1px solid var(--border,#e5e7eb);border-radius:var(--radius-pill);padding:4px 12px;font-size:.76rem;cursor:pointer;color:var(--text-s)">↺ Refresh</button>
+      </div>
+      <div id="ins-daily-pick-output" style="font-size:.84rem;line-height:1.75;white-space:pre-wrap;min-height:48px;color:var(--text-m)">
+        <span style="color:var(--text-s)">Loading today's recommendation…</span>
+      </div>
+      <p id="ins-daily-pick-meta" style="font-size:.72rem;color:var(--text-s);margin-top:8px"></p>
+    </div>
+
     <!-- Panel C: Actions + Deep Analyze -->
     <div class="card" id="ins-actions-card">
       <h2>Actions &amp; Prompt Analysis</h2>
@@ -343,6 +358,51 @@
       <div id="ins-deep-output" style="display:none;background:#f8f9fa;border-radius:var(--radius-sm);padding:14px;font-size:.82rem;line-height:1.7;white-space:pre-wrap;max-height:400px;overflow-y:auto;border:1px solid #e5e7eb;margin-bottom:16px"></div>
       <h2 style="margin-bottom:12px">Recommendations</h2>
       <div id="ins-recs-enhanced" class="rg"></div>
+    </div>
+  </section>
+
+  <!-- PROJECTS -->
+  <section id="t-projects" class="tp">
+    <div class="kpi" id="k-projects"></div>
+    <div id="projects-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:14px;margin-bottom:18px"></div>
+    <!-- Drill-down panel (hidden by default) -->
+    <div id="project-drilldown" style="display:none">
+      <div class="card" style="border-left:4px solid var(--primary)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+          <h2 id="drilldown-title">Project</h2>
+          <button id="drilldown-close" style="background:none;border:none;cursor:pointer;font-size:1.2rem;color:var(--text-s)">✕</button>
+        </div>
+        <div id="drilldown-content"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MODELS -->
+  <section id="t-models" class="tp">
+    <div class="kpi" id="k-models"></div>
+    <div class="g2">
+      <div class="card">
+        <h2>Model Performance (all tools)</h2>
+        <div style="overflow-x:auto"><table><thead><tr>
+          <th>Model</th><th>Tools</th><th class="num">Sessions</th>
+          <th class="num">Avg Turns</th><th class="num">Cache Hit</th><th class="num">Latency</th><th class="num">Error Rate</th>
+        </tr></thead><tbody id="models-perf-body"></tbody></table></div>
+      </div>
+      <div class="card">
+        <h2>Model Win Rates by Task</h2>
+        <div style="overflow-x:auto"><table><thead><tr>
+          <th>Tool</th><th>Model</th><th>Task</th><th class="num">Win Rate</th><th class="num">Avg Turns</th><th class="num">Sessions</th>
+        </tr></thead><tbody id="models-winrate-body"></tbody></table></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Routing Recommendation</h2>
+      <div style="display:flex;gap:10px;margin-bottom:14px;flex-wrap:wrap;align-items:center">
+        <input id="routing-task-input" type="text" placeholder="Describe your task (e.g. fix postgres migration, build React component...)"
+          style="flex:1;min-width:260px;padding:8px 14px;border:1px solid #ddd;border-radius:var(--radius-sm);font-size:.84rem">
+        <button id="routing-btn" style="background:var(--primary);color:#fff;border:none;padding:8px 20px;border-radius:var(--radius-pill);cursor:pointer;font-size:.84rem;font-weight:600">Get Recommendation</button>
+      </div>
+      <div id="routing-result" style="font-size:.84rem;line-height:1.7;color:var(--text-m)"></div>
     </div>
   </section>
 
