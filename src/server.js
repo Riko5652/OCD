@@ -8,15 +8,17 @@ import {
   getAllSessions, getSessionById, getTurnsForSession,
   getDailyStatsRange, getCommitScores as dbGetCommitScores,
   getRecommendations, getOverview,
+  getCachedInsight, setCachedInsight,
 } from './db.js';
 import { adapter as claudeAdapter } from './adapters/claude-code.js';
 import { adapter as cursorAdapter } from './adapters/cursor.js';
 import { adapter as antigravityAdapter } from './adapters/antigravity.js';
+import { register, getAdapter } from './adapters/registry.js';
 import { computeOverview, computeToolComparison, computeModelUsage, computeCodeGeneration, computeInsights, computeCostAnalysis, computePersonalInsights, rebuildDailyStats } from './engine/analytics.js';
 import { runOptimizer } from './engine/optimizer.js';
 import { scoreAndSave } from './engine/scorer.js';
 import { computeProfile, computeTrends, computePromptMetrics } from './engine/insights.js';
-import { detectProvider, streamDeepAnalysis } from './engine/llm-analyzer.js';
+import { detectProvider, streamDeepAnalysis, buildDailyPickPrompt, callAzure } from './engine/llm-analyzer.js';
 import { startWatchers, stopWatchers } from './watcher.js';
 import { analyzePromptMetrics } from './engine/prompt-analyzer.js';
 
@@ -28,6 +30,7 @@ import { config, printConfig } from './config.js';
 const app = express();
 const PORT = config.port;
 const adapters = [claudeAdapter, cursorAdapter, antigravityAdapter];
+adapters.forEach(register);
 
 // ---- SSE live push ----
 const sseClients = new Set();
@@ -101,6 +104,20 @@ async function ingestAdapter(adapter) {
   }
 }
 
+// ---- In-memory result cache (invalidated after each ingest) ----
+// All heavy compute functions write here once; subsequent requests return instantly.
+
+const RC = {};
+
+function invalidateCache() {
+  for (const k of Object.keys(RC)) delete RC[k];
+}
+
+function cached(key, fn) {
+  if (RC[key] === undefined) RC[key] = fn();
+  return RC[key];
+}
+
 async function ingestAll() {
   console.log('[ingest] Starting full ingestion...');
   const start = Date.now();
@@ -109,7 +126,29 @@ async function ingestAll() {
   }
   rebuildDailyStats();
   runOptimizer();
+  invalidateCache();
   console.log(`[ingest] Complete in ${Date.now() - start}ms`);
+  // Pre-warm cache in background so first tab load is instant
+  setImmediate(() => {
+    try {
+      cached('overview', computeOverview);
+      cached('compare', computeToolComparison);
+      cached('models', computeModelUsage);
+      cached('code-generation', computeCodeGeneration);
+      cached('insights', computeInsights);
+      cached('costs', computeCostAnalysis);
+      cached('personal-insights', computePersonalInsights);
+      cached('ins:profile', computeProfile);
+      cached('ins:trends:90', () => computeTrends(90));
+      cached('ins:prompt-metrics', computePromptMetrics);
+      cached('recs:false', () => getRecommendations(false));
+      cached('daily:180', () => getDailyStatsRange(180));
+      cached('commits:100', () => dbGetCommitScores(100));
+      console.log('[cache] Pre-warmed');
+    } catch (e) {
+      console.warn('[cache] Pre-warm error:', e.message);
+    }
+  });
   broadcast('refresh');
 }
 
@@ -119,29 +158,29 @@ app.use(express.static(join(__dirname, '..', 'public')));
 // ---- API Routes ----
 
 // Overview KPIs
-app.get('/api/overview', (req, res) => {
-  res.json(computeOverview());
+app.get('/api/overview', (_req, res) => {
+  res.json(cached('overview', computeOverview));
 });
 
 // Tool comparison
-app.get('/api/compare', (req, res) => {
-  res.json(computeToolComparison());
+app.get('/api/compare', (_req, res) => {
+  res.json(cached('compare', computeToolComparison));
 });
 
 // Model usage analytics
-app.get('/api/models', (req, res) => {
-  res.json(computeModelUsage());
+app.get('/api/models', (_req, res) => {
+  res.json(cached('models', computeModelUsage));
 });
 
 // All sessions (with optional tool filter)
 app.get('/api/sessions', (req, res) => {
   const toolId = req.query.tool || null;
   const limit = parseInt(req.query.limit) || 100;
-  const sessions = getAllSessions(toolId, limit);
-  res.json({ sessions });
+  const cacheKey = `sessions:${toolId}:${limit}`;
+  res.json({ sessions: cached(cacheKey, () => getAllSessions(toolId, limit)) });
 });
 
-// Single session with turns
+// Single session with turns (not cached — low-frequency)
 app.get('/api/sessions/:id', (req, res) => {
   const session = getSessionById(req.params.id);
   if (!session) return res.status(404).json({ error: 'Session not found' });
@@ -152,63 +191,56 @@ app.get('/api/sessions/:id', (req, res) => {
 // Daily stats (30-day default)
 app.get('/api/daily', (req, res) => {
   const days = parseInt(req.query.days) || 180;
-  res.json(getDailyStatsRange(days));
+  res.json(cached(`daily:${days}`, () => getDailyStatsRange(days)));
 });
 
 // Commit scores (Cursor AI vs human)
 app.get('/api/commits', (req, res) => {
   const limit = parseInt(req.query.limit) || 100;
-  res.json(dbGetCommitScores(limit));
+  res.json(cached(`commits:${limit}`, () => dbGetCommitScores(limit)));
 });
 
 // Code generation analytics
-app.get('/api/code-generation', (req, res) => {
-  res.json(computeCodeGeneration());
+app.get('/api/code-generation', (_req, res) => {
+  res.json(cached('code-generation', computeCodeGeneration));
 });
 
 // Cross-tool insights (thinking depth, errors, recovery, suggestions)
-app.get('/api/insights', (req, res) => {
-  res.json(computeInsights());
+app.get('/api/insights', (_req, res) => {
+  res.json(cached('insights', computeInsights));
 });
 
 // Cost estimation by tool and model
-app.get('/api/costs', (req, res) => {
-  res.json(computeCostAnalysis());
+app.get('/api/costs', (_req, res) => {
+  res.json(cached('costs', computeCostAnalysis));
 });
 
 // Personal insights (gamification + coaching)
-let personalInsightsCache = null;
-let personalInsightsCacheAt = 0;
-app.get('/api/personal-insights', (req, res) => {
-  const now = Date.now();
-  if (!personalInsightsCache || now - personalInsightsCacheAt > 30000) {
-    personalInsightsCache = computePersonalInsights();
-    personalInsightsCacheAt = now;
-  }
-  res.json(personalInsightsCache);
+app.get('/api/personal-insights', (_req, res) => {
+  res.json(cached('personal-insights', computePersonalInsights));
 });
 
 // Optimization recommendations
 app.get('/api/recommendations', (req, res) => {
   const all = req.query.all === 'true';
-  res.json(getRecommendations(all));
+  res.json(cached(`recs:${all}`, () => getRecommendations(all)));
 });
 
 // ── Insights routes ──────────────────────────────────────────────────────────
 
 app.get('/api/insights/profile', (_req, res) => {
-  try { res.json(computeProfile()); }
+  try { res.json(cached('ins:profile', computeProfile)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/insights/trends', (req, res) => {
   const days = parseInt(req.query.days) || 90;
-  try { res.json(computeTrends(days)); }
+  try { res.json(cached(`ins:trends:${days}`, () => computeTrends(days))); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 app.get('/api/insights/prompt-metrics', (_req, res) => {
-  try { res.json(computePromptMetrics()); }
+  try { res.json(cached('ins:prompt-metrics', computePromptMetrics)); }
   catch (e) { res.status(500).json({ error: e.message }); }
 });
 
@@ -257,7 +289,7 @@ app.get('/api/efficiency', (req, res) => {
 // Cursor daily stats (tab/composer lines)
 app.get('/api/cursor-daily', async (req, res) => {
   try {
-    const stats = await cursorAdapter.getDailyStats();
+    const stats = await getAdapter('cursor')?.getDailyStats?.();
     res.json(stats);
   } catch (e) {
     res.json([]);
@@ -274,6 +306,108 @@ app.get('/api/antigravity-stats', async (req, res) => {
   }
 });
 
+// ── Daily Pick (Claude Automation Recommender) ───────────────────────────────
+
+const DAILY_PICK_KEY = 'daily-pick';
+
+async function generateDailyPick() {
+  const today = new Date().toISOString().split('T')[0];
+  const cached = getCachedInsight(DAILY_PICK_KEY);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (parsed.date === today) {
+        console.log('[daily-pick] Already generated for today, skipping');
+        return;
+      }
+    } catch { /* old format, regenerate */ }
+  }
+
+  const { provider, available } = await detectProvider();
+  if (!available) {
+    console.log('[daily-pick] No LLM provider available, skipping');
+    return;
+  }
+
+  try {
+    console.log(`[daily-pick] Generating with provider=${provider}`);
+    const sessions = getDb().prepare(`
+      SELECT s.*, t.label as first_label
+      FROM sessions s
+      LEFT JOIN turns t ON t.session_id = s.id AND t.rowid = (
+        SELECT MIN(rowid) FROM turns WHERE session_id = s.id
+      )
+      ORDER BY s.started_at DESC LIMIT 20
+    `).all();
+
+    if (sessions.length === 0) {
+      console.log('[daily-pick] No sessions yet, skipping');
+      return;
+    }
+
+    const prompt = buildDailyPickPrompt(sessions);
+    let text = '';
+
+    if (provider === 'azure') {
+      text = await callAzure(prompt);
+    } else if (provider === 'openai') {
+      const r = await fetch(`${process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1'}/chat/completions`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
+        body: JSON.stringify({ model: process.env.OPENAI_MODEL || 'gpt-4o-mini', messages: [{ role: 'user', content: prompt }], max_tokens: 400 }),
+        signal: AbortSignal.timeout(60000),
+      });
+      const json = await r.json();
+      text = json.choices?.[0]?.message?.content || '';
+    } else if (provider === 'anthropic') {
+      const r = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-api-key': process.env.ANTHROPIC_API_KEY, 'anthropic-version': '2023-06-01' },
+        body: JSON.stringify({ model: process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001', messages: [{ role: 'user', content: prompt }], max_tokens: 400 }),
+        signal: AbortSignal.timeout(60000),
+      });
+      const json = await r.json();
+      text = json.content?.[0]?.text || '';
+    } else if (provider === 'ollama') {
+      const r = await fetch(`${process.env.OLLAMA_HOST || 'http://localhost:11434'}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model: process.env.OLLAMA_MODEL || 'gemma2:2b', prompt, stream: false }),
+        signal: AbortSignal.timeout(60000),
+      });
+      const json = await r.json();
+      text = json.response || '';
+    }
+
+    if (text) {
+      setCachedInsight(DAILY_PICK_KEY, JSON.stringify({ date: today, text, provider }));
+      console.log(`[daily-pick] Saved (${text.length} chars)`);
+    }
+  } catch (e) {
+    console.error('[daily-pick] Error:', e.message);
+  }
+}
+
+// Route: get today's daily pick
+app.get('/api/insights/daily-pick', (req, res) => {
+  const today = new Date().toISOString().split('T')[0];
+  const cached = getCachedInsight(DAILY_PICK_KEY);
+  if (cached) {
+    try {
+      const parsed = JSON.parse(cached);
+      if (parsed.date === today) return res.json({ text: parsed.text, provider: parsed.provider, date: today });
+    } catch { /* old format */ }
+  }
+  res.json({ text: null, date: today });
+});
+
+// Route: force-regenerate daily pick
+app.post('/api/insights/daily-pick/refresh', async (req, res) => {
+  getDb().prepare(`DELETE FROM insight_cache WHERE key=?`).run(DAILY_PICK_KEY);
+  generateDailyPick().catch(e => console.error('[daily-pick] refresh error:', e.message));
+  res.json({ ok: true });
+});
+
 // ---- Start ----
 
 // Initialize DB
@@ -284,9 +418,9 @@ ingestAll().catch(e => console.error('[startup] Ingestion error:', e.message));
 
 // Start file watchers
 startWatchers(
-  () => { console.log('[watcher] Claude data changed'); ingestAdapter(claudeAdapter).then(broadcast); },
-  () => { console.log('[watcher] Cursor data changed'); ingestAdapter(cursorAdapter).then(broadcast); },
-  () => { console.log('[watcher] Antigravity data changed'); ingestAdapter(antigravityAdapter).then(broadcast); },
+  () => { console.log('[watcher] Claude data changed'); ingestAdapter(getAdapter('claude-code')).then(broadcast); },
+  () => { console.log('[watcher] Cursor data changed'); ingestAdapter(getAdapter('cursor')).then(broadcast); },
+  () => { console.log('[watcher] Antigravity data changed'); ingestAdapter(getAdapter('antigravity')).then(broadcast); },
 );
 
 app.listen(PORT, '0.0.0.0', () => {
@@ -294,13 +428,29 @@ app.listen(PORT, '0.0.0.0', () => {
   console.log(`  Local:     http://localhost:${PORT}`);
   console.log(`  Network:   http://0.0.0.0:${PORT}`);
   printConfig();
+
+  // Generate daily pick on startup (runs only if not already generated today)
+  setTimeout(() => generateDailyPick().catch(e => console.error('[daily-pick] startup error:', e.message)), 5000);
+
+  // Re-run daily pick at midnight
+  const scheduleNextMidnight = () => {
+    const now = new Date();
+    const tomorrow = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 1, 0);
+    const msUntilMidnight = tomorrow - now;
+    setTimeout(() => {
+      generateDailyPick().catch(e => console.error('[daily-pick] midnight error:', e.message));
+      scheduleNextMidnight();
+    }, msUntilMidnight);
+    console.log(`[daily-pick] Next run scheduled in ${Math.round(msUntilMidnight / 60000)}m`);
+  };
+  scheduleNextMidnight();
 });
 
 // Graceful shutdown
 process.on('SIGINT', () => {
   console.log('\nShutting down...');
   stopWatchers();
-  const { closeAll } = cursorAdapter;
+  const { closeAll } = getAdapter('cursor') || {};
   if (closeAll) closeAll();
   process.exit(0);
 });
