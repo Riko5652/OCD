@@ -14,6 +14,7 @@ import {
 import './adapters/claude-code.js';    // self-registers via registry
 import './adapters/cursor.js';         // self-registers via registry
 import './adapters/antigravity.js';    // self-registers via registry
+import './adapters/aider.js';          // self-registers via registry
 import { getAdapters, getAdapter } from './adapters/registry.js';
 import { computeOverview, computeToolComparison, computeModelUsage, computeCodeGeneration, computeInsights, computeCostAnalysis, computePersonalInsights, rebuildDailyStats } from './engine/analytics.js';
 import { runOptimizer } from './engine/optimizer.js';

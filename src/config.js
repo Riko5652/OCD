@@ -117,6 +117,10 @@ export const config = {
     importedDirs: getImportedAntigravityDirs(),
   },
 
+  aider: {
+    logsDir: process.env.AIDER_LOGS_DIR || join(home, '.aider', 'logs'),
+  },
+
   platform,
 };
 

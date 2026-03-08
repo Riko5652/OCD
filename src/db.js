@@ -210,6 +210,7 @@ function migrate(db) {
   upsert.run('claude-code', 'Claude Code');
   upsert.run('cursor', 'Cursor');
   upsert.run('antigravity', 'Antigravity');
+  upsert.run('aider', 'Aider');
 }
 
 // ---- Query helpers ----
