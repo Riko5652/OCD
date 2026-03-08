@@ -1308,6 +1308,60 @@ function rInsActions(prompt, llmStatus) {
         ${guide ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:.76rem;font-weight:600;color:var(--text-s)">How to fix ▸</summary><div style="margin-top:6px;font-size:.78rem;line-height:1.6;color:var(--text-m)">${guide}</div></details>` : ''}
       </div>`;
     }).join('') || '<p style="color:var(--text-s);font-size:.8rem">No active recommendations.</p>';
+
+  // Deep Analyze streaming handler
+  if (btn && !btn._deepBound) {
+    btn._deepBound = true;
+    btn.addEventListener('click', () => {
+      const out = $('ins-deep-output');
+      if (!out) return;
+      out.style.display = 'block';
+      out.textContent = 'Analyzing your sessions…';
+      btn.disabled = true;
+      if (statusEl) statusEl.textContent = 'Connecting…';
+
+      const url = '/api/insights/deep-analyze';
+      const es = new EventSource(url);
+      let fullText = '';
+
+      es.onmessage = (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.error) {
+            out.textContent = data.error === 'no_provider'
+              ? 'No LLM provider configured. Set OLLAMA_HOST, OPENAI_API_KEY, or ANTHROPIC_API_KEY and restart.'
+              : `Error: ${data.error}`;
+            es.close();
+            btn.disabled = false;
+            if (statusEl) statusEl.textContent = '';
+            return;
+          }
+          if (data.token) {
+            if (fullText === 'Analyzing your sessions…' || !fullText) fullText = '';
+            fullText += data.token;
+            out.textContent = fullText;
+            out.scrollTop = out.scrollHeight;
+          }
+          if (data.done) {
+            es.close();
+            btn.disabled = false;
+            const src = data.cached ? 'cached' : `${data.provider} · ${data.model}`;
+            if (statusEl) statusEl.textContent = `Done (${src}) · cached 24h · add ?refresh=1 to regenerate`;
+            S.insLlmStatus = null; // re-fetch status on next render
+          }
+        } catch { /* malformed chunk */ }
+      };
+
+      es.onerror = () => {
+        es.close();
+        if (!fullText || fullText === 'Analyzing your sessions…') {
+          out.textContent = 'Connection error — is the server running?';
+        }
+        btn.disabled = false;
+        if (statusEl) statusEl.textContent = '';
+      };
+    });
+  }
 }
 
 // ---- PWA ----
