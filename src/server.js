@@ -200,6 +200,11 @@ app.use(express.static(join(__dirname, '..', 'public')));
 
 // ---- API Routes ----
 
+// Health check (for Docker, uptime monitors, etc.)
+app.get('/api/health', (_req, res) => {
+  res.json({ status: 'ok', version: '3.0.0', uptime: Math.round(process.uptime()) });
+});
+
 // Overview KPIs
 app.get('/api/overview', (_req, res) => {
   res.json(cached('overview', computeOverview));
