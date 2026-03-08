@@ -9,6 +9,7 @@ import {
   getDailyStatsRange, getCommitScores as dbGetCommitScores,
   getRecommendations, getOverview,
   getCachedInsight, setCachedInsight,
+  upsertModelPerformance, getModelPerformance,
 } from './db.js';
 import './adapters/claude-code.js';    // self-registers via registry
 import './adapters/cursor.js';         // self-registers via registry
@@ -18,9 +19,11 @@ import { computeOverview, computeToolComparison, computeModelUsage, computeCodeG
 import { runOptimizer } from './engine/optimizer.js';
 import { scoreAndSave } from './engine/scorer.js';
 import { computeProfile, computeTrends, computePromptMetrics } from './engine/insights.js';
+import { computeAllProjects, computeProjectInsights } from './engine/project-insights.js';
 import { detectProvider, streamDeepAnalysis, buildDailyPickPrompt, callAzure } from './engine/llm-analyzer.js';
 import { startWatchers, stopWatchers } from './watcher.js';
 import { analyzePromptMetrics } from './engine/prompt-analyzer.js';
+import { classifySession, computeToolModelWinRates, getRoutingRecommendation } from './engine/cross-tool-router.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -63,6 +66,25 @@ async function ingestAdapter(adapter) {
     for (const session of sessions) {
       upsertSession(session);
       scoreAndSave(session);
+      // Classify session by task type for routing recommendations
+      try {
+        const cls = classifySession(session);
+        getDb().prepare(`
+          INSERT OR REPLACE INTO task_classifications
+            (session_id, task_type, language, complexity, classified_at)
+          VALUES (?,?,?,?,?)
+        `).run(session.id, cls.taskType, cls.language, cls.complexity, Date.now());
+      } catch (_) {} // never block ingestion
+      // Write per-model performance rows
+      if (session._modelPerf?.length) {
+        const date = new Date(session.started_at || Date.now()).toISOString().slice(0, 10);
+        upsertModelPerformance(session._modelPerf.map(r => ({
+          ...r,
+          session_id: session.id,
+          tool_id: session.tool_id || adapter.id,
+          date,
+        })));
+      }
     }
 
     // Ingest turns for recent sessions (last 50)
@@ -405,6 +427,89 @@ app.post('/api/insights/daily-pick/refresh', async (req, res) => {
   getDb().prepare(`DELETE FROM insight_cache WHERE key=?`).run(DAILY_PICK_KEY);
   generateDailyPick().catch(e => console.error('[daily-pick] refresh error:', e.message));
   res.json({ ok: true });
+});
+
+// Model-level performance breakdown
+app.get('/api/models/performance', (req, res) => {
+  try {
+    const rows = getModelPerformance({
+      tool:  req.query.tool,
+      model: req.query.model,
+      days:  parseInt(req.query.days || '90'),
+    });
+
+    // Aggregate by model across all sessions
+    const byModel = {};
+    for (const r of rows) {
+      if (!byModel[r.model]) byModel[r.model] = {
+        model: r.model, tools: new Set(), sessions: 0,
+        turns: 0, input_tokens: 0, output_tokens: 0, cache_read: 0,
+        latencies: [], errors: 0,
+      };
+      const m = byModel[r.model];
+      m.tools.add(r.tool_id);
+      m.sessions++;
+      m.turns        += r.turns;
+      m.input_tokens += r.input_tokens;
+      m.output_tokens+= r.output_tokens;
+      m.cache_read   += r.cache_read;
+      if (r.avg_latency_ms) m.latencies.push(r.avg_latency_ms);
+      m.errors       += r.error_count;
+    }
+
+    const result = Object.values(byModel).map(m => ({
+      model:          m.model,
+      tools:          [...m.tools],
+      sessions:       m.sessions,
+      turns:          m.turns,
+      input_tokens:   m.input_tokens,
+      output_tokens:  m.output_tokens,
+      cache_hit_pct:  m.cache_read / Math.max(m.input_tokens + m.cache_read, 1) * 100,
+      avg_latency_ms: m.latencies.length
+        ? m.latencies.reduce((a, b) => a + b, 0) / m.latencies.length
+        : null,
+      error_rate: m.turns > 0 ? m.errors / m.turns : 0,
+    }));
+
+    res.json({ models: result.sort((a, b) => b.turns - a.turns) });
+  } catch (err) {
+    console.error('[models/performance]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+// Cross-tool auto-routing
+app.get('/api/routing/win-rates', (req, res) => {
+  try {
+    res.json({ win_rates: computeToolModelWinRates({
+      taskType: req.query.task_type,
+      language: req.query.language,
+    })});
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/routing/recommend', (req, res) => {
+  try {
+    res.json(getRoutingRecommendation(req.query.task || ''));
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Project rollup
+app.get('/api/projects', (req, res) => {
+  try {
+    res.json({ projects: cached('projects:list', computeAllProjects) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/projects/:projectName/insights', (req, res) => {
+  try {
+    const data = computeProjectInsights(req.params.projectName);
+    if (!data) return res.status(404).json({ error: 'No sessions found for this project.' });
+    res.json(data);
+  } catch (err) {
+    console.error('[project-insights]', err);
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // ---- Start ----

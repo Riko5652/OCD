@@ -165,6 +165,42 @@ function migrate(db) {
       result TEXT NOT NULL,
       created_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS model_performance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      tool_id TEXT NOT NULL,
+      model TEXT NOT NULL,
+      turns INTEGER DEFAULT 0,
+      input_tokens INTEGER DEFAULT 0,
+      output_tokens INTEGER DEFAULT 0,
+      cache_read INTEGER DEFAULT 0,
+      avg_latency_ms REAL,
+      error_count INTEGER DEFAULT 0,
+      date TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_mp_model ON model_performance(model);
+    CREATE INDEX IF NOT EXISTS idx_mp_tool ON model_performance(tool_id, model);
+
+    CREATE TABLE IF NOT EXISTS task_classifications (
+      session_id TEXT PRIMARY KEY,
+      task_type TEXT,
+      language TEXT,
+      framework TEXT,
+      complexity TEXT,
+      classified_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_tc_task ON task_classifications(task_type, language);
+
+    CREATE TABLE IF NOT EXISTS project_index (
+      name TEXT PRIMARY KEY,
+      session_count INTEGER DEFAULT 0,
+      total_tokens INTEGER DEFAULT 0,
+      total_lines_added INTEGER DEFAULT 0,
+      dominant_tool TEXT,
+      dominant_model TEXT,
+      last_active INTEGER
+    );
   `);
 
   // Seed tools
@@ -414,4 +450,37 @@ export function setCachedInsight(key, result) {
     INSERT INTO insight_cache (key, result, created_at) VALUES (?,?,?)
     ON CONFLICT(key) DO UPDATE SET result=excluded.result, created_at=excluded.created_at
   `).run(key, result, Date.now());
+}
+
+export function upsertModelPerformance(rows) {
+  const db = getDb();
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO model_performance
+      (session_id, tool_id, model, turns, input_tokens, output_tokens,
+       cache_read, avg_latency_ms, error_count, date)
+    VALUES (?,?,?,?,?,?,?,?,?,?)
+  `);
+  const insertMany = db.transaction((rows) => {
+    for (const r of rows) stmt.run(
+      r.session_id, r.tool_id, r.model, r.turns, r.input_tokens,
+      r.output_tokens, r.cache_read, r.avg_latency_ms ?? null,
+      r.error_count, r.date
+    );
+  });
+  insertMany(rows);
+}
+
+export function getModelPerformance({ tool, model, days = 90 } = {}) {
+  const db = getDb();
+  const since = Date.now() - days * 86400000;
+  let sql = `
+    SELECT mp.*, s.primary_model, s.cache_hit_pct
+    FROM model_performance mp
+    JOIN sessions s ON s.id = mp.session_id
+    WHERE s.started_at > ?
+  `;
+  const params = [since];
+  if (tool)  { sql += ` AND mp.tool_id = ?`;  params.push(tool); }
+  if (model) { sql += ` AND mp.model = ?`;    params.push(model); }
+  return db.prepare(sql).all(...params);
 }
