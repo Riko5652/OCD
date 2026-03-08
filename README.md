@@ -4,6 +4,20 @@ Track and compare your AI coding tool usage across **Claude Code**, **Cursor**, 
 
 ![Dashboard Overview](https://img.shields.io/badge/tools-3-blue) ![License](https://img.shields.io/badge/license-MIT-green) ![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)
 
+## Screenshots
+
+**Overview** — hero KPIs, daily turns & token charts, tool distribution
+![Overview](screenshots/01-overview.png)
+
+**Personal** — XP level, achievements, activity heatmap
+![Personal](screenshots/02-personal.png)
+
+**Compare Tools** — session distribution, donut chart, metrics table
+![Compare Tools](screenshots/03-compare-tools.png)
+
+**Sessions** — searchable table with tool badges, turns, tokens, models, top tools
+![Sessions](screenshots/04-sessions.png)
+
 ## What it does
 
 - Reads local data from your AI coding tools (no cloud accounts needed)
