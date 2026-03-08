@@ -195,6 +195,12 @@ const adapters = [claudeAdapter, cursorAdapter, antigravityAdapter, myToolAdapte
 - The SQLite database (`data/analytics.db`) is gitignored
 - No telemetry, no analytics, no tracking
 
+## Author
+
+Built by **[Dor Lipetz](https://github.com/Riko5652)**.
+
+If this tool saves you time, a ⭐ on GitHub is appreciated.
+
 ## License
 
-MIT
+MIT © [Dor Lipetz](https://github.com/Riko5652)
