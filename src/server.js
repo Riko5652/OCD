@@ -31,6 +31,8 @@ import { classifySession, computeToolModelWinRates, getRoutingRecommendation } f
 import { detectToolSwitches, getCrossToolStats } from './engine/cross-tool.js';
 import { scoreAllSessions, getAgenticLeaderboard } from './engine/agentic-scorer.js';
 import { checkActiveSession } from './engine/session-coach.js';
+import { getOptimalPromptStructure, suggestImprovements, extractPromptTemplates } from './engine/prompt-coach.js';
+import { classifyAllSessionTopics, getTopicBreakdown, getTopicSummary, detectTopic, scoreProjectRelevance } from './engine/topic-segmenter.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -554,6 +556,88 @@ app.get('/api/agentic/scores', (req, res) => {
   }
 });
 
+app.get('/api/prompt-coach/templates', (req, res) => {
+  try {
+    const templates = extractPromptTemplates({ minQuality: parseInt(req.query.min_quality || '70') });
+    res.json({ templates });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/prompt-coach/optimal', (req, res) => {
+  try {
+    const structure = getOptimalPromptStructure(req.query.task_type || 'general');
+    res.json(structure);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/prompt-coach/improve', (req, res) => {
+  try {
+    const suggestions = suggestImprovements(req.query.task_type || 'general');
+    res.json(suggestions);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Topic segmentation routes ─────────────────────────────────────────────
+
+app.get('/api/projects/:projectName/topics', async (req, res) => {
+  try {
+    const projectName = req.params.projectName;
+    const breakdown = getTopicBreakdown(projectName);
+
+    // For each topic with 3+ sessions, get/generate summary
+    const result = {};
+    for (const [topic, group] of Object.entries(breakdown)) {
+      const summaryData = group.sessions.length >= 3
+        ? await getTopicSummary(projectName, topic)
+        : { summary: null };
+      result[topic] = {
+        session_count: group.sessions.length,
+        total_tokens: group.total_tokens,
+        low_relevance_count: group.low_relevance_count,
+        summary: summaryData.summary,
+        sessions: group.sessions.slice(0, 10).map(s => ({
+          id: s.id,
+          tool: s.tool_id,
+          model: s.primary_model,
+          turns: s.total_turns,
+          quality: Math.round(s.quality_score || 0),
+          relevance: Math.round((s.project_relevance_score || 0.5) * 100),
+          date: new Date(s.started_at).toISOString().slice(0, 10),
+        })),
+      };
+    }
+
+    res.json({ project: projectName, topics: result });
+  } catch (err) {
+    console.error('[topics]', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.get('/api/topics/summary', (req, res) => {
+  try {
+    const db = getDb();
+    const distribution = db.prepare(`
+      SELECT topic, COUNT(*) as session_count, AVG(project_relevance_score) as avg_relevance
+      FROM sessions
+      WHERE topic IS NOT NULL
+      GROUP BY topic
+      ORDER BY session_count DESC
+    `).all();
+    res.json({ distribution });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get('/api/sessions/:id/classify', (req, res) => {
+  try {
+    const session = getDb().prepare(`SELECT id, title, tldr, raw_data, top_tools FROM sessions WHERE id = ?`).get(req.params.id);
+    if (!session) return res.status(404).json({ error: 'Session not found' });
+    const topic = detectTopic(session);
+    const relevance = scoreProjectRelevance(session, req.query.project || '');
+    res.json({ id: session.id, topic, project_relevance_score: relevance });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ---- Start ----
 
 // Initialize DB
@@ -580,6 +664,9 @@ app.listen(PORT, '0.0.0.0', () => {
 
   // Score unscored sessions for agentic leaderboard
   setTimeout(() => scoreAllSessions(), 5000);
+
+  // Classify session topics on startup
+  setTimeout(() => classifyAllSessionTopics(), 8000);
 
   // Re-run daily pick at midnight
   const scheduleNextMidnight = () => {

@@ -215,6 +215,27 @@ function migrate(db) {
     CREATE INDEX IF NOT EXISTS idx_sl_session_b ON session_links(session_b);
   `);
 
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS topic_clusters (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project_name TEXT,
+      topic TEXT NOT NULL,
+      session_ids TEXT NOT NULL,
+      summary TEXT,
+      total_tokens INTEGER DEFAULT 0,
+      total_sessions INTEGER DEFAULT 0,
+      date_range_start INTEGER,
+      date_range_end INTEGER,
+      generated_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_tc_project ON topic_clusters(project_name, topic);
+  `);
+
+  // Add columns to sessions table if not present
+  try { db.exec(`ALTER TABLE sessions ADD COLUMN topic TEXT`); } catch (_) {}
+  try { db.exec(`ALTER TABLE sessions ADD COLUMN project_relevance_score REAL`); } catch (_) {}
+  try { db.exec(`ALTER TABLE sessions ADD COLUMN topic_summary TEXT`); } catch (_) {}
+
   // Add agentic_score column (idempotent — ALTER TABLE fails silently if already exists)
   try {
     db.exec(`ALTER TABLE sessions ADD COLUMN agentic_score REAL`);

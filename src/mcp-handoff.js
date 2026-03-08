@@ -107,6 +107,29 @@ const TOOLS = [
       required: ['note'],
     },
   },
+  {
+    name: 'get_optimal_prompt_structure',
+    description: "Get the optimal prompt structure for a task type, based on your highest-quality historical sessions. Returns example prompts, tips, and recommended tool+model.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        task_type: { type: 'string', description: 'Task type: migration, component, debug, refactor, test, api, general' },
+      },
+      required: ['task_type'],
+    },
+  },
+  {
+    name: 'get_topic_summary',
+    description: "Get an executive summary of what was worked on for a specific topic within a project (e.g., 'What db-work was done in pm-dashboard?'). Detects unrelated sessions automatically.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        project: { type: 'string', description: 'Project name' },
+        topic: { type: 'string', description: 'Topic: db-work, frontend, debugging, devops, writing, planning, testing, api, general' },
+      },
+      required: ['project', 'topic'],
+    },
+  },
 ];
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
@@ -262,6 +285,24 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       db.prepare(`UPDATE sessions SET raw_data = ? WHERE id = ?`).run(JSON.stringify(raw), last.id);
 
       return { content: [{ type: 'text', text: `Handoff note saved. Retrieve it with get_last_session_context from another tool.` }] };
+    }
+
+    // ── get_optimal_prompt_structure ────────────────────────────────────────
+    if (name === 'get_optimal_prompt_structure') {
+      const { getOptimalPromptStructure } = await import('./engine/prompt-coach.js');
+      const result = getOptimalPromptStructure(args.task_type || 'general');
+      const text = result.available
+        ? [
+            `## Optimal Prompt Structure for ${result.task_type}`,
+            `- Best tool: ${result.best_tool} / ${result.best_model}`,
+            `- Avg turns: ${result.avg_turns} | Cache hit: ${result.avg_cache_hit}%`,
+            `- Based on ${result.example_count} high-quality sessions`,
+            ``,
+            `### Tips:`,
+            ...(result.tips || []).map(t => `- ${t}`),
+          ].join('\n')
+        : result.reason;
+      return { content: [{ type: 'text', text }] };
     }
 
     throw new Error(`Unknown tool: ${name}`);
