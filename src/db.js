@@ -201,7 +201,24 @@ function migrate(db) {
       dominant_model TEXT,
       last_active INTEGER
     );
+
+    CREATE TABLE IF NOT EXISTS session_links (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_a TEXT NOT NULL REFERENCES sessions(id),
+      session_b TEXT NOT NULL REFERENCES sessions(id),
+      link_type TEXT NOT NULL,
+      quality_score REAL,
+      shared_files INTEGER DEFAULT 0,
+      detected_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_sl_session_a ON session_links(session_a);
+    CREATE INDEX IF NOT EXISTS idx_sl_session_b ON session_links(session_b);
   `);
+
+  // Add agentic_score column (idempotent — ALTER TABLE fails silently if already exists)
+  try {
+    db.exec(`ALTER TABLE sessions ADD COLUMN agentic_score REAL`);
+  } catch (_) {} // column may already exist
 
   // Seed tools
   const upsert = db.prepare(
@@ -213,6 +230,7 @@ function migrate(db) {
   upsert.run('aider', 'Aider');
   upsert.run('windsurf', 'Windsurf');
   upsert.run('copilot', 'GitHub Copilot');
+  db.prepare(`INSERT OR IGNORE INTO tools (id, display_name) VALUES ('continue', 'Continue.dev')`).run();
 }
 
 // ---- Query helpers ----

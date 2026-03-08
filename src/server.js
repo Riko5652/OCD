@@ -17,6 +17,7 @@ import './adapters/antigravity.js';    // self-registers via registry
 import './adapters/aider.js';          // self-registers via registry
 import './adapters/windsurf.js';       // self-registers via registry
 import './adapters/copilot.js';        // self-registers via registry
+import './adapters/continue.js';       // self-registers via registry
 import { getAdapters, getAdapter } from './adapters/registry.js';
 import { computeOverview, computeToolComparison, computeModelUsage, computeCodeGeneration, computeInsights, computeCostAnalysis, computePersonalInsights, rebuildDailyStats } from './engine/analytics.js';
 import { runOptimizer } from './engine/optimizer.js';
@@ -27,6 +28,9 @@ import { detectProvider, streamDeepAnalysis, buildDailyPickPrompt, callAzure } f
 import { startWatchers, stopWatchers } from './watcher.js';
 import { analyzePromptMetrics } from './engine/prompt-analyzer.js';
 import { classifySession, computeToolModelWinRates, getRoutingRecommendation } from './engine/cross-tool-router.js';
+import { detectToolSwitches, getCrossToolStats } from './engine/cross-tool.js';
+import { scoreAllSessions, getAgenticLeaderboard } from './engine/agentic-scorer.js';
+import { checkActiveSession } from './engine/session-coach.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -57,6 +61,19 @@ function broadcast(event = 'refresh') {
     try { client.write(msg); } catch { sseClients.delete(client); }
   }
 }
+
+// Periodic session coach: emit coaching nudges to all SSE clients every 60s
+setInterval(() => {
+  try {
+    const nudges = checkActiveSession();
+    if (nudges.length > 0) {
+      const data = JSON.stringify({ nudges });
+      for (const res of sseClients) {
+        try { res.write(`event: coach\ndata: ${data}\n\n`); } catch { sseClients.delete(res); }
+      }
+    }
+  } catch (_) {} // never crash the interval
+}, 60000);
 
 // ---- Ingestion ----
 
@@ -515,6 +532,28 @@ app.get('/api/projects/:projectName/insights', (req, res) => {
   }
 });
 
+// Cross-tool intelligence
+app.get('/api/cross-tool', (req, res) => {
+  try {
+    detectToolSwitches(); // re-detect on every request (fast, idempotent)
+    const stats = getCrossToolStats();
+    res.json({ switches: stats });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Agentic session leaderboard
+app.get('/api/agentic/scores', (req, res) => {
+  try {
+    const days = parseInt(req.query.days || '90');
+    const leaderboard = getAgenticLeaderboard({ days });
+    res.json({ leaderboard });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ---- Start ----
 
 // Initialize DB
@@ -538,6 +577,9 @@ app.listen(PORT, '0.0.0.0', () => {
 
   // Generate daily pick on startup (runs only if not already generated today)
   setTimeout(() => generateDailyPick().catch(e => console.error('[daily-pick] startup error:', e.message)), 5000);
+
+  // Score unscored sessions for agentic leaderboard
+  setTimeout(() => scoreAllSessions(), 5000);
 
   // Re-run daily pick at midnight
   const scheduleNextMidnight = () => {
