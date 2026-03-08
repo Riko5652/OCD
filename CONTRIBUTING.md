@@ -1,79 +1,66 @@
 # Contributing to AI Productivity Dashboard
 
-Thank you for your interest in contributing! This is a local-first, privacy-focused tool for tracking AI coding assistant usage across Claude Code, Cursor, and Gemini/Antigravity.
+> **Note:** This is a personal plugin maintained by [@Riko5652](https://github.com/Riko5652).
+> It is shared as a **downloadable, self-hosted tool** — not an open-contribution project.
+> The `main` branch is protected and only the maintainer can merge changes.
 
-## Getting Started
+---
+
+## Using the Dashboard (for everyone)
 
 ### Prerequisites
 - Node.js >= 18.0.0
 - npm
+- At least one of: Claude Code, Cursor, or Gemini/Antigravity installed locally
 
-### Local Setup
+### Install & Run
 
 ```bash
 git clone https://github.com/Riko5652/ai-productivity-dashboard.git
 cd ai-productivity-dashboard
 npm install
-cp .env.example .env
 npm start
 # Dashboard available at http://localhost:3030
 ```
 
-To test with mock data:
+To explore with mock data before connecting your real tools:
 ```bash
 node seed-mock.mjs
+npm start
 ```
 
-## How to Contribute
+The dashboard auto-detects your installed AI tools on startup. No configuration needed.
 
-### Reporting Bugs
-Use the [Bug Report](.github/ISSUE_TEMPLATE/bug_report.md) issue template. Include:
-- Your OS and Node.js version
-- Which AI tools you have installed (Claude Code, Cursor, Gemini/Antigravity)
-- Steps to reproduce
-- Expected vs. actual behavior
+---
 
-### Suggesting Features
-Use the [Feature Request](.github/ISSUE_TEMPLATE/feature_request.md) issue template. Describe the problem you're solving, not just the solution.
+## Bug Reports & Feature Requests
 
-### Adding a New AI Tool Adapter
+Found a bug or have an idea? Open an issue using the provided templates:
 
-The dashboard is built to be extensible. To add support for a new AI coding tool:
+- [Report a bug](.github/ISSUE_TEMPLATE/bug_report.md)
+- [Request a feature](.github/ISSUE_TEMPLATE/feature_request.md)
 
-1. Create a new adapter in `src/adapters/` following the existing pattern
-2. Register it in `src/server.js`
-3. Add a seeder function to `seed-mock.mjs` for testing
-4. Document the data source path in your PR description
+Issues are reviewed by the maintainer. There is no guarantee of a response timeline.
 
-### Code Style
+---
 
-- **ES Modules**: This project uses `"type": "module"` — use `import`/`export`, not `require()`
-- **No build step**: Vanilla JS on the frontend, no bundler — keep it simple
-- **Privacy first**: No external API calls, no telemetry — all data stays local
-- **SQLite**: All persistence via `better-sqlite3` — no cloud databases
+## Pull Requests
 
-### Submitting a Pull Request
+PRs are not actively solicited, but well-scoped fixes may be considered.
 
-1. Fork the repository
-2. Create a branch: `git checkout -b feature/your-feature-name`
-3. Make your changes
-4. Test manually: `npm start` and verify the dashboard works
-5. Open a PR against `main` using the PR template
+If you do open a PR:
+- Keep it focused — one fix or one feature
+- Test with `npm start` and verify the dashboard loads at `http://localhost:3030`
+- Do not add external dependencies or cloud connections
+- All PRs require approval from @Riko5652 (CODEOWNERS) before merging
 
-### What Makes a Good PR
+**PRs that will not be merged:** telemetry, cloud sync, new dependencies without strong justification, scope creep.
 
-- Single focused change (one feature, one fix)
-- Tested with at least one real tool install or `seed-mock.mjs`
-- Clear description of what changed and why
-- No new external dependencies unless absolutely necessary
+---
 
 ## Privacy Commitment
 
-All contributions must maintain the project's zero-cloud, zero-telemetry design. Do not introduce:
-- External API calls for analytics or error reporting
-- Cloud database connections
-- Any code that transmits user data externally
-
-## Questions?
-
-Open a [GitHub Discussion](https://github.com/Riko5652/ai-productivity-dashboard/issues) or file an issue with the `question` label.
+This tool is local-only by design. Any contribution must preserve:
+- Zero external API calls
+- Zero telemetry or data transmission
+- All data stays on the user's machine

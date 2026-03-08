@@ -6,3 +6,11 @@ cursor-imports/
 .env
 .DS_Store
 Thumbs.db
+
+# Internal planning & session files — not for distribution
+docs/plans/
+docs/internal/
+ai_learnings.json
+ai_best_practices.md
+*.csv
+*.log
