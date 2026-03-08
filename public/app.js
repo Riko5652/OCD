@@ -1283,10 +1283,10 @@ function rInsActions(prompt, llmStatus) {
   const statusEl = $('ins-llm-status');
   if (btn && statusEl) {
     if (llmStatus?.available) {
-      btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer';
+      if (!btn._streaming) { btn.disabled = false; btn.style.opacity = '1'; btn.style.cursor = 'pointer'; }
       statusEl.textContent = `${llmStatus.provider} · ${llmStatus.model} · results cached 24h`;
     } else {
-      btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed';
+      if (!btn._streaming) { btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; }
       statusEl.innerHTML = 'No LLM — set <code>OLLAMA_HOST</code>, <code>OPENAI_API_KEY</code>, or <code>ANTHROPIC_API_KEY</code>';
     }
   }
@@ -1318,6 +1318,7 @@ function rInsActions(prompt, llmStatus) {
       out.style.display = 'block';
       out.textContent = 'Analyzing your sessions…';
       btn.disabled = true;
+      btn._streaming = true;
       if (statusEl) statusEl.textContent = 'Connecting…';
 
       const url = btn._hasResult
@@ -1335,11 +1336,12 @@ function rInsActions(prompt, llmStatus) {
               : `Error: ${data.error}`;
             es.close();
             btn.disabled = false;
+            btn._streaming = false;
             if (statusEl) statusEl.textContent = '';
             return;
           }
           if (data.token) {
-            if (fullText === 'Analyzing your sessions…' || !fullText) fullText = '';
+            if (!fullText) fullText = '';
             fullText += data.token;
             out.textContent = fullText;
             out.scrollTop = out.scrollHeight;
@@ -1347,6 +1349,7 @@ function rInsActions(prompt, llmStatus) {
           if (data.done) {
             es.close();
             btn.disabled = false;
+            btn._streaming = false;
             btn._hasResult = true;
             const src = data.cached ? 'cached' : `${data.provider} · ${data.model}`;
             if (statusEl) statusEl.textContent = `Done (${src}) · cached 24h · click again to regenerate`;
@@ -1357,10 +1360,9 @@ function rInsActions(prompt, llmStatus) {
 
       es.onerror = () => {
         es.close();
-        if (!fullText || fullText === 'Analyzing your sessions…') {
-          out.textContent = 'Connection error — is the server running?';
-        }
+        if (!fullText) out.textContent = 'Connection error — is the server running?';
         btn.disabled = false;
+        btn._streaming = false;
         if (statusEl) statusEl.textContent = '';
       };
     });
