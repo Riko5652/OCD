@@ -96,6 +96,47 @@ function getImportedAntigravityDirs() {
   return dirs;
 }
 
+// Windsurf DB path (platform-specific)
+function getWindsurfDbPath() {
+  const base = {
+    win32: join(home, 'AppData', 'Roaming', 'Windsurf', 'User', 'globalStorage', 'codeium.codeium', 'db'),
+    darwin: join(home, 'Library', 'Application Support', 'Windsurf', 'User', 'globalStorage', 'codeium.codeium', 'db'),
+    linux: join(home, '.config', 'Windsurf', 'User', 'globalStorage', 'codeium.codeium', 'db'),
+  }[platform] || join(home, '.windsurf');
+  return process.env.WINDSURF_DB || join(base, 'ai_usage.db');
+}
+
+// Continue.dev sessions dir
+function getContinueSessionsDir() {
+  return process.env.CONTINUE_SESSIONS_DIR || join(home, '.continue', 'sessions');
+}
+
+// Aider history files (scanned from CWD)
+function getAiderHistoryCount() {
+  let count = 0;
+  const scan = (dir, depth = 0) => {
+    if (depth > 3) return;
+    try {
+      for (const entry of readdirSync(dir, { withFileTypes: true })) {
+        if (entry.isDirectory() && !entry.name.startsWith('.') && entry.name !== 'node_modules') scan(join(dir, entry.name), depth + 1);
+        else if (entry.name === '.aider.chat.history.md') count++;
+      }
+    } catch { /* skip */ }
+  };
+  scan(process.cwd());
+  return count;
+}
+
+// Copilot telemetry DB
+function getCopilotDbPath() {
+  const vsBase = {
+    win32: join(home, 'AppData', 'Roaming', 'Code', 'User', 'globalStorage'),
+    darwin: join(home, 'Library', 'Application Support', 'Code', 'User', 'globalStorage'),
+    linux: join(home, '.config', 'Code', 'User', 'globalStorage'),
+  }[platform];
+  return vsBase ? join(vsBase, 'github.copilot', 'telemetry.db') : null;
+}
+
 // ---- App config ----
 export const config = {
   port: parseInt(process.env.PORT || '3030', 10),
@@ -121,44 +162,63 @@ export const config = {
     logsDir: process.env.AIDER_LOGS_DIR || join(home, '.aider', 'logs'),
   },
 
+  windsurf: {
+    dbPath: getWindsurfDbPath(),
+  },
+
+  continueDev: {
+    sessionsDir: getContinueSessionsDir(),
+  },
+
+  copilot: {
+    telemetryDb: getCopilotDbPath(),
+  },
+
   platform,
 };
 
-// Print detected config on startup
+function found(path) { return path && existsSync(path) ? '✓' : '✗'; }
+
+// Print detected config on startup — tells user exactly what was found
 export function printConfig() {
-  console.log('\n  Configuration:');
-  console.log(`  Platform:     ${platform}`);
-  console.log(`  DB:           ${config.dbPath}`);
-  console.log(`  Port:         ${config.port}`);
+  console.log('\n  Auto-discovery results:');
+  console.log(`  Platform: ${platform} | DB: ${config.dbPath}`);
   console.log('');
-  console.log('  Data sources:');
 
   // Claude Code
   if (config.claudeCode.dirs.length > 0) {
-    console.log(`  Claude Code:  ${config.claudeCode.dirs.length} project(s) found`);
+    let totalSessions = 0;
     for (const d of config.claudeCode.dirs) {
-      const count = readdirSync(d).filter(f => f.endsWith('.jsonl')).length;
-      console.log(`    - ${d} (${count} sessions)`);
+      try { totalSessions += readdirSync(d).filter(f => f.endsWith('.jsonl')).length; } catch { /* skip */ }
     }
+    console.log(`  ✓ Claude Code    — ${config.claudeCode.dirs.length} project dir(s), ~${totalSessions} session files`);
   } else {
-    console.log('  Claude Code:  not found (set CLAUDE_PROJECT_DIR)');
+    console.log(`  ✗ Claude Code    — not found. Set CLAUDE_PROJECT_DIR=~/.claude/projects/your-project`);
   }
 
   // Cursor
-  if (existsSync(config.cursor.stateDb)) {
-    console.log(`  Cursor:       ${config.cursor.stateDb}`);
-  } else {
-    console.log(`  Cursor:       not found at ${config.cursor.stateDb}`);
-  }
-  if (existsSync(config.cursor.trackingDb)) {
-    console.log(`  Cursor AI:    ${config.cursor.trackingDb}`);
-  }
+  const cursorFound = existsSync(config.cursor.stateDb) || existsSync(config.cursor.trackingDb);
+  console.log(`  ${found(config.cursor.stateDb)} Cursor           — ${cursorFound ? config.cursor.trackingDb : 'not found. Set CURSOR_TRACKING_DB=/path/to/ai-code-tracking.db'}`);
 
-  // Antigravity
-  if (existsSync(config.antigravity.dir)) {
-    console.log(`  Antigravity:  ${config.antigravity.dir}`);
-  } else {
-    console.log('  Antigravity:  not found');
-  }
+  // Antigravity / Gemini
+  console.log(`  ${found(config.antigravity.dir)} Gemini/Antigrav  — ${existsSync(config.antigravity.dir) ? config.antigravity.dir : 'not found. Set ANTIGRAVITY_DIR=~/.gemini/antigravity'}`);
+
+  // Aider
+  const aiderCount = getAiderHistoryCount();
+  console.log(`  ${aiderCount > 0 ? '✓' : '✗'} Aider            — ${aiderCount > 0 ? `${aiderCount} history file(s) found in workspace` : 'no .aider.chat.history.md found in current directory tree'}`);
+
+  // Windsurf
+  console.log(`  ${found(config.windsurf.dbPath)} Windsurf         — ${existsSync(config.windsurf.dbPath || '') ? config.windsurf.dbPath : 'not found (not installed, or set WINDSURF_DB=)'}`);
+
+  // Copilot
+  const copilotPath = config.copilot.telemetryDb;
+  console.log(`  ${found(copilotPath)} GitHub Copilot   — ${copilotPath && existsSync(copilotPath) ? copilotPath : 'not found (VS Code extension data missing)'}`);
+
+  // Continue.dev
+  console.log(`  ${found(config.continueDev.sessionsDir)} Continue.dev     — ${existsSync(config.continueDev.sessionsDir) ? config.continueDev.sessionsDir : 'not found. Set CONTINUE_SESSIONS_DIR=~/.continue/sessions'}`);
+
+  console.log('');
+  console.log(`  Set missing paths in .env — see .env.example for all options.`);
+  console.log(`  Full setup guide: https://github.com/Riko5652/ai-productivity-dashboard/blob/main/SETUP.md`);
   console.log('');
 }

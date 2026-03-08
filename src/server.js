@@ -658,10 +658,13 @@ startWatchers(
   () => { console.log('[watcher] Antigravity data changed'); ingestAdapter(getAdapter('antigravity')).then(broadcast); },
 );
 
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n  AI Productivity Dashboard`);
-  console.log(`  Local:     http://localhost:${PORT}`);
-  console.log(`  Network:   http://0.0.0.0:${PORT}`);
+// Bind to localhost by default (personal tool — don't expose to LAN).
+// Set BIND=0.0.0.0 to listen on all interfaces (e.g. Docker or remote access).
+const BIND = process.env.BIND || '127.0.0.1';
+
+app.listen(PORT, BIND, () => {
+  console.log(`\n  AI Productivity Dashboard v3`);
+  console.log(`  Open: http://localhost:${PORT}`);
   printConfig();
 
   // Generate daily pick on startup (runs only if not already generated today)
