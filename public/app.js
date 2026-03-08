@@ -1341,7 +1341,6 @@ function rInsActions(prompt, llmStatus) {
             return;
           }
           if (data.token) {
-            if (!fullText) fullText = '';
             fullText += data.token;
             out.textContent = fullText;
             out.scrollTop = out.scrollHeight;
