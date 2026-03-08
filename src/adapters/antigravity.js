@@ -8,60 +8,76 @@ import { join, extname } from 'path';
 import { TOOL_IDS } from './types.js';
 import { config } from '../config.js';
 
-const GEMINI_DIR = config.antigravity.dir;
+// All Antigravity base directories: local install + any Drive imports
+const ALL_GEMINI_DIRS = [
+  config.antigravity.dir,
+  ...config.antigravity.importedDirs,
+].filter(d => existsSync(d));
+
+const GEMINI_DIR = ALL_GEMINI_DIRS[0] || config.antigravity.dir;
 const ANNOTATIONS_DIR = join(GEMINI_DIR, 'annotations');
 const BRAIN_DIR = join(GEMINI_DIR, 'brain');
 const CODE_TRACKER_DIR = join(GEMINI_DIR, 'code_tracker', 'active');
 const CONVERSATIONS_DIR = join(GEMINI_DIR, 'conversations');
 const SCRATCH_DIR = join(GEMINI_DIR, 'scratch');
 
-// Parse annotations/*.pbtxt for conversation timestamps
-function parseAnnotations() {
-  if (!existsSync(ANNOTATIONS_DIR)) return new Map();
-  const timestamps = new Map(); // conversationId -> lastViewTime (unix ms)
+if (ALL_GEMINI_DIRS.length > 1) {
+  console.log(`[antigravity] Merging ${ALL_GEMINI_DIRS.length} data sources`);
+}
 
-  for (const file of readdirSync(ANNOTATIONS_DIR)) {
-    if (!file.endsWith('.pbtxt')) continue;
-    const id = file.replace('.pbtxt', '');
-    try {
-      const text = readFileSync(join(ANNOTATIONS_DIR, file), 'utf-8');
-      // Format: last_user_view_time:{seconds:1771740338 nanos:801000000}
-      const match = text.match(/seconds:(\d+)/);
-      if (match) {
-        timestamps.set(id, parseInt(match[1]) * 1000);
-      }
-    } catch { /* skip */ }
+// Parse annotations/*.pbtxt for conversation timestamps — merges all dirs
+function parseAnnotations() {
+  const timestamps = new Map(); // conversationId -> lastViewTime (unix ms)
+  for (const baseDir of ALL_GEMINI_DIRS) {
+    const annotDir = join(baseDir, 'annotations');
+    if (!existsSync(annotDir)) continue;
+    for (const file of readdirSync(annotDir)) {
+      if (!file.endsWith('.pbtxt')) continue;
+      const id = file.replace('.pbtxt', '');
+      if (timestamps.has(id)) continue; // deduplicate
+      try {
+        const text = readFileSync(join(annotDir, file), 'utf-8');
+        // Format: last_user_view_time:{seconds:1771740338 nanos:801000000}
+        const match = text.match(/seconds:(\d+)/);
+        if (match) timestamps.set(id, parseInt(match[1]) * 1000);
+      } catch { /* skip */ }
+    }
   }
   return timestamps;
 }
 
-// Parse brain/*/metadata.json for artifact data
+// Parse brain/*/metadata.json for artifact data — merges all dirs
 function parseBrainArtifacts() {
-  if (!existsSync(BRAIN_DIR)) return new Map();
   const artifacts = new Map(); // conversationId -> artifacts[]
 
-  for (const dir of readdirSync(BRAIN_DIR)) {
-    const brainPath = join(BRAIN_DIR, dir);
-    try {
-      if (!statSync(brainPath).isDirectory()) continue;
-    } catch { continue; }
+  for (const baseDir of ALL_GEMINI_DIRS) {
+    const brainDir = join(baseDir, 'brain');
+    if (!existsSync(brainDir)) continue;
 
-    const conversationArtifacts = [];
-    for (const file of readdirSync(brainPath)) {
-      if (!file.endsWith('.metadata.json')) continue;
+    for (const dir of readdirSync(brainDir)) {
+      if (artifacts.has(dir)) continue; // deduplicate by conversation ID
+      const brainPath = join(brainDir, dir);
       try {
-        const meta = JSON.parse(readFileSync(join(brainPath, file), 'utf-8'));
-        conversationArtifacts.push({
-          type: meta.artifactType || 'unknown',
-          summary: meta.summary || null,
-          version: parseInt(meta.version || '1'),
-          updatedAt: meta.updatedAt ? new Date(meta.updatedAt).getTime() : null,
-        });
-      } catch { /* skip */ }
-    }
+        if (!statSync(brainPath).isDirectory()) continue;
+      } catch { continue; }
 
-    if (conversationArtifacts.length > 0) {
-      artifacts.set(dir, conversationArtifacts);
+      const conversationArtifacts = [];
+      for (const file of readdirSync(brainPath)) {
+        if (!file.endsWith('.metadata.json')) continue;
+        try {
+          const meta = JSON.parse(readFileSync(join(brainPath, file), 'utf-8'));
+          conversationArtifacts.push({
+            type: meta.artifactType || 'unknown',
+            summary: meta.summary || null,
+            version: parseInt(meta.version || '1'),
+            updatedAt: meta.updatedAt ? new Date(meta.updatedAt).getTime() : null,
+          });
+        } catch { /* skip */ }
+      }
+
+      if (conversationArtifacts.length > 0) {
+        artifacts.set(dir, conversationArtifacts);
+      }
     }
   }
   return artifacts;

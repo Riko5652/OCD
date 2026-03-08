@@ -70,6 +70,32 @@ function getAntigravityDir() {
   return join(home, '.gemini', 'antigravity');
 }
 
+// Scan cursor-imports/ subfolders for additional Antigravity data directories
+// Handles Drive-imported structure: cursor-imports/*/Antigravity/antigravity/
+function getImportedAntigravityDirs() {
+  const importDir = process.env.CURSOR_IMPORT_DIR || join(DATA_DIR, 'cursor-imports');
+  const dirs = [];
+  if (!existsSync(importDir)) return dirs;
+  try {
+    for (const sub of readdirSync(importDir, { withFileTypes: true })) {
+      if (!sub.isDirectory()) continue;
+      // Check common patterns: sub/Antigravity/antigravity or sub/antigravity
+      const candidates = [
+        join(importDir, sub.name, 'Antigravity', 'antigravity'),
+        join(importDir, sub.name, 'antigravity'),
+        join(importDir, sub.name),
+      ];
+      for (const c of candidates) {
+        if (existsSync(join(c, 'brain')) || existsSync(join(c, 'annotations'))) {
+          dirs.push(c);
+          break;
+        }
+      }
+    }
+  } catch { /* not readable */ }
+  return dirs;
+}
+
 // ---- App config ----
 export const config = {
   port: parseInt(process.env.PORT || '3030', 10),
@@ -88,6 +114,7 @@ export const config = {
 
   antigravity: {
     dir: getAntigravityDir(),
+    importedDirs: getImportedAntigravityDirs(),
   },
 
   platform,

@@ -42,7 +42,21 @@ function getStateDb() {
   }
 }
 
-// Load imported state.vscdb files from cursor-imports/ directory
+// Recursively find all .vscdb / .db / .sqlite files under a directory
+function findDbFiles(dir, results = []) {
+  if (!existsSync(dir)) return results;
+  for (const entry of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, entry.name);
+    if (entry.isDirectory()) {
+      findDbFiles(full, results);
+    } else if (entry.name.endsWith('.vscdb') || entry.name.endsWith('.db') || entry.name.endsWith('.sqlite')) {
+      results.push(full);
+    }
+  }
+  return results;
+}
+
+// Load imported state.vscdb files from cursor-imports/ directory (scans recursively)
 function getImportedDbs() {
   if (importedDbs.length > 0) return importedDbs;
   if (!existsSync(IMPORT_DIR)) {
@@ -50,9 +64,8 @@ function getImportedDbs() {
     return [];
   }
 
-  for (const file of readdirSync(IMPORT_DIR)) {
-    if (!file.endsWith('.vscdb') && !file.endsWith('.db') && !file.endsWith('.sqlite')) continue;
-    const dbPath = join(IMPORT_DIR, file);
+  for (const dbPath of findDbFiles(IMPORT_DIR)) {
+    const file = dbPath.split(/[\\/]/).pop();
     try {
       const db = new Database(dbPath, { readonly: true, fileMustExist: true });
       // Verify it has the expected table
@@ -60,7 +73,7 @@ function getImportedDbs() {
       if (tables.some(t => t.name === 'cursorDiskKV')) {
         const label = file.replace(/\.(vscdb|db|sqlite)$/, '');
         importedDbs.push({ db, label });
-        console.log(`[cursor] Loaded imported DB: ${file}`);
+        console.log(`[cursor] Loaded imported DB: ${dbPath}`);
       } else {
         db.close();
       }
