@@ -1292,6 +1292,7 @@ function rInsActions(prompt, llmStatus) {
   }
 
   const recs = (S.recs || []).filter(r => !r.dismissed);
+  const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   const grouped = {};
   for (const r of recs) { if (!grouped[r.title]) grouped[r.title] = []; grouped[r.title].push(r); }
   $('ins-recs-enhanced').innerHTML = Object.entries(grouped)
@@ -1299,12 +1300,13 @@ function rInsActions(prompt, llmStatus) {
     .map(([title, items]) => {
       const r = items[0];
       const guide = FIX_GUIDES[title] || '';
-      return `<div class="rc ${r.severity}">
+      const sev = esc(r.severity);
+      return `<div class="rc ${sev}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
-          <div><div class="rc-cat">${r.category} · ${items.length} session${items.length > 1 ? 's' : ''}</div><div class="rc-t">${title}</div></div>
-          <span style="font-size:.7rem;padding:2px 7px;border-radius:var(--radius-pill);background:rgba(0,0,0,.06);color:var(--text-s);white-space:nowrap">${r.severity}</span>
+          <div><div class="rc-cat">${esc(r.category)} · ${items.length} session${items.length > 1 ? 's' : ''}</div><div class="rc-t">${esc(title)}</div></div>
+          <span style="font-size:.7rem;padding:2px 7px;border-radius:var(--radius-pill);background:rgba(0,0,0,.06);color:var(--text-s);white-space:nowrap">${sev}</span>
         </div>
-        <div class="rc-d" style="margin-top:6px">${r.description}</div>
+        <div class="rc-d" style="margin-top:6px">${esc(r.description)}</div>
         ${guide ? `<details style="margin-top:8px"><summary style="cursor:pointer;font-size:.76rem;font-weight:600;color:var(--text-s)">How to fix ▸</summary><div style="margin-top:6px;font-size:.78rem;line-height:1.6;color:var(--text-m)">${guide}</div></details>` : ''}
       </div>`;
     }).join('') || '<p style="color:var(--text-s);font-size:.8rem">No active recommendations.</p>';
