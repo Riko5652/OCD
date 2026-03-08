@@ -1,8 +1,8 @@
 {
   "name": "ai-productivity-dashboard",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "type": "module",
-  "description": "Local dashboard that tracks Claude Code, Cursor, and Gemini/Antigravity — and uses your patterns to make every future prompt smarter",
+  "description": "Local dashboard that tracks Claude Code, Cursor, and Gemini/Antigravity \u2013 and uses your patterns to make every future prompt smarter",
   "author": {
     "name": "Dor Lipetz",
     "url": "https://github.com/Riko5652"
