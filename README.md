@@ -1,180 +1,242 @@
 # AI Productivity Dashboard
 
-> **v2.1 — Now Live** · Track, compare, and optimize your AI coding workflows across Claude Code, Cursor, and Gemini/Antigravity — all local, zero cloud.
+> A local-first tool that tracks your AI coding sessions, benchmarks every tool and model against each other, and tells you which one actually works best for the work you do.
 
-[![npm version](https://img.shields.io/npm/v/ai-productivity-dashboard)](https://www.npmjs.com/package/ai-productivity-dashboard)
-[![npm downloads](https://img.shields.io/npm/dm/ai-productivity-dashboard)](https://www.npmjs.com/package/ai-productivity-dashboard)
-[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
-[![Node.js](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen)](https://nodejs.org)
-[![Privacy: Local-only](https://img.shields.io/badge/privacy-local--only-blue)](#privacy)
-
----
-
-## What It Does
-
-Most developers feel AI tools are a black box — they don't know which prompts actually work, which tools save more time, or whether they're getting better or worse over time.
-
-**AI Productivity Dashboard** fixes that. It passively monitors your sessions, measures what matters, and gives you a feedback loop that makes every future prompt smarter.
+[![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
+[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Tools](https://img.shields.io/badge/tools-7-blue)](#what-gets-tracked)
+[![MCP](https://img.shields.io/badge/MCP-9%20tools-purple)](SETUP.md#mcp-server-setup)
+[![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
+[![npm](https://img.shields.io/npm/v/ai-productivity-dashboard)](https://www.npmjs.com/package/ai-productivity-dashboard)
 
 ---
 
-## Screenshots
+## What it does
 
-| Overview | Personal Insights |
-|---|---|
-| ![Overview](screenshots/01-overview.png) | ![Personal](screenshots/02-personal.png) |
+When you switch between Claude Code, Cursor, Aider, Windsurf, or Copilot every day, you're building up a huge amount of data about what actually works — but most of it just disappears. This dashboard reads your local session data, stores it in a local SQLite database, and gives you a clear picture of patterns you can act on.
 
-| Compare Tools | Session Browser |
-|---|---|
-| ![Compare](screenshots/03-compare-tools.png) | ![Sessions](screenshots/04-sessions.png) |
+It's not meant to replace any tool. It's meant to help you use all of them better.
+
+**Some things it can tell you:**
+- "For postgres migrations, Claude Code with claude-sonnet-4-6 resolves them in 4 turns on average. Cursor with gpt-4o takes 11."
+- "Your cache hit rate dropped 20% this week — here's why."
+- "This session touched 12 files in 8 turns. That's your most agentic session this month."
+- "3 sessions in pm-dashboard/ were about writing blog posts, not code. They've been flagged so they don't skew your project metrics."
+
+It also runs an MCP server so any AI agent (Claude Code, Cursor, Aider) can query your live stats mid-session: which tool should I use for this task, what were you working on last, how efficient have you been this week.
 
 ---
 
-## Quick Start
+## Quick start
 
 ```bash
-# No install needed — just run
+# No install — just run
 npx ai-productivity-dashboard
 
 # Or install globally
 npm install -g ai-productivity-dashboard
-ai-productivity-dashboard
+ai-dashboard
 
-# Or clone for development
+# Docker
 git clone https://github.com/Riko5652/ai-productivity-dashboard
 cd ai-productivity-dashboard
-npm install && npm start
+docker compose up
 ```
 
-Then open **http://localhost:3000** in your browser.
+Open **http://localhost:3030**. The first thing you'll see in the terminal is a discovery report showing which tools were found and which weren't — with exact paths and hints for anything missing.
+
+**Zero config required.** All tool data paths are auto-detected. See [SETUP.md](SETUP.md) for overrides.
 
 ---
 
-## Features
+## What gets tracked
 
-### Core Analytics Engine
-- **Multi-tool tracking** — Claude Code, Cursor, and Gemini/Antigravity in a single dashboard
-- **Auto-detection** — automatically discovers Claude Code projects and Cursor databases across Windows, macOS, and Linux
-- **Real-time monitoring** — file-system watcher picks up new sessions without a page refresh
-- **Token deep-dive** — input/output tokens, cache hit rates, cost per session, and efficiency trends
-- **Turns-to-resolution** — see how many back-and-forth rounds each task really takes
-- **Thinking depth** — tracks extended thinking usage where supported
+All data is read-only. Nothing is ever written to your AI tools' files.
 
-### v2.1 — Personal Insights ✨
-The flagship v2.1 addition is a three-panel **Personal Insights** tab:
-
-| Panel | What It Shows |
-|---|---|
-| **Profile** | Your AI practitioner archetype — prompt complexity score, token efficiency percentile, dominant prompting patterns |
-| **Trends** | Rolling 7 / 14 / 30-day charts — are you improving or regressing? |
-| **Recommendations** | Actionable signals: structural patterns correlated with your first-attempt success rate |
-
-### Dashboard Tabs
-
-| Tab | Purpose |
-|---|---|
-| **Overview** | Session count, token totals, cache efficiency, tool breakdown |
-| **Personal** ✨ | Insights profile, trends, and recommendations (v2.1) |
-| **Compare Tools** | Side-by-side Claude Code vs Cursor vs Antigravity metrics |
-| **Sessions** | Full searchable session log with per-session stats |
-| **Token Deep Dive** | Granular token analysis — input, output, cache read/write |
-| **AI Authorship** | % of code lines generated by AI vs written by hand |
-| **Optimization** | Prompt efficiency score, suggestions for improvement |
-| **Insights** | LLM-powered narrative analysis (optional) |
-
-### XP Gamification
-Earn XP points for hitting efficiency milestones — high cache hit rates, low turns-to-resolution, consistent improvement streaks. Track your level on the Personal tab.
-
-### Optional LLM Integration
-For narrative-style deep analysis, plug in a local or remote LLM:
-- **Local**: Ollama (any model — no API key required)
-- **Remote**: OpenAI-compatible endpoints or Anthropic Claude
-- Structural analysis works without any LLM — this is additive only
+| Tool | How |
+|------|-----|
+| **Claude Code** | Reads `~/.claude/projects/*/` JSONL session files |
+| **Cursor** | Reads local SQLite DB (chat history, code authorship stats) |
+| **Aider** | Reads `.aider.chat.history.md` files in your project directories |
+| **Windsurf** | Reads Codeium's local SQLite DB (chat sessions, token counts) |
+| **GitHub Copilot** | Reads VS Code extension telemetry (suggestion acceptance by model) |
+| **Continue.dev** | Reads `~/.continue/sessions/*.json` |
+| **Gemini/Antigravity** | Reads `~/.gemini/antigravity/` session logs |
 
 ---
 
-## Metrics Tracked
+## Dashboard tabs
 
-| Metric | Description |
-|---|---|
-| Token efficiency | Output tokens per unit of useful work |
-| Cache hit rate | % of input tokens served from cache |
-| Prompt complexity | Structural scoring of prompt quality |
-| Turns-to-resolution | Rounds needed to complete a task |
-| First-attempt success | % of tasks resolved in a single turn |
-| AI authorship % | Lines generated vs manually written |
-| Suggestion acceptance | How often AI suggestions are kept as-is |
-| Error recovery | How quickly errors are resolved after a mistake |
-| Thinking depth | Extended thinking usage (Claude Code) |
-| Latency | Time-to-first-token and full response time |
+**Overview** — KPIs at a glance: sessions, turns, output tokens, cache hit rate, AI code authorship, today's activity. Daily charts by tool.
 
----
+**Sessions** — Searchable/sortable table of every session. Expand any row to see per-turn details.
 
-## Supported Platforms
+**Token Deep Dive** — Where your tokens actually go. Breakdown by input/cache/output with per-session mix chart.
 
-| Tool | Auto-detect | Multi-machine import |
-|---|---|---|
-| **Claude Code** | ✅ | — |
-| **Cursor** | ✅ Windows / macOS / Linux | ✅ via DB file drop |
-| **Gemini / Antigravity** | ✅ | — |
+**Compare Tools** — Side-by-side: which tool you use most, where each one performs differently, distribution across time.
 
----
+**Code Authorship** — What percentage of your committed code was AI-generated. Scored per commit, trended over time.
 
-## Architecture
+**Code Gen** — First-attempt success rate, error rate trend, thinking depth, lines added. Model quality comparison table.
 
-```
-src/
-├── adapters/         # Tool-specific data parsers (Claude Code, Cursor, Gemini)
-├── engine/           # Analytics computation and trend engine
-├── config.js         # User configuration (ports, data paths, LLM endpoint)
-├── db.js             # SQLite schema + query layer (better-sqlite3)
-├── server.js         # Express API server
-└── watcher.js        # File-system monitor (chokidar)
+**Analytics** — Model usage distribution, turns per day, efficiency trend (O × Q × S score).
 
-public/               # Vanilla JS + Chart.js frontend (no build step required)
-bin/                  # npx entry point
-```
+**Costs** — Estimated spend by tool and model. Cost per session. Trend charts.
 
-**Stack**: Node.js ≥18 · Express · SQLite (better-sqlite3) · Vanilla JS · Chart.js
+**Personal** — Gamified: level, XP, streak, achievements. Activity heatmap. Flow state trend. Personal records.
 
-**Data location**: `~/.ai-productivity-dashboard/` (global install) or `./data/` (dev clone)
+**Optimization** — Open recommendations sorted by severity. One-click dismiss.
+
+**Insights** — How you work: prompt length distribution, tool call breakdown, cache/quality/error trends. Daily automation pick from your own patterns. Deep Analyze (LLM-powered, optional).
+
+**Projects** — Per-project rollup: total tokens, lines added, dominant tool and model, tool breakdown. Click any project to drill into per-tool+model performance and AI suggestions.
+
+**Models** — Cross-tool model comparison: avg turns, cache hit %, latency, error rate. Win-rate matrix by task type. Interactive routing recommendation: describe a task, get a data-driven suggestion.
 
 ---
 
-## Configuration
+## MCP Universal Brain
 
-Copy `.env.example` to `.env` and adjust as needed:
+The dashboard runs an MCP stdio server exposing 9 tools that any AI agent can call.
 
-```bash
-cp .env.example .env
+Register it with Claude Code by adding to `.mcp.json` in your project:
+
+```json
+{
+  "mcpServers": {
+    "ai-brain": {
+      "command": "npx",
+      "args": ["ai-productivity-dashboard", "--mcp"]
+    }
+  }
+}
 ```
 
-Key options:
+**Available tools:**
 
-```env
-PORT=3000
-DATA_DIR=~/.ai-productivity-dashboard
-
-# Optional LLM for narrative analysis
-LLM_PROVIDER=ollama          # ollama | openai | anthropic
-LLM_MODEL=llama3.2
-LLM_BASE_URL=http://localhost:11434
-```
+| Tool | What it does |
+|------|-------------|
+| `get_last_session_context` | Pick up where a different tool left off — surfaces last session context so you don't re-explain the problem |
+| `get_routing_recommendation` | "Which tool + model should I use for this?" based on your history |
+| `get_efficiency_snapshot` | Current week's cache hit rate, first-attempt %, turns, tokens |
+| `get_active_recommendations` | Open optimization nudges from the dashboard |
+| `get_project_stats` | Token/session/model breakdown for a specific project |
+| `get_model_comparison` | claude-sonnet vs gpt-4o vs gemini — on your actual sessions |
+| `push_handoff_note` | Save a note before switching tools; next tool picks it up |
+| `get_optimal_prompt_structure` | Prompt patterns from your highest-quality sessions by task type |
+| `get_topic_summary` | "What db-work was done in pm-dashboard last week?" |
 
 ---
 
 ## Privacy
 
-**All data stays on your machine.** There is no telemetry, no cloud sync, no account required. The SQLite database lives at `~/.ai-productivity-dashboard/` and never leaves your device unless you explicitly move it.
+- **All data stays on your machine.** Nothing is sent anywhere unless you configure an LLM provider for the optional Deep Analyze feature.
+- **Server binds to 127.0.0.1 by default** — not reachable from your network. Set `BIND=0.0.0.0` only if you need LAN access (or use Docker, which sets it automatically).
+- **Read-only access** to all AI tool databases. Windsurf and Copilot DBs are opened with `{ readonly: true }`.
+- **Prompt injection protection** — all session text is sanitized before being passed to any LLM.
+- **No telemetry.** No analytics. No opt-in tracking. The source is short and auditable.
 
 ---
 
-## Contributing
+## LLM provider (optional)
 
-Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines and [CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) for community standards.
+The core dashboard — all charts, tables, recommendations, MCP tools — works without any LLM. The LLM is only used for:
+- Deep Analyze button (Insights tab)
+- Daily Automation Pick
+- Project AI suggestions (Projects tab drill-down)
+
+Supported providers, in priority order:
+
+```env
+# Free, local — recommended
+OLLAMA_HOST=http://localhost:11434
+OLLAMA_MODEL=gemma2:2b
+
+# Cloud
+ANTHROPIC_API_KEY=sk-ant-...
+OPENAI_API_KEY=sk-...
+AZURE_OPENAI_API_KEY=...
+```
+
+---
+
+## Tech
+
+- **Node.js 18+ ESM** — no build step, no transpilation
+- **Express 4** — minimal API server with SSE live push
+- **better-sqlite3** — fast local SQLite, no server process needed
+- **Chart.js** (CDN) — all charts rendered in the browser, no bundler
+- **@modelcontextprotocol/sdk** — MCP stdio server
+- **chokidar** — file watching for live session updates
+
+No React. No Webpack. No TypeScript compilation. Loads in under a second on any hardware made after 2015.
+
+---
+
+## Setup & configuration
+
+See **[SETUP.md](SETUP.md)** for:
+- Full installation guide (Windows, macOS, Linux)
+- How to tell the dashboard where your tools' data lives
+- Path override reference (all env vars)
+- MCP registration for Claude Code and Cursor
+- Docker setup
+- Troubleshooting
+
+---
+
+## Project structure
+
+```
+src/
+  adapters/        # One file per AI tool (claude-code, cursor, aider, ...)
+    registry.js    # Auto-registration — new tools are single-file additions
+  engine/          # Analytics engines
+    cross-tool-router.js   # Task classification + win-rate routing
+    project-insights.js    # Per-project rollup
+    agentic-scorer.js      # 0-100 autonomy score per session
+    session-coach.js       # Real-time SSE nudges
+    prompt-coach.js        # Prompt patterns from high-quality sessions
+    topic-segmenter.js     # Detect sessions unrelated to their project
+    cross-tool.js          # Tool switch detection + handoff quality
+  lib/
+    sanitize.js    # Prompt injection protection
+  mcp-handoff.js   # MCP Universal Brain server (9 tools)
+  server.js        # Express app + all API routes
+  db.js            # SQLite schema + migration
+  config.js        # Auto-detected paths + startup discovery report
+public/            # Static frontend (HTML + vanilla JS, no build step)
+bin/
+  ai-dashboard.js  # CLI entrypoint (version check, auto-open browser)
+```
+
+---
+
+## Adding a new AI tool
+
+1. Create `src/adapters/your-tool.js` with `id`, `name`, and `getSessions()`
+2. Call `register(adapter)` at the bottom
+3. Import it in `src/server.js`
+4. Add a seed row in `src/db.js`
+
+That's it. The adapter registry handles everything else.
+
+---
+
+## Roadmap
+
+These are things that would make it meaningfully better — contributions welcome:
+
+- [ ] GitHub/GitLab PR linking (tie sessions to PRs, show AI % per PR)
+- [ ] Devin / OpenHands adapter (REST API polling)
+- [ ] PostgreSQL backend + team mode (opt-in, shared leaderboard)
+- [ ] Crowd-sourced benchmarks (opt-in, no session content, anonymized)
+- [ ] `pkg` binary builds for Windows/macOS/Linux (no Node required)
 
 ---
 
 ## License
 
-MIT © [Dor Lipetz](https://github.com/Riko5652)
+MIT — see [LICENSE](LICENSE). Built and maintained by [Dor Lipetz](https://github.com/Riko5652).
+
+If this is useful to you, a ⭐ on GitHub goes a long way.
