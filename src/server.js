@@ -15,6 +15,8 @@ import { adapter as antigravityAdapter } from './adapters/antigravity.js';
 import { computeOverview, computeToolComparison, computeModelUsage, computeCodeGeneration, computeInsights, computeCostAnalysis, computePersonalInsights, rebuildDailyStats } from './engine/analytics.js';
 import { runOptimizer } from './engine/optimizer.js';
 import { scoreAndSave } from './engine/scorer.js';
+import { computeProfile, computeTrends, computePromptMetrics } from './engine/insights.js';
+import { detectProvider, streamDeepAnalysis } from './engine/llm-analyzer.js';
 import { startWatchers, stopWatchers } from './watcher.js';
 import { analyzePromptMetrics } from './engine/prompt-analyzer.js';
 
@@ -190,6 +192,44 @@ app.get('/api/personal-insights', (req, res) => {
 app.get('/api/recommendations', (req, res) => {
   const all = req.query.all === 'true';
   res.json(getRecommendations(all));
+});
+
+// ── Insights routes ──────────────────────────────────────────────────────────
+
+app.get('/api/insights/profile', (_req, res) => {
+  try { res.json(computeProfile()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/insights/trends', (req, res) => {
+  const days = parseInt(req.query.days) || 90;
+  try { res.json(computeTrends(days)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/insights/prompt-metrics', (_req, res) => {
+  try { res.json(computePromptMetrics()); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+app.get('/api/ollama/status', async (_req, res) => {
+  try { res.json(await detectProvider()); }
+  catch (e) { res.json({ available: false, error: e.message }); }
+});
+
+app.get('/api/insights/deep-analyze', (req, res) => {
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+  if (req.query.refresh === '1') {
+    getDb().prepare(`DELETE FROM insight_cache WHERE key='deep-analyze-default'`).run();
+  }
+  streamDeepAnalysis(res).catch(e => {
+    res.write(`data: ${JSON.stringify({ error: e.message })}\n\n`);
+    res.end();
+  });
 });
 
 // Dismiss a recommendation

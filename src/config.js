@@ -12,6 +12,16 @@ const ROOT = join(__dirname, '..');
 const platform = process.platform; // 'win32', 'darwin', 'linux'
 const home = os.homedir();
 
+// User data dir: auto-detected based on context.
+// - Local clone (`.git` present): uses `./data/` — same as before, no disruption
+// - npm global install / npx: uses `~/.ai-productivity-dashboard/` so data persists across updates
+const isLocalDev = existsSync(join(ROOT, '.git'));
+const DATA_DIR = process.env.DB_PATH
+  ? dirname(process.env.DB_PATH)
+  : isLocalDev
+    ? join(ROOT, 'data')
+    : join(home, '.ai-productivity-dashboard');
+
 // ---- Cursor paths per OS ----
 function getCursorStatePath() {
   if (process.env.CURSOR_STATE_DB) return process.env.CURSOR_STATE_DB;
@@ -63,13 +73,13 @@ function getAntigravityDir() {
 // ---- App config ----
 export const config = {
   port: parseInt(process.env.PORT || '3030', 10),
-  dbPath: process.env.DB_PATH || join(ROOT, 'data', 'analytics.db'),
+  dbPath: process.env.DB_PATH || join(DATA_DIR, 'analytics.db'),
 
   cursor: {
     stateDb: getCursorStatePath(),
     trackingDb: getCursorTrackingPath(),
-    importDir: process.env.CURSOR_IMPORT_DIR || join(ROOT, 'cursor-imports'),
-    csvDir: process.env.CURSOR_CSV_DIR || join(ROOT, '..'),
+    importDir: process.env.CURSOR_IMPORT_DIR || join(DATA_DIR, 'cursor-imports'),
+    csvDir: process.env.CURSOR_CSV_DIR || DATA_DIR,
   },
 
   claudeCode: {

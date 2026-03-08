@@ -2,7 +2,7 @@
   "name": "ai-productivity-dashboard",
   "version": "2.0.0",
   "type": "module",
-  "description": "Track and compare your AI coding tool usage across Claude Code, Cursor, and Gemini/Antigravity",
+  "description": "Local dashboard that tracks Claude Code, Cursor, and Gemini/Antigravity — and uses your patterns to make every future prompt smarter",
   "author": {
     "name": "Dor Lipetz",
     "url": "https://github.com/Riko5652"
@@ -16,6 +16,18 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "bin": {
+    "ai-dashboard": "./bin/ai-dashboard.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "public/",
+    "seed-mock.mjs",
+    ".env.example",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js"
@@ -33,6 +45,10 @@
     "cursor",
     "gemini",
     "analytics",
-    "developer-tools"
+    "developer-tools",
+    "prompt-optimization",
+    "llm",
+    "sqlite",
+    "local-first"
   ]
 }
