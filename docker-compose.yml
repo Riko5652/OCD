@@ -13,6 +13,9 @@ version: '3.8'
 services:
   dashboard:
     build: .
+    env_file:
+      - path: .env
+        required: false
     ports:
       - "3030:3030"
     volumes:

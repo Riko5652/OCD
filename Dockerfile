@@ -15,9 +15,6 @@
 
 FROM node:20-alpine
 
-# Install build deps for better-sqlite3 native module
-RUN apk add --no-cache python3 make g++
-
 WORKDIR /app
 
 # Install dependencies first (cache layer)
@@ -44,4 +41,4 @@ ENV PORT=3030
 ENV DB_PATH=/app/data/analytics.db
 ENV NODE_ENV=production
 
-CMD ["node", "--env-file=.env", "src/server.js"]
+CMD ["node", "src/server.js"]
