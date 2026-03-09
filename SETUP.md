@@ -1,6 +1,6 @@
-# Setup Guide
+# Setup Guide — v3.0
 
-This guide covers installation on **Windows**, **macOS**, and **Linux**, and explains how to tell the dashboard which AI tools to track and where their data lives.
+This guide covers installation on **Windows**, **macOS**, and **Linux**, and explains how to tell the dashboard which AI tools to track and where their data lives. v3.0 adds PWA support, SEA binary builds, and GitHub Codespaces.
 
 ---
 
@@ -23,6 +23,14 @@ npm start
 
 # Option D: Docker
 docker compose up
+
+# Option E: GitHub Codespaces (zero local setup)
+# Click "Code → Codespaces → New codespace" on the GitHub repo page
+# Port 3030 auto-forwards and opens in your browser
+
+# Option F: SEA binary (no Node.js required)
+# Download the binary for your platform from the GitHub Releases page
+# ./ai-dashboard-linux   (or ai-dashboard-macos / ai-dashboard-windows.exe)
 ```
 
 The dashboard auto-detects all supported tools. Open **http://localhost:3030** — that's it.
@@ -80,7 +88,7 @@ The dashboard reads your existing tool data — it never modifies any AI tool's 
 | **Windsurf** | Codeium globalStorage DB (platform-specific) | Chat sessions, token counts |
 | **GitHub Copilot** | VS Code globalStorage (platform-specific) | Suggestion acceptance, inline completions |
 | **Continue.dev** | `~/.continue/sessions/` | Session JSON files |
-| **Gemini/Antigravity** | `~/.gemini/antigravity/` | Session logs |
+| **Gemini/Antigravity** | `~/.gemini/antigravity/` | Session logs, brain artifact metadata, code tracker files, version churn |
 
 ---
 

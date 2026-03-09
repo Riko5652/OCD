@@ -1,6 +1,5 @@
 # These are supported funding model platforms
-github: []  # Replace with your GitHub username
-open_collective: # Replace with your Open Collective slug if you create one
-ko_fi: # Replace with your Ko-fi username if applicable
-custom:
-  - "https://buymeacoffee.com/"  # Replace with your URL
+github: [Riko5652]
+open_collective:
+ko_fi:
+custom: []

@@ -28,7 +28,7 @@ and distribute the software in commercial applications.
 **Pricing**: Contact for enterprise pricing. Individual commercial licenses starting at
 a flat annual fee per developer seat.
 
-**Contact**: [your-email@domain.com] — include "Commercial License" in subject line.
+**Contact**: Open a [GitHub Discussion](https://github.com/Riko5652/ai-productivity-dashboard/discussions) or reach out via [@Riko5652](https://github.com/Riko5652) — include "Commercial License" in the subject.
 
 ---
 

@@ -69,6 +69,10 @@
     "local-first",
     "docker",
     "vibe-coding",
-    "agentic-coding"
+    "agentic-coding",
+    "pwa",
+    "sea",
+    "codespaces",
+    "offline"
   ]
 }
