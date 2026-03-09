@@ -1,16 +1,32 @@
 {
-  "name": "AI Productivity",
-  "short_name": "AI Prod",
-  "description": "Personal AI coding productivity dashboard",
+  "name": "AI Productivity Dashboard",
+  "short_name": "AI Dashboard",
+  "description": "Local-first analytics for AI coding tools — track Claude Code, Cursor, Copilot and more",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f172a",
-  "theme_color": "#3b82f6",
+  "background_color": "#1d1d1b",
+  "theme_color": "#F15A2B",
+  "orientation": "any",
   "icons": [
     {
-      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧠</text></svg>",
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231d1d1b'/><text y='.9em' font-size='80' x='10'>📊</text></svg>",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["developer", "productivity", "utilities"],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Command Center",
+      "url": "/#command",
+      "description": "View KPIs and recommendations"
+    },
+    {
+      "name": "Sessions",
+      "url": "/#workspaces",
+      "description": "Browse sessions and projects"
     }
   ]
 }
