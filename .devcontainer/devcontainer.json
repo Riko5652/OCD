@@ -1,0 +1,28 @@
+{
+  "name": "AI Productivity Dashboard",
+  "image": "mcr.microsoft.com/devcontainers/javascript-node:20",
+  "postCreateCommand": "npm install && node seed-mock.mjs",
+  "forwardPorts": [3030],
+  "portsAttributes": {
+    "3030": {
+      "label": "Dashboard",
+      "onAutoForward": "openBrowser",
+      "protocol": "http"
+    }
+  },
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ],
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      }
+    }
+  },
+  "remoteEnv": {
+    "PORT": "3030",
+    "BIND": "0.0.0.0"
+  }
+}

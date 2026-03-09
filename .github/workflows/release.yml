@@ -1,0 +1,84 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-sea:
+    name: Build SEA — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact: ai-dashboard-linux-x64
+          - os: macos-latest
+            artifact: ai-dashboard-macos-arm64
+          - os: windows-latest
+            artifact: ai-dashboard-win.exe
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install postject
+        run: npm install -g postject
+
+      - name: Build SEA
+        run: node scripts/build-sea.mjs
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: dist/${{ matrix.artifact }}
+
+  release:
+    name: Create GitHub Release
+    needs: build-sea
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist/
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/**/*
+          generate_release_notes: true
+          body: |
+            ## AI Productivity Dashboard ${{ github.ref_name }}
+
+            ### Installation
+
+            Download the binary for your platform and run it directly — no Node.js required.
+
+            | Platform | File |
+            |---------|------|
+            | Linux (x64) | `ai-dashboard-linux-x64` |
+            | macOS (Apple Silicon) | `ai-dashboard-macos-arm64` |
+            | Windows | `ai-dashboard-win.exe` |
+
+            ```bash
+            # Linux/macOS
+            chmod +x ai-dashboard-linux-x64
+            ./ai-dashboard-linux-x64
+
+            # Then open: http://localhost:3030
+            ```
