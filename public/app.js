@@ -300,7 +300,7 @@ function rSess() {
     }).join('') + (topTools.length > 3 ? `<span class="chip">+${topTools.length - 3}</span>` : '');
 
     return `<tr class="sr" data-sid="${s.id}">
-      <td>${toolChip(s.tool_id)}</td>
+      <td>${toolChip(s.tool_id)}${s.meta ? '<span style="display:inline-flex;align-items:center;gap:3px;font-size:.68rem;font-weight:700;background:rgba(241,90,43,0.1);color:#F15A2B;border-radius:50px;padding:1px 7px;margin-left:6px" title="This session built this dashboard">&#x221e; Meta</span>' : ''}</td>
       <td style="white-space:nowrap">${fD(s.started_at)}</td>
       <td class="num">${s.total_turns || 0}</td>
       <td class="num">${fmt(s.total_output_tokens)}</td>

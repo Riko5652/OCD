@@ -248,6 +248,10 @@ function buildSession(filename, turns, projectDir) {
     error_count: s.errors,
   }));
 
+  const projectPath = projectDir || '';
+  const isMeta = projectPath.includes('ai-productivity-dashboard') ||
+    projectPath.includes('ai-dashboard');
+
   return {
     id,
     tool_id: TOOL_IDS.CLAUDE_CODE,
@@ -271,6 +275,7 @@ function buildSession(filename, turns, projectDir) {
     avg_thinking_length: codeStats.avgThinkingLength || null,
     error_count: codeStats.errorCount || 0,
     error_recovery_pct: codeStats.errorRecoveryPct ?? null,
+    meta: isMeta ? true : undefined,
     _modelPerf,
     raw: {
       project: projectDir,

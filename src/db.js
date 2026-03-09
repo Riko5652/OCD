@@ -236,6 +236,7 @@ function migrate(db) {
   try { db.exec(`ALTER TABLE sessions ADD COLUMN topic TEXT`); } catch (_) {}
   try { db.exec(`ALTER TABLE sessions ADD COLUMN project_relevance_score REAL`); } catch (_) {}
   try { db.exec(`ALTER TABLE sessions ADD COLUMN topic_summary TEXT`); } catch (_) {}
+  try { db.exec(`ALTER TABLE sessions ADD COLUMN meta INTEGER DEFAULT 0`); } catch (_) {}
 
   // Add agentic_score column (idempotent — ALTER TABLE fails silently if already exists)
   try {
@@ -267,7 +268,7 @@ export function upsertSession(s) {
       code_lines_added, code_lines_removed, files_touched, first_attempt_pct,
       avg_thinking_length, error_count, error_recovery_pct,
       suggestion_acceptance_pct, lint_improvement,
-      raw_data)
+      meta, raw_data)
     VALUES (@id, @tool_id, @title, @tldr, @started_at, @ended_at,
       @total_turns, @total_input_tokens, @total_output_tokens, @total_cache_read,
       @total_cache_create, @primary_model, @models_used, @cache_hit_pct,
@@ -275,7 +276,7 @@ export function upsertSession(s) {
       @code_lines_added, @code_lines_removed, @files_touched, @first_attempt_pct,
       @avg_thinking_length, @error_count, @error_recovery_pct,
       @suggestion_acceptance_pct, @lint_improvement,
-      @raw_data)
+      @meta, @raw_data)
     ON CONFLICT(id) DO UPDATE SET
       title=excluded.title, tldr=excluded.tldr, ended_at=excluded.ended_at,
       total_turns=excluded.total_turns, total_input_tokens=excluded.total_input_tokens,
@@ -290,6 +291,7 @@ export function upsertSession(s) {
       error_recovery_pct=excluded.error_recovery_pct,
       suggestion_acceptance_pct=excluded.suggestion_acceptance_pct,
       lint_improvement=excluded.lint_improvement,
+      meta=excluded.meta,
       raw_data=excluded.raw_data
   `).run({
     id: s.id,
@@ -318,6 +320,7 @@ export function upsertSession(s) {
     error_recovery_pct: s.error_recovery_pct ?? null,
     suggestion_acceptance_pct: s.suggestion_acceptance_pct ?? null,
     lint_improvement: s.lint_improvement ?? null,
+    meta: s.meta ? 1 : 0,
     raw_data: s.raw ? JSON.stringify(s.raw) : null,
   });
 }
