@@ -7,7 +7,7 @@ import {
   getDb, upsertSession, insertTurns, upsertCommitScore,
   getAllSessions, getSessionById, getTurnsForSession,
   getDailyStatsRange, getCommitScores as dbGetCommitScores,
-  getRecommendations, getOverview,
+  getRecommendations,
   getCachedInsight, setCachedInsight,
   upsertModelPerformance, getModelPerformance,
 } from './db.js';
@@ -42,7 +42,7 @@ import { config, printConfig } from './config.js';
 const app = express();
 
 // Security headers
-app.use((req, res, next) => {
+app.use((_req, res, next) => {
   res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'");
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
@@ -370,7 +370,7 @@ app.post('/api/recommendations/:id/dismiss', express.json(), (req, res) => {
 });
 
 // Manual re-ingest trigger
-app.post('/api/ingest', async (req, res) => {
+app.post('/api/ingest', async (_req, res) => {
   await ingestAll();
   res.json({ ok: true, timestamp: Date.now() });
 });
@@ -385,7 +385,7 @@ app.get('/api/efficiency', (req, res) => {
 });
 
 // Cursor daily stats (tab/composer lines)
-app.get('/api/cursor-daily', async (req, res) => {
+app.get('/api/cursor-daily', async (_req, res) => {
   try {
     const stats = await getAdapter('cursor')?.getDailyStats?.();
     res.json(stats);
@@ -395,7 +395,7 @@ app.get('/api/cursor-daily', async (req, res) => {
 });
 
 // Antigravity stats
-app.get('/api/antigravity-stats', async (req, res) => {
+app.get('/api/antigravity-stats', async (_req, res) => {
   try {
     const { getStats } = await import('./adapters/antigravity.js');
     res.json(getStats());
@@ -487,7 +487,7 @@ async function generateDailyPick() {
 }
 
 // Route: get today's daily pick
-app.get('/api/insights/daily-pick', (req, res) => {
+app.get('/api/insights/daily-pick', (_req, res) => {
   const today = new Date().toISOString().split('T')[0];
   const cached = getCachedInsight(DAILY_PICK_KEY);
   if (cached) {
@@ -572,7 +572,7 @@ app.get('/api/routing/recommend', (req, res) => {
 });
 
 // Project rollup
-app.get('/api/projects', (req, res) => {
+app.get('/api/projects', (_req, res) => {
   try {
     res.json({ projects: cached('projects:list', computeAllProjects) });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -590,7 +590,7 @@ app.get('/api/projects/:projectName/insights', (req, res) => {
 });
 
 // Cross-tool intelligence
-app.get('/api/cross-tool', (req, res) => {
+app.get('/api/cross-tool', (_req, res) => {
   try {
     detectToolSwitches(); // re-detect on every request (fast, idempotent)
     const stats = getCrossToolStats();
@@ -669,7 +669,7 @@ app.get('/api/projects/:projectName/topics', async (req, res) => {
   }
 });
 
-app.get('/api/topics/summary', (req, res) => {
+app.get('/api/topics/summary', (_req, res) => {
   try {
     const db = getDb();
     const distribution = db.prepare(`

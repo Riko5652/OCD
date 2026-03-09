@@ -454,9 +454,7 @@ async function rTok() {
 // ==============================================================
 async function rCompare() {
   if (!S.compare) S.compare = await fJ('/api/compare');
-  if (!S.models) S.models = await fJ('/api/models');
   const compare = S.compare || [];
-  const models = S.models || [];
 
   // KPIs
   const totalSess = compare.reduce((s, t) => s + (t.sessions || 0), 0);
@@ -1267,7 +1265,7 @@ function rInsProfile(p) {
 
 function rInsTrends(t) {
   if (!t) return;
-  const lineOpts = (color, baseline) => ({
+  const lineOpts = (color, _baseline) => ({
     type: 'line',
     options: {
       plugins: { legend: { display: false } },
