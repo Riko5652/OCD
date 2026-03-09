@@ -11,14 +11,17 @@ import {
   getCachedInsight, setCachedInsight,
   upsertModelPerformance, getModelPerformance,
 } from './db.js';
-import './adapters/claude-code.js';    // self-registers via registry
-import './adapters/cursor.js';         // self-registers via registry
-import './adapters/antigravity.js';    // self-registers via registry
-import './adapters/aider.js';          // self-registers via registry
-import './adapters/windsurf.js';       // self-registers via registry
-import './adapters/copilot.js';        // self-registers via registry
-import './adapters/continue.js';       // self-registers via registry
-import { getAdapters, getAdapter } from './adapters/registry.js';
+import { adapter as claudeAdapter } from './adapters/claude-code.js';
+import { adapter as cursorAdapter } from './adapters/cursor.js';
+import { adapter as antigravityAdapter } from './adapters/antigravity.js';
+import { adapter as aiderAdapter } from './adapters/aider.js';
+import { adapter as windsurfAdapter } from './adapters/windsurf.js';
+import { adapter as copilotAdapter } from './adapters/copilot.js';
+import { adapter as continueAdapter } from './adapters/continue.js';
+
+const _adapters = [claudeAdapter, cursorAdapter, antigravityAdapter, aiderAdapter, windsurfAdapter, copilotAdapter, continueAdapter];
+const getAdapters = () => _adapters;
+const getAdapter = (id) => _adapters.find(a => a.id === id);
 import { computeOverview, computeToolComparison, computeModelUsage, computeCodeGeneration, computeInsights, computeCostAnalysis, computePersonalInsights, rebuildDailyStats } from './engine/analytics.js';
 import { runOptimizer } from './engine/optimizer.js';
 import { scoreAndSave } from './engine/scorer.js';
@@ -43,7 +46,7 @@ const app = express();
 
 // Security headers
 app.use((_req, res, next) => {
-  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'");
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'");
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
@@ -69,7 +72,7 @@ if (AUTH_TOKEN) {
 const PORT = config.port;
 // Global history window: how many days back to show in charts and stats by default.
 // 0 = all time. Override via HISTORY_DAYS env var or ?days=N query param per request.
-const HISTORY_DAYS = process.env.HISTORY_DAYS ? parseInt(process.env.HISTORY_DAYS) : 365;
+const HISTORY_DAYS = process.env.HISTORY_DAYS ? parseInt(process.env.HISTORY_DAYS) : 0;
 
 // ---- Simple rate limiter for LLM-triggering endpoints ----
 // Prevents accidental or malicious repeated calls that consume cloud API quota.
@@ -232,10 +235,10 @@ async function ingestAll() {
       cached('costs', computeCostAnalysis);
       cached('personal-insights', computePersonalInsights);
       cached('ins:profile', computeProfile);
-      cached('ins:trends:90', () => computeTrends(90));
+      cached('ins:trends:0', () => computeTrends(0));
       cached('ins:prompt-metrics', computePromptMetrics);
       cached('recs:false', () => getRecommendations(false));
-      cached('daily:180', () => getDailyStatsRange(180));
+      cached('daily:0', () => getDailyStatsRange(0));
       cached('commits:100', () => dbGetCommitScores(100));
       console.log('[cache] Pre-warmed');
     } catch (e) {
@@ -391,6 +394,75 @@ app.get('/api/cursor-daily', async (_req, res) => {
     res.json(stats);
   } catch (e) {
     res.json([]);
+  }
+});
+
+// Cursor deep dive — model breakdown, bubble metrics, session-level insights
+app.get('/api/cursor/deep', (_req, res) => {
+  try {
+    const db = getDb();
+
+    // Cursor model breakdown
+    const modelBreakdown = db.prepare(`
+      SELECT primary_model as model,
+        COUNT(*) as sessions,
+        SUM(total_turns) as total_turns,
+        SUM(total_output_tokens) as total_output,
+        SUM(total_input_tokens) as total_input,
+        AVG(cache_hit_pct) as avg_cache_pct,
+        AVG(suggestion_acceptance_pct) as avg_suggestion_acceptance,
+        AVG(lint_improvement) as avg_lint_improvement,
+        AVG(avg_thinking_length) as avg_thinking_depth,
+        AVG(error_recovery_pct) as avg_error_recovery,
+        SUM(code_lines_added) as total_code_lines,
+        SUM(files_touched) as total_files,
+        AVG(agentic_score) as avg_agentic_score
+      FROM sessions WHERE tool_id = 'cursor' AND primary_model IS NOT NULL
+      GROUP BY primary_model ORDER BY sessions DESC
+    `).all();
+
+    // Overall cursor stats
+    const overview = db.prepare(`
+      SELECT
+        COUNT(*) as total_sessions,
+        SUM(total_turns) as total_turns,
+        SUM(total_output_tokens) as total_output,
+        SUM(total_input_tokens) as total_input,
+        AVG(cache_hit_pct) as avg_cache_pct,
+        AVG(suggestion_acceptance_pct) as avg_suggestion_acceptance,
+        AVG(lint_improvement) as avg_lint_improvement,
+        AVG(avg_thinking_length) as avg_thinking_depth,
+        SUM(code_lines_added) as total_code_lines,
+        SUM(files_touched) as total_files,
+        AVG(agentic_score) as avg_agentic_score,
+        COUNT(DISTINCT date(started_at / 1000, 'unixepoch')) as active_days
+      FROM sessions WHERE tool_id = 'cursor'
+    `).get();
+
+    // Top cursor sessions by output
+    const topSessions = db.prepare(`
+      SELECT id, title, primary_model, started_at, total_turns,
+        total_output_tokens, total_input_tokens, cache_hit_pct,
+        suggestion_acceptance_pct, lint_improvement, avg_thinking_length,
+        code_lines_added, files_touched, agentic_score
+      FROM sessions WHERE tool_id = 'cursor'
+      ORDER BY total_output_tokens DESC LIMIT 20
+    `).all();
+
+    // Daily cursor activity
+    const dailyActivity = db.prepare(`
+      SELECT date(started_at / 1000, 'unixepoch') as date,
+        COUNT(*) as sessions,
+        SUM(total_turns) as turns,
+        SUM(total_output_tokens) as output_tokens,
+        AVG(suggestion_acceptance_pct) as avg_suggestion_accept
+      FROM sessions WHERE tool_id = 'cursor'
+      GROUP BY date ORDER BY date
+    `).all();
+
+    res.json({ modelBreakdown, overview, topSessions, dailyActivity });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
@@ -703,9 +775,9 @@ ingestAll().catch(e => console.error('[startup] Ingestion error:', e.message));
 
 // Start file watchers
 startWatchers(
-  () => { console.log('[watcher] Claude data changed'); ingestAdapter(getAdapter('claude-code')).then(broadcast); },
-  () => { console.log('[watcher] Cursor data changed'); ingestAdapter(getAdapter('cursor')).then(broadcast); },
-  () => { console.log('[watcher] Antigravity data changed'); ingestAdapter(getAdapter('antigravity')).then(broadcast); },
+  () => { const a = getAdapter('claude-code'); if (a) { console.log('[watcher] Claude data changed'); ingestAdapter(a).then(broadcast); } },
+  () => { const a = getAdapter('cursor'); if (a) { console.log('[watcher] Cursor data changed'); ingestAdapter(a).then(broadcast); } },
+  () => { const a = getAdapter('antigravity'); if (a) { console.log('[watcher] Antigravity data changed'); ingestAdapter(a).then(broadcast); } },
 );
 
 // Bind to localhost by default (personal tool — don't expose to LAN).

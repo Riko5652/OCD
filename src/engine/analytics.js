@@ -73,9 +73,23 @@ export function computeOverview() {
       SUM(error_count) as total_errors,
       AVG(error_recovery_pct) as avg_error_recovery,
       AVG(suggestion_acceptance_pct) as avg_suggestion_acceptance,
-      AVG(lint_improvement) as avg_lint_improvement
+      AVG(lint_improvement) as avg_lint_improvement,
+      SUM(code_lines_added) as total_code_lines,
+      SUM(files_touched) as total_files_touched,
+      AVG(agentic_score) as avg_agentic_score,
+      COUNT(DISTINCT primary_model) as distinct_models,
+      COUNT(DISTINCT date(started_at / 1000, 'unixepoch')) as active_days
     FROM sessions
   `).get();
+
+  // Total estimated cost
+  try {
+    const allSessions = db.prepare(`
+      SELECT primary_model, total_input_tokens, total_output_tokens, total_cache_read FROM sessions
+    `).all();
+    global.total_cost = allSessions.reduce((sum, s) =>
+      sum + estimateCost(s.primary_model, s.total_input_tokens, s.total_output_tokens, s.total_cache_read), 0);
+  } catch { global.total_cost = null; }
 
   // Today's activity
   const today = new Date().toISOString().slice(0, 10);

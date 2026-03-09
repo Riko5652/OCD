@@ -629,10 +629,12 @@ export async function getSessions() {
     console.log(`[cursor] Added ${csvAdded} sessions from team-usage CSV (${localCount} local)`);
   }
 
-  // Filter out sessions with 0 output tokens (failed/errored requests)
-  // Local sessions have estimatedOutput from bubble text; CSV sessions have it from API response
+  // Filter out sessions with no meaningful data.
+  // Local sessions may not have estimatedOutput yet (computed later from bubbles),
+  // so also keep sessions that have turns or bubble data.
   const validSessions = allSessions.filter(cs =>
-    (cs.estimatedOutput || 0) > 0 || (cs.estimatedInput || 0) > 0
+    (cs.estimatedOutput || 0) > 0 || (cs.estimatedInput || 0) > 0 ||
+    cs.totalTurns > 0 || (cs.bubbleIds && cs.bubbleIds.length > 0)
   );
   const filtered = allSessions.length - validSessions.length;
   if (filtered > 0) {
@@ -661,11 +663,26 @@ export async function getSessions() {
       }
     }
 
-    // Parse deeper insights from bubble data (local sessions only)
+    // Parse deeper insights and token data from bubble data (local sessions only)
     let insights = null;
+    let bubbleOutputTokens = 0;
+    let bubbleInputTokens = 0;
     if (cs._isLocal && cs._db && cs.bubbleIds.length > 0) {
       insights = parseSessionInsights(cs._db, cs.composerId, cs.bubbleIds);
+      // Also parse bubbles for token counts if we don't have estimated tokens
+      if (!cs.estimatedOutput) {
+        const turns = parseBubbles(cs._db, cs.composerId, cs.bubbleIds);
+        for (const t of turns) {
+          bubbleOutputTokens += t.output_tokens || 0;
+          bubbleInputTokens += t.input_tokens || 0;
+        }
+      }
     }
+
+    // Use best available output estimate: CSV > bubble-parsed > turn-count heuristic
+    const outputTokens = cs.estimatedOutput || bubbleOutputTokens ||
+      (cs.assistantTurns > 0 ? cs.assistantTurns * 800 : 0); // ~800 tokens per assistant turn as fallback
+    const inputTokens = input || bubbleInputTokens;
 
     // Compute derived insight metrics
     const suggestionAcceptancePct = insights && insights.suggestionCount > 0
@@ -681,8 +698,8 @@ export async function getSessions() {
       title: null,
       started_at: cs.createdAt || null,
       total_turns: cs.totalTurns,
-      total_input_tokens: input,
-      total_output_tokens: cs.estimatedOutput || 0,
+      total_input_tokens: inputTokens,
+      total_output_tokens: outputTokens,
       total_cache_read: cacheRead,
       cache_hit_pct: cacheHitPct,
       avg_latency_ms: avgLatency,

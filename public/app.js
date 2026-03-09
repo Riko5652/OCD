@@ -155,7 +155,7 @@ async function refreshAll() {
 // ==============================================================
 // OVERVIEW TAB
 // ==============================================================
-let ovRange = 180;
+let ovRange = 0;
 
 async function rOv() {
   if (!S.overview) S.overview = await fJ('/api/overview');
@@ -1834,10 +1834,79 @@ function switchPillar(name) {
 }
 
 async function renderPillar(name) {
-  if (name === 'command') await renderCommandCenter();
-  else if (name === 'workspaces') await renderWorkspaces();
-  else if (name === 'performance') await renderPerformance();
-  else if (name === 'profile') await renderProfilePillar();
+  if (name === 'command') {
+    await renderCommandCenter();
+  } else if (name === 'workspaces') {
+    initSubTabs('p-workspaces', _subTabRenderers.workspaces);
+    _mountV2Tab('t-sessions', 'ws-sessions');
+    rSess();
+  } else if (name === 'performance') {
+    initSubTabs('p-performance', _subTabRenderers.performance);
+    _mountV2Tab('t-compare', 'perf-tools');
+    rCompare();
+  } else if (name === 'profile') {
+    initSubTabs('p-profile', _subTabRenderers.profile);
+    _subTabRenderers.profile['prof-personal']();
+  }
+}
+
+// Sub-tab renderer map — maps panel IDs to the V2 render function to call.
+// V2 renderers write into #t-sessions, #t-tokens etc. which still exist in HTML (just hidden).
+// We move the #t-* element into the active sub-panel so the renderer output is visible.
+const _subTabRenderers = {
+  workspaces: {
+    'ws-sessions': () => { _mountV2Tab('t-sessions', 'ws-sessions'); rSess(); },
+    'ws-projects': () => { _mountV2Tab('t-projects', 'ws-projects'); rProjects(); },
+    'ws-tokens':   () => { _mountV2Tab('t-tokens', 'ws-tokens'); rTok(); },
+  },
+  performance: {
+    'perf-tools':     () => { _mountV2Tab('t-compare', 'perf-tools'); rCompare(); },
+    'perf-models':    () => { _mountV2Tab('t-models', 'perf-models'); rModels(); },
+    'perf-codegen':   () => { _mountV2Tab('t-codegen', 'perf-codegen'); rCG(); },
+    'perf-cursor':    () => renderCursorDeepDive(),
+    'perf-analytics': () => { _mountV2Tab('t-analytics', 'perf-analytics'); rAna(); },
+  },
+  profile: {
+    'prof-personal': () => renderProfilePillar(),
+    'prof-costs':    () => { _mountV2Tab('t-costs', 'prof-costs'); rCosts(); },
+    'prof-insights': () => renderCombinedInsights(),
+  },
+};
+
+// Move a hidden V2 .tp element into the target sub-panel div (only once)
+// Returns a promise that resolves after the element is in the DOM and laid out
+function _mountV2Tab(v2Id, panelId) {
+  const panel = document.getElementById(panelId);
+  const v2el = document.getElementById(v2Id);
+  if (!panel || !v2el) return;
+  if (!panel.contains(v2el)) {
+    v2el.style.display = 'block';
+    v2el.style.padding = '16px 24px 40px';
+    panel.appendChild(v2el);
+  } else {
+    v2el.style.display = 'block';
+  }
+  // After a layout tick, resize any charts that were created while hidden
+  requestAnimationFrame(() => {
+    Object.values(S.charts || {}).forEach(chart => {
+      try { chart.resize(); } catch { /* ignore */ }
+    });
+  });
+}
+
+// Wire sub-tab clicking for a pillar section
+function initSubTabs(sectionId, renderers) {
+  const section = document.getElementById(sectionId);
+  if (!section || section.dataset.subTabsInit) return;
+  section.dataset.subTabsInit = '1';
+  section.querySelectorAll('.sub-tab').forEach(btn => {
+    btn.onclick = async () => {
+      const panelId = btn.dataset.stab;
+      section.querySelectorAll('.sub-tab').forEach(b => b.classList.toggle('active', b === btn));
+      section.querySelectorAll('.sub-tab-panel').forEach(p => p.classList.toggle('active', p.id === panelId));
+      if (renderers[panelId]) await renderers[panelId]();
+    };
+  });
 }
 
 // ---- Command Center ----
@@ -1845,53 +1914,192 @@ async function renderCommandCenter() {
   const el = document.getElementById('p-command-inner');
   if (!el) return;
 
-  if (!S.overview) S.overview = await fJ('/api/overview');
-  if (!S.recs) S.recs = await fJ('/api/recommendations');
-  if (!S.insProfile) S.insProfile = await fJ('/api/insights/profile');
-  if (!S.insLlmStatus) S.insLlmStatus = await fJ('/api/ollama/status');
+  const [ovRes, recsRes, profileRes, costsRes, codeGenRes, agenticRes] = await Promise.all([
+    S.overview ? S.overview : fJ('/api/overview'),
+    S.recs ? S.recs : fJ('/api/recommendations'),
+    S.insProfile ? S.insProfile : fJ('/api/insights/profile'),
+    S.costs ? S.costs : fJ('/api/costs'),
+    S.codeGen ? S.codeGen : fJ('/api/code-generation'),
+    fJ('/api/agentic/scores'),
+  ]);
+  S.overview = ovRes; S.recs = recsRes; S.insProfile = profileRes;
+  S.costs = costsRes; S.codeGen = codeGenRes;
 
   const ov = S.overview || {};
+  const g = ov.global || {};
   const recs = (S.recs || []).filter(r => !r.dismissed).slice(0, 4);
   const profile = S.insProfile || {};
+  const tools = ov.tools || [];
+  const today = ov.today || [];
+  const commits = ov.commits || {};
+  const agentic = agenticRes?.leaderboard || [];
+
+  // Compute totals
+  const totalSessions = g.total_sessions || 0;
+  const totalTurns = g.total_turns || 0;
+  const totalTokens = (g.total_input || 0) + (g.total_output || 0);
+  const avgCache = g.avg_cache_pct;
+  const totalCost = g.total_cost;
+  const totalCodeLines = g.total_code_lines || 0;
+  const totalFiles = g.total_files_touched || 0;
+  const avgAgentic = g.avg_agentic_score;
+  const distinctModels = g.distinct_models || 0;
+  const activeDays = g.active_days || 0;
+  const avgThinking = g.avg_thinking_depth;
+  const avgErrorRecovery = g.avg_error_recovery;
+
+  const avgQuality = tools.length
+    ? tools.reduce((s, t) => s + (t.avg_quality || 0), 0) / tools.length
+    : null;
+
+  const todayTurns = today.reduce((s, t) => s + (t.turns || t.count || 0), 0);
+  const todaySessions = today.reduce((s, t) => s + (t.count || 0), 0);
 
   const hour12 = h => h != null ? (h % 12 || 12) + (h < 12 ? 'am' : 'pm') : '--';
+  const fmtCost = c => c != null ? '$' + (c >= 100 ? Math.round(c) : c.toFixed(2)) : '--';
+
+  // Top agentic sessions
+  const topAgentic = agentic.slice(0, 3);
 
   el.innerHTML = `
+    <!-- Hero stats row -->
     <div class="bento">
-      <div class="bento-card" onclick="openModal('Total Sessions','<p>Sessions tracked across all AI tools. Each session is one task or conversation.</p>')">
+      <div class="bento-card accent-sessions">
         <div class="bento-icon">\uD83D\uDCAC</div>
         <div class="bento-label">Total Sessions</div>
-        <div class="bento-value">${fmt(ov.totalSessions || 0)}</div>
-        <div class="bento-sub">across all tools</div>
+        <div class="bento-value">${fmt(totalSessions)}</div>
+        <div class="bento-sub">${activeDays} active days</div>
       </div>
-      <div class="bento-card" onclick="openModal('Token Usage','<p>Total tokens consumed across all sessions.</p>')">
+      <div class="bento-card accent-turns">
+        <div class="bento-icon">\uD83D\uDD04</div>
+        <div class="bento-label">Total Turns</div>
+        <div class="bento-value">${fmt(totalTurns)}</div>
+        <div class="bento-sub">${totalSessions ? (totalTurns / totalSessions).toFixed(1) : '--'} avg/session</div>
+      </div>
+      <div class="bento-card accent-tokens">
         <div class="bento-icon">\uD83D\uDD24</div>
         <div class="bento-label">Total Tokens</div>
-        <div class="bento-value">${fmt(ov.totalTokens || 0)}</div>
-        <div class="bento-sub">input + output + cache</div>
+        <div class="bento-value">${fmt(totalTokens)}</div>
+        <div class="bento-sub">${fmt(g.total_input || 0)} in \u00B7 ${fmt(g.total_output || 0)} out</div>
       </div>
-      <div class="bento-card" onclick="openModal('Cache Efficiency','<p>Prompt cache hit rate. Higher means better reuse of previous context, saving tokens and cost.</p>')">
+      <div class="bento-card accent-cache">
         <div class="bento-icon">\u26A1</div>
         <div class="bento-label">Cache Hit Rate</div>
-        <div class="bento-value">${ov.avgCacheHitPct != null ? ov.avgCacheHitPct.toFixed(1) + '%' : '--'}</div>
+        <div class="bento-value">${avgCache != null ? avgCache.toFixed(1) + '%' : '--'}</div>
         <div class="bento-sub">prompt cache efficiency</div>
       </div>
-      <div class="bento-card" onclick="openModal('Quality Score','<p>Average session quality score (0\u2013100) based on turn efficiency, cache usage, error rate, and code output.</p>')">
+      <div class="bento-card accent-cost">
+        <div class="bento-icon">\uD83D\uDCB0</div>
+        <div class="bento-label">Estimated Cost</div>
+        <div class="bento-value">${fmtCost(totalCost)}</div>
+        <div class="bento-sub">${totalSessions ? fmtCost(totalCost / totalSessions) + '/session' : '--'}</div>
+      </div>
+      <div class="bento-card accent-code">
+        <div class="bento-icon">\uD83D\uDCBB</div>
+        <div class="bento-label">Code Generated</div>
+        <div class="bento-value">${fmt(totalCodeLines)}</div>
+        <div class="bento-sub">${fmt(totalFiles)} files touched</div>
+      </div>
+    </div>
+
+    <!-- Second row: deeper metrics -->
+    <div class="bento" style="margin-top:12px">
+      ${avgAgentic != null ? `
+      <div class="bento-card accent-agentic" onclick="switchPillar('performance')">
+        <div class="bento-icon">\uD83E\uDD16</div>
+        <div class="bento-label">Agentic Score</div>
+        <div class="bento-value">${Math.round(avgAgentic)}</div>
+        <div class="bento-sub">AI autonomy (0\u2013100)</div>
+      </div>` : ''}
+      ${avgThinking != null ? `
+      <div class="bento-card" onclick="switchPillar('performance')">
+        <div class="bento-icon">\uD83E\uDDE0</div>
+        <div class="bento-label">Thinking Depth</div>
+        <div class="bento-value">${fmt(Math.round(avgThinking))}</div>
+        <div class="bento-sub">avg thinking tokens</div>
+      </div>` : ''}
+      ${avgErrorRecovery != null ? `
+      <div class="bento-card" onclick="switchPillar('performance')">
+        <div class="bento-icon">\uD83D\uDD27</div>
+        <div class="bento-label">Error Recovery</div>
+        <div class="bento-value">${avgErrorRecovery.toFixed(0)}%</div>
+        <div class="bento-sub">self-corrected errors</div>
+      </div>` : ''}
+      <div class="bento-card" onclick="switchPillar('performance')">
+        <div class="bento-icon">\uD83C\uDFAF</div>
+        <div class="bento-label">Models Used</div>
+        <div class="bento-value">${distinctModels}</div>
+        <div class="bento-sub">distinct AI models</div>
+      </div>
+      ${avgQuality != null ? `
+      <div class="bento-card" onclick="switchPillar('performance')">
         <div class="bento-icon">\u2B50</div>
         <div class="bento-label">Avg Quality</div>
-        <div class="bento-value">${ov.avgQualityScore != null ? ov.avgQualityScore.toFixed(0) : '--'}</div>
+        <div class="bento-value">${avgQuality.toFixed(0)}</div>
         <div class="bento-sub">session quality score</div>
+      </div>` : ''}
+      ${commits.avg_ai_pct != null ? `
+      <div class="bento-card accent-commits" onclick="switchPillar('performance')">
+        <div class="bento-icon">\uD83D\uDCC8</div>
+        <div class="bento-label">AI Authorship</div>
+        <div class="bento-value">${Math.round(commits.avg_ai_pct)}%</div>
+        <div class="bento-sub">${fmt(commits.total_ai_lines || 0)} AI lines</div>
+      </div>` : ''}
+    </div>
+
+    <!-- Today's Activity -->
+    <div style="margin-top:18px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div class="card" style="margin:0">
+        <h2 style="font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-s);margin-bottom:12px">Today's Activity</h2>
+        ${todaySessions > 0 ? `
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:10px">
+          <div><span style="font-size:1.6rem;font-weight:800;color:var(--text-h)">${todaySessions}</span> <span style="font-size:.78rem;color:var(--text-s)">sessions</span></div>
+          <div><span style="font-size:1.6rem;font-weight:800;color:var(--text-h)">${fmt(todayTurns)}</span> <span style="font-size:.78rem;color:var(--text-s)">turns</span></div>
+        </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap">
+          ${today.map(t => `<span style="display:inline-flex;align-items:center;gap:4px;padding:4px 10px;border-radius:20px;font-size:.74rem;font-weight:500;background:${toolColor(t.tool_id)}18;color:${toolColor(t.tool_id)};border:1px solid ${toolColor(t.tool_id)}30">
+            <span style="width:6px;height:6px;border-radius:50%;background:${toolColor(t.tool_id)}"></span>
+            ${t.tool_id} \u00B7 ${t.count} sessions
+          </span>`).join('')}
+        </div>` : '<div style="color:var(--text-s);font-size:.84rem">No sessions today yet. Start coding!</div>'}
       </div>
-      ${profile.peakHour != null ? `
-      <div class="bento-card" onclick="switchPillar('profile')">
-        <div class="bento-icon">\uD83D\uDD50</div>
-        <div class="bento-label">Peak Hour</div>
-        <div class="bento-value">${hour12(profile.peakHour)}</div>
-        <div class="bento-sub">most productive time \u00B7 ${profile.medianTurns || '--'} median turns</div>
+      <div class="card" style="margin:0">
+        <h2 style="font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-s);margin-bottom:12px">Tool Breakdown</h2>
+        ${tools.length > 0 ? tools.map(t => {
+          const maxS = Math.max(...tools.map(x => x.sessions));
+          const pctW = maxS ? ((t.sessions / maxS) * 100).toFixed(1) : 0;
+          return `<div style="margin-bottom:8px">
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:3px">
+              <span style="font-weight:600;color:var(--text-h)">${t.tool_id}</span>
+              <span style="color:var(--text-s)">${t.sessions} sessions \u00B7 ${fmt(t.output_tokens || 0)} tokens</span>
+            </div>
+            <div style="height:6px;background:var(--bg-alt,#f0f0f0);border-radius:3px;overflow:hidden">
+              <div style="height:100%;width:${pctW}%;background:${toolColor(t.tool_id)};border-radius:3px"></div>
+            </div>
+          </div>`;
+        }).join('') : '<div style="color:var(--text-s);font-size:.84rem">No tool data yet.</div>'}
+      </div>
+    </div>
+
+    <!-- Top Agentic Sessions + Recommendations -->
+    <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      ${topAgentic.length > 0 ? `
+      <div class="card" style="margin:0">
+        <h2 style="font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-s);margin-bottom:12px">Most Autonomous Sessions</h2>
+        <div style="display:grid;gap:8px">
+          ${topAgentic.map(s => `
+            <div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-radius:8px;background:var(--bg-alt,#f8f8f8)">
+              <div style="min-width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,var(--primary),#ff7e5f);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:700;font-size:.8rem">${s.agentic_score || 0}</div>
+              <div style="flex:1;min-width:0">
+                <div style="font-size:.8rem;font-weight:600;color:var(--text-h);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.title || s.id?.slice(0, 12) || 'Session'}</div>
+                <div style="font-size:.72rem;color:var(--text-s)">${toolChip(s.tool_id)} \u00B7 ${s.total_turns || 0} turns \u00B7 ${fmt(s.total_output_tokens || 0)} tokens</div>
+              </div>
+            </div>`).join('')}
+        </div>
       </div>` : ''}
       ${recs.length > 0 ? `
-      <div class="bento-card full" style="cursor:default">
-        <div class="bento-label" style="margin-bottom:12px">Active Recommendations</div>
+      <div class="card" style="margin:0">
+        <h2 style="font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-s);margin-bottom:12px">Active Recommendations</h2>
         <div style="display:grid;gap:8px">
           ${recs.map(r => `
             <div style="padding:10px 14px;border-radius:8px;background:${r.severity === 'critical' ? 'rgba(239,68,68,0.06)' : r.severity === 'warning' ? 'rgba(245,158,11,0.06)' : 'rgba(59,130,246,0.06)'};border-left:3px solid ${r.severity === 'critical' ? '#ef4444' : r.severity === 'warning' ? '#f59e0b' : '#3b82f6'}">
@@ -1899,50 +2107,357 @@ async function renderCommandCenter() {
               <div style="font-size:.78rem;color:var(--text-s);margin-top:2px">${r.description}</div>
             </div>`).join('')}
         </div>
-      </div>` : ''}
+      </div>` : `
+      <div class="card" style="margin:0">
+        <h2 style="font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-s);margin-bottom:12px">Quick Navigation</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="bento-card" style="padding:12px;cursor:pointer" onclick="switchPillar('workspaces')">
+            <div style="font-size:.82rem;font-weight:600">Sessions</div>
+            <div style="font-size:.72rem;color:var(--text-s)">Browse all sessions</div>
+          </div>
+          <div class="bento-card" style="padding:12px;cursor:pointer" onclick="switchPillar('performance')">
+            <div style="font-size:.82rem;font-weight:600">Models</div>
+            <div style="font-size:.72rem;color:var(--text-s)">Compare AI models</div>
+          </div>
+          <div class="bento-card" style="padding:12px;cursor:pointer" onclick="switchPillar('profile')">
+            <div style="font-size:.82rem;font-weight:600">Insights</div>
+            <div style="font-size:.72rem;color:var(--text-s)">Your work patterns</div>
+          </div>
+          <div class="bento-card" style="padding:12px;cursor:pointer" onclick="switchPillar('performance')">
+            <div style="font-size:.82rem;font-weight:600">Code Gen</div>
+            <div style="font-size:.72rem;color:var(--text-s)">Code output stats</div>
+          </div>
+        </div>
+      </div>`}
+    </div>
+
+    <!-- Overview charts -->
+    <div style="margin-top:14px" class="g2">
+      <div class="card"><h2>Daily Activity</h2><canvas id="cc-daily-chart"></canvas></div>
+      <div class="card"><h2>Token Flow</h2><canvas id="cc-token-chart"></canvas></div>
+    </div>`;
+
+  // Render charts with all-time data
+  const daily = ov.daily || [];
+  if (daily.length > 0) {
+    const dates = [...new Set(daily.map(d => d.date))].sort();
+    const toolIds = [...new Set(daily.map(d => d.tool_id))];
+
+    // Downsample if too many dates for readability
+    const step = dates.length > 90 ? Math.ceil(dates.length / 90) : 1;
+    const sampledDates = dates.filter((_, i) => i % step === 0);
+
+    mc('cc-daily-chart', {
+      type: 'bar',
+      data: {
+        labels: sampledDates.map(d => d.slice(5)),
+        datasets: toolIds.map(tid => ({
+          label: tid,
+          data: sampledDates.map(date => {
+            const row = daily.find(d => d.date === date && d.tool_id === tid);
+            return row?.total_turns || 0;
+          }),
+          backgroundColor: toolColor(tid),
+        })),
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'top', labels: { font: { size: 10 }, boxWidth: 10 } } },
+        scales: {
+          x: { stacked: true, ticks: { maxRotation: 45, maxTicksLimit: 20 } },
+          y: { stacked: true, beginAtZero: true },
+        },
+      },
+    });
+
+    mc('cc-token-chart', {
+      type: 'line',
+      data: {
+        labels: sampledDates.map(d => d.slice(5)),
+        datasets: toolIds.map(tid => ({
+          label: tid,
+          data: sampledDates.map(date => {
+            const row = daily.find(d => d.date === date && d.tool_id === tid);
+            return row?.total_output_tokens || 0;
+          }),
+          borderColor: toolColor(tid),
+          backgroundColor: toolColor(tid) + '18',
+          fill: true,
+          tension: 0.3,
+          pointRadius: 1,
+        })),
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'top', labels: { font: { size: 10 }, boxWidth: 10 } } },
+        scales: {
+          x: { ticks: { maxRotation: 45, maxTicksLimit: 20 } },
+          y: { beginAtZero: true, ticks: { callback: v => fmt(v) } },
+        },
+      },
+    });
+  }
+}
+
+// ---- Combined Insights & Optimization ----
+async function renderCombinedInsights() {
+  const panel = document.getElementById('prof-insights');
+  if (!panel) return;
+
+  // Mount insights section first
+  _mountV2Tab('t-insights', 'prof-insights');
+  rIns();
+
+  // Then append optimization recommendations below
+  let optContainer = document.getElementById('combined-opt-section');
+  if (!optContainer) {
+    optContainer = document.createElement('div');
+    optContainer.id = 'combined-opt-section';
+    optContainer.style.cssText = 'padding:16px 24px 40px';
+    panel.appendChild(optContainer);
+  }
+
+  // Fetch recommendations
+  if (!S.recs) S.recs = await fJ('/api/recommendations?all=true');
+  const recs = S.recs || [];
+  const active = recs.filter(r => !r.dismissed);
+
+  if (active.length === 0) {
+    optContainer.innerHTML = `<div class="card" style="margin-top:20px"><h2>Optimization Recommendations</h2><p style="color:var(--text-s);padding:12px 0">All clear — no recommendations right now.</p></div>`;
+    return;
+  }
+
+  // Group and sort
+  const grouped = new Map();
+  for (const r of active) {
+    if (!grouped.has(r.title)) grouped.set(r.title, { ...r, count: 1 });
+    else grouped.get(r.title).count++;
+  }
+  const sevOrder = { critical: 0, warning: 1, info: 2 };
+  const sorted = [...grouped.values()].sort((a, b) => (sevOrder[a.severity] ?? 3) - (sevOrder[b.severity] ?? 3) || b.count - a.count);
+
+  optContainer.innerHTML = `
+    <div class="card" style="margin-top:20px">
+      <h2>Optimization Recommendations (${sorted.length})</h2>
+      <div class="rg" style="margin-top:12px">
+        ${sorted.map(r => `
+          <div class="rc ${r.severity}">
+            <div class="rc-cat">${r.category}${r.tool_id ? ' — ' + r.tool_id : ''}</div>
+            <div class="rc-t">${r.title}${r.count > 1 ? ` <span style="background:rgba(0,0,0,.08);border-radius:20px;padding:1px 7px;font-size:.68rem">${r.count}x</span>` : ''}</div>
+            <div class="rc-d">${r.description}</div>
+            ${r.action ? `<div class="rc-a">${r.action}</div>` : ''}
+          </div>`).join('')}
+      </div>
     </div>`;
 }
 
-// ---- Workspaces ----
+// ---- Cursor Deep Dive ----
+async function renderCursorDeepDive() {
+  const panel = document.getElementById('perf-cursor');
+  if (!panel) return;
+
+  const data = await fJ('/api/cursor/deep');
+  if (!data || !data.overview) {
+    panel.innerHTML = '<div style="padding:24px;color:var(--text-s)">No Cursor data available. Make sure Cursor state DB is detected.</div>';
+    return;
+  }
+
+  const ov = data.overview;
+  const models = data.modelBreakdown || [];
+  const topSessions = data.topSessions || [];
+
+  panel.innerHTML = `
+    <div style="padding:16px 24px 40px">
+      <!-- Cursor Overview KPIs -->
+      <div class="kpi" id="cursor-kpis"></div>
+
+      <!-- Model Breakdown -->
+      <div class="g2" style="margin-top:16px">
+        <div class="card">
+          <h2>Model Usage Distribution</h2>
+          <canvas id="c-cursor-model-dist" style="max-height:280px"></canvas>
+        </div>
+        <div class="card">
+          <h2>Model Performance Radar</h2>
+          <canvas id="c-cursor-model-radar" style="max-height:280px"></canvas>
+        </div>
+      </div>
+
+      <!-- Model Comparison Table -->
+      <div class="card" style="margin-top:14px">
+        <h2>Model-by-Model Comparison</h2>
+        <div style="overflow-x:auto">
+          <table><thead><tr>
+            <th>Model</th><th class="num">Sessions</th><th class="num">Turns</th>
+            <th class="num">Output Tokens</th><th class="num">Cache Hit</th>
+            <th class="num">Suggestions Accepted</th><th class="num">Lint Improvement</th>
+            <th class="num">Thinking Depth</th><th class="num">Agentic Score</th>
+          </tr></thead><tbody id="cursor-model-body"></tbody></table>
+        </div>
+      </div>
+
+      <!-- Top Sessions -->
+      <div class="card" style="margin-top:14px">
+        <h2>Top Cursor Sessions by Output</h2>
+        <div style="overflow-x:auto">
+          <table><thead><tr>
+            <th>Date</th><th>Model</th><th class="num">Turns</th>
+            <th class="num">Output</th><th class="num">Cache</th>
+            <th class="num">Suggestions</th><th class="num">Lint</th>
+            <th class="num">Lines</th><th class="num">Agentic</th>
+          </tr></thead><tbody id="cursor-sessions-body"></tbody></table>
+        </div>
+      </div>
+
+      <!-- Daily Activity Chart -->
+      <div class="card" style="margin-top:14px">
+        <h2>Cursor Daily Activity</h2>
+        <canvas id="c-cursor-daily-deep"></canvas>
+      </div>
+    </div>`;
+
+  // KPIs
+  $('cursor-kpis').innerHTML = [
+    kpi(fmt(ov.total_sessions), 'Cursor Sessions', '--primary'),
+    kpi(fmt(ov.total_turns), 'Total Turns', '--c-input'),
+    kpi(fmt(ov.total_output), 'Output Tokens', '--c-output'),
+    kpi(ov.avg_cache_pct != null ? Math.round(ov.avg_cache_pct) + '%' : '--', 'Cache Hit', '--c-cache-read'),
+    kpi(ov.avg_suggestion_acceptance != null ? Math.round(ov.avg_suggestion_acceptance) + '%' : '--', 'Suggestion Accept', '--c-cache-create'),
+    kpi(ov.avg_lint_improvement != null ? Math.round(ov.avg_lint_improvement) + '%' : '--', 'Lint Improvement', '--lv-good'),
+    kpi(fmt(ov.total_code_lines || 0), 'Code Lines', '--accent-performance'),
+    kpi(ov.avg_agentic_score != null ? Math.round(ov.avg_agentic_score) : '--', 'Agentic Score', '--lv-tip'),
+  ].join('');
+
+  // Model distribution doughnut
+  if (models.length > 0) {
+    mc('c-cursor-model-dist', {
+      type: 'doughnut',
+      data: {
+        labels: models.map(m => (m.model || 'unknown').replace('claude-', '').replace(/-\d{8}$/, '')),
+        datasets: [{
+          data: models.map(m => m.sessions),
+          backgroundColor: models.map((_, i) => MODEL_COLORS[i % MODEL_COLORS.length]),
+          borderWidth: 2, borderColor: 'var(--bg-card)',
+        }],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'right', labels: { font: { size: 10 }, boxWidth: 10, color: 'var(--text-m)' } } },
+      },
+    });
+
+    // Radar chart for top 5 models
+    const top5 = models.slice(0, 5);
+    mc('c-cursor-model-radar', {
+      type: 'radar',
+      data: {
+        labels: ['Cache %', 'Suggestion Accept %', 'Lint Fix %', 'Thinking Depth', 'Agentic Score'],
+        datasets: top5.map((m, i) => ({
+          label: (m.model || '').replace('claude-', '').replace(/-\d{8}$/, '').slice(0, 18),
+          data: [
+            m.avg_cache_pct || 0,
+            m.avg_suggestion_acceptance || 0,
+            m.avg_lint_improvement || 0,
+            Math.min(100, (m.avg_thinking_depth || 0) / 10), // normalize to ~100 scale
+            m.avg_agentic_score || 0,
+          ],
+          borderColor: MODEL_COLORS[i],
+          backgroundColor: MODEL_COLORS[i] + '20',
+          pointBackgroundColor: MODEL_COLORS[i],
+        })),
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'top', labels: { font: { size: 9 }, boxWidth: 8 } } },
+        scales: { r: { beginAtZero: true, max: 100, ticks: { stepSize: 20, font: { size: 8 } } } },
+      },
+    });
+  }
+
+  // Model comparison table
+  $('cursor-model-body').innerHTML = models.map(m => `<tr>
+    <td style="font-weight:600;font-size:.78rem">${(m.model || 'unknown').replace('claude-', '').replace(/-\d{8}$/, '')}</td>
+    <td class="num">${m.sessions}</td>
+    <td class="num">${fmt(m.total_turns)}</td>
+    <td class="num">${fmt(m.total_output)}</td>
+    <td class="num">${m.avg_cache_pct != null ? Math.round(m.avg_cache_pct) + '%' : '--'}</td>
+    <td class="num">${m.avg_suggestion_acceptance != null ? Math.round(m.avg_suggestion_acceptance) + '%' : '--'}</td>
+    <td class="num">${m.avg_lint_improvement != null ? Math.round(m.avg_lint_improvement) + '%' : '--'}</td>
+    <td class="num">${m.avg_thinking_depth != null ? fmt(Math.round(m.avg_thinking_depth)) : '--'}</td>
+    <td class="num">${m.avg_agentic_score != null ? Math.round(m.avg_agentic_score) : '--'}</td>
+  </tr>`).join('');
+
+  // Top sessions table
+  $('cursor-sessions-body').innerHTML = topSessions.map(s => `<tr>
+    <td style="white-space:nowrap;font-size:.76rem">${fD(s.started_at)}</td>
+    <td style="font-size:.76rem">${(s.primary_model || '').replace('claude-', '').replace(/-\d{8}$/, '').slice(0, 16)}</td>
+    <td class="num">${s.total_turns || 0}</td>
+    <td class="num">${fmt(s.total_output_tokens)}</td>
+    <td class="num">${s.cache_hit_pct != null ? Math.round(s.cache_hit_pct) + '%' : '--'}</td>
+    <td class="num">${s.suggestion_acceptance_pct != null ? Math.round(s.suggestion_acceptance_pct) + '%' : '--'}</td>
+    <td class="num">${s.lint_improvement != null ? Math.round(s.lint_improvement) + '%' : '--'}</td>
+    <td class="num">${fmt(s.code_lines_added)}</td>
+    <td class="num">${s.agentic_score != null ? s.agentic_score : '--'}</td>
+  </tr>`).join('');
+
+  // Daily activity line chart
+  const daily = data.dailyActivity || [];
+  if (daily.length > 0) {
+    const step = daily.length > 90 ? Math.ceil(daily.length / 90) : 1;
+    const sampled = daily.filter((_, i) => i % step === 0);
+    mc('c-cursor-daily-deep', {
+      type: 'line',
+      data: {
+        labels: sampled.map(d => d.date?.slice(5)),
+        datasets: [
+          {
+            label: 'Turns',
+            data: sampled.map(d => d.turns || 0),
+            borderColor: '#8b5cf6',
+            backgroundColor: 'rgba(139,92,246,0.08)',
+            fill: true, tension: 0.3, pointRadius: 1, yAxisID: 'y',
+          },
+          {
+            label: 'Output Tokens',
+            data: sampled.map(d => d.output_tokens || 0),
+            borderColor: '#f59e0b',
+            backgroundColor: 'rgba(245,158,11,0.08)',
+            fill: true, tension: 0.3, pointRadius: 1, yAxisID: 'y1',
+          },
+        ],
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'top', labels: { font: { size: 10 }, boxWidth: 10 } } },
+        scales: {
+          x: { ticks: { maxRotation: 45, maxTicksLimit: 20 } },
+          y: { beginAtZero: true, position: 'left', title: { display: true, text: 'Turns', font: { size: 9 } } },
+          y1: { beginAtZero: true, position: 'right', grid: { drawOnChartArea: false }, title: { display: true, text: 'Output Tokens', font: { size: 9 } }, ticks: { callback: v => fmt(v) } },
+        },
+      },
+    });
+  }
+}
+
+// ---- Workspaces (Projects sub-tab) ----
 async function renderWorkspaces() {
   const el = document.getElementById('p-workspaces-inner');
   if (!el) return;
 
   if (!S.projects) S.projects = await fJ('/api/projects');
-  if (!S.sessions) S.sessions = await fJ('/api/sessions');
 
-  const projects = (S.projects?.projects || []).slice(0, 20);
-  const sessions = (S.sessions || []).slice(0, 10);
+  const projects = (S.projects?.projects || []).slice(0, 40);
 
   el.innerHTML = `
-    <h3 style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-s);margin-bottom:12px">Projects</h3>
-    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:28px">
+    <h3 style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-s);margin-bottom:12px">Projects (${projects.length})</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px">
       ${projects.map(p => `
         <div class="bento-card" style="padding:16px" onclick="openProjectDrawer('${encodeURIComponent(p.project_name || '')}','${encodeURIComponent(p.project_name || 'Unnamed')}')">
           <div style="font-weight:600;font-size:.9rem;color:var(--text-h);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.project_name || 'Unnamed'}</div>
-          <div style="font-size:.76rem;color:var(--text-s)">${p.session_count} sessions \u00B7 ${fmt(p.total_tokens || 0)} tokens</div>
+          <div style="font-size:.76rem;color:var(--text-s)">${p.session_count || 0} sessions \u00B7 ${fmt(p.total_tokens || 0)} tokens</div>
           <div style="font-size:.72rem;color:var(--text-s);margin-top:4px">${p.dominant_tool || '--'}</div>
         </div>`).join('') || '<p style="color:var(--text-s)">No projects yet.</p>'}
-    </div>
-    <h3 style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-s);margin-bottom:12px">Recent Sessions</h3>
-    <div id="ws-sessions-list" style="display:grid;gap:8px">
-      ${_renderSessionRows(sessions)}
     </div>`;
-
-  // Wire up workspace search
-  const searchEl = document.getElementById('ws-search');
-  if (searchEl) {
-    searchEl.oninput = (e) => {
-      const q = e.target.value.toLowerCase();
-      const filtered = (S.sessions || []).filter(s =>
-        (s.label || '').toLowerCase().includes(q) ||
-        (s.tool_id || '').toLowerCase().includes(q) ||
-        (s.project_name || '').toLowerCase().includes(q)
-      ).slice(0, 10);
-      const list = document.getElementById('ws-sessions-list');
-      if (list) list.innerHTML = _renderSessionRows(filtered, true);
-    };
-  }
 }
 
 function _renderSessionRows(sessions, noQuality) {
@@ -2007,50 +2522,62 @@ async function renderPerfContent(el) {
   el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-s)">Loading\u2026</div>';
 
   if (_perfView === 'tools') {
+    // API returns array directly (not wrapped in {tools:[]})
     if (!S.compare) S.compare = await fJ('/api/compare');
-    const tools = S.compare?.tools || [];
+    const tools = Array.isArray(S.compare) ? S.compare : (S.compare?.tools || []);
     el.innerHTML = `
       <div style="display:grid;gap:10px">
         ${tools.map(t => `
           <div style="background:var(--bg-card);border-radius:12px;padding:16px 20px;display:grid;grid-template-columns:1fr repeat(4,auto);gap:16px;align-items:center">
             <div>
               <div style="font-weight:600;font-size:.9rem">${toolChip(t.tool_id)} ${t.tool_id}</div>
-              <div style="font-size:.74rem;color:var(--text-s)">${t.sessionCount} sessions</div>
+              <div style="font-size:.74rem;color:var(--text-s)">${t.sessions || t.sessionCount || 0} sessions</div>
             </div>
-            <div style="text-align:center"><div style="font-weight:700">${fmt(t.totalTokens || 0)}</div><div style="font-size:.7rem;color:var(--text-s)">tokens</div></div>
-            <div style="text-align:center"><div style="font-weight:700">${t.avgQuality != null ? t.avgQuality.toFixed(0) : '--'}</div><div style="font-size:.7rem;color:var(--text-s)">quality</div></div>
-            <div style="text-align:center"><div style="font-weight:700">${t.avgCacheHit != null ? t.avgCacheHit.toFixed(0) : '--'}%</div><div style="font-size:.7rem;color:var(--text-s)">cache</div></div>
-            <div style="text-align:center"><div style="font-weight:700">${t.avgTurns != null ? t.avgTurns.toFixed(0) : '--'}</div><div style="font-size:.7rem;color:var(--text-s)">avg turns</div></div>
+            <div style="text-align:center"><div style="font-weight:700">${fmt((t.output_tokens || t.totalTokens || 0))}</div><div style="font-size:.7rem;color:var(--text-s)">tokens</div></div>
+            <div style="text-align:center"><div style="font-weight:700">${t.avg_quality != null ? t.avg_quality.toFixed(0) : (t.avgQuality != null ? t.avgQuality.toFixed(0) : '--')}</div><div style="font-size:.7rem;color:var(--text-s)">quality</div></div>
+            <div style="text-align:center"><div style="font-weight:700">${t.avg_cache_pct != null ? t.avg_cache_pct.toFixed(0) : (t.avgCacheHit != null ? t.avgCacheHit.toFixed(0) : '--')}%</div><div style="font-size:.7rem;color:var(--text-s)">cache</div></div>
+            <div style="text-align:center"><div style="font-weight:700">${t.avg_turns_per_session != null ? t.avg_turns_per_session.toFixed(0) : (t.avgTurns != null ? t.avgTurns.toFixed(0) : '--')}</div><div style="font-size:.7rem;color:var(--text-s)">avg turns</div></div>
           </div>`).join('') || '<p style="color:var(--text-s)">No tool comparison data yet.</p>'}
       </div>`;
   } else if (_perfView === 'models') {
+    // API returns array directly (not wrapped in {byModel:[]})
     if (!S.models) S.models = await fJ('/api/models');
-    const rows = S.models?.byModel || [];
+    const rows = Array.isArray(S.models) ? S.models : (S.models?.byModel || []);
     el.innerHTML = `
       <div style="overflow-x:auto">
         <table style="width:100%;border-collapse:collapse;font-size:.84rem">
-          <thead><tr style="border-bottom:2px solid rgba(0,0,0,0.06)">${['Model', 'Sessions', 'Tokens', 'Avg Latency', 'Quality'].map(h => `<th style="text-align:left;padding:8px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-s)">${h}</th>`).join('')}</tr></thead>
-          <tbody>${rows.slice(0, 15).map((r, i) => `<tr style="border-bottom:1px solid rgba(0,0,0,0.04);${i % 2 ? 'background:rgba(0,0,0,0.015)' : ''}">${[r.model, r.sessionCount, fmt(r.totalTokens || 0), (r.avgLatency ? r.avgLatency.toFixed(0) + 'ms' : '--'), (r.avgQuality ? r.avgQuality.toFixed(0) : '--')].map(v => `<td style="padding:10px 12px">${v}</td>`).join('')}</tr>`).join('')}</tbody>
+          <thead><tr style="border-bottom:2px solid rgba(0,0,0,0.06)">${['Model', 'Sessions', 'Output Tokens', 'Avg Cache', 'Avg Latency'].map(h => `<th style="text-align:left;padding:8px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-s)">${h}</th>`).join('')}</tr></thead>
+          <tbody>${rows.slice(0, 15).map((r, i) => `<tr style="border-bottom:1px solid rgba(0,0,0,0.04);${i % 2 ? 'background:rgba(0,0,0,0.015)' : ''}"><td style="padding:10px 12px">${r.model}</td><td style="padding:10px 12px">${r.sessions || r.sessionCount || 0}</td><td style="padding:10px 12px">${fmt(r.output_tokens || r.totalTokens || 0)}</td><td style="padding:10px 12px">${r.avg_cache_pct != null ? r.avg_cache_pct.toFixed(0) + '%' : '--'}</td><td style="padding:10px 12px">${r.avg_latency != null ? (r.avg_latency / 1000).toFixed(1) + 's' : '--'}</td></tr>`).join('')}</tbody>
         </table>
       </div>`;
   } else if (_perfView === 'codegen') {
+    // API returns {byTool:[], topSessions:[], byModel:[]} — aggregate from byTool
     if (!S.codeGen) S.codeGen = await fJ('/api/code-generation');
-    const cg = S.codeGen || {};
+    const byTool = (S.codeGen?.byTool || []);
+    const totalAdded = byTool.reduce((s, t) => s + (t.total_lines_added || 0), 0);
+    const totalRemoved = byTool.reduce((s, t) => s + (t.total_lines_removed || 0), 0);
+    const totalFiles = byTool.reduce((s, t) => s + (t.total_files_touched || 0), 0);
     el.innerHTML = `
       <div class="bento" style="padding:0;margin:0">
-        <div class="bento-card">
+        <div class="bento-card" style="cursor:default">
           <div class="bento-label">Lines Added</div>
-          <div class="bento-value">${fmt(cg.totalLinesAdded || 0)}</div>
+          <div class="bento-value">${fmt(totalAdded)}</div>
         </div>
-        <div class="bento-card">
+        <div class="bento-card" style="cursor:default">
           <div class="bento-label">Lines Deleted</div>
-          <div class="bento-value">${fmt(cg.totalLinesDeleted || 0)}</div>
+          <div class="bento-value">${fmt(totalRemoved)}</div>
         </div>
-        <div class="bento-card">
-          <div class="bento-label">Avg Quality</div>
-          <div class="bento-value">${cg.avgQuality != null ? cg.avgQuality.toFixed(0) : '--'}</div>
+        <div class="bento-card" style="cursor:default">
+          <div class="bento-label">Files Touched</div>
+          <div class="bento-value">${fmt(totalFiles)}</div>
         </div>
-      </div>`;
+      </div>
+      ${byTool.length ? `<div style="margin-top:20px;display:grid;gap:8px">
+        ${byTool.map(t => `<div style="background:var(--bg-card);border-radius:10px;padding:12px 16px;display:flex;justify-content:space-between;align-items:center">
+          <span style="font-weight:600">${toolChip(t.tool_id)} ${t.tool_id}</span>
+          <span style="font-size:.8rem;color:var(--text-s)">+${fmt(t.total_lines_added||0)} / -${fmt(t.total_lines_removed||0)} lines</span>
+        </div>`).join('')}
+      </div>` : ''}`;
   } else {
     el.innerHTML = '<p style="color:var(--text-s);padding:20px">Task type routing coming soon.</p>';
   }
@@ -2061,54 +2588,115 @@ async function renderProfilePillar() {
   const el = document.getElementById('p-profile-inner');
   if (!el) return;
 
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-s)">Loading\u2026</div>';
+
   if (!S.personal) S.personal = await fJ('/api/personal-insights');
   if (!S.costs) S.costs = await fJ('/api/costs');
 
   const pi = S.personal || {};
   const costs = S.costs || {};
 
+  // API shape: pi.xp = {total, level, rank, currentLevelXP, nextLevelXP, progress}
+  // pi.streak = {current, longest}
+  // pi.lifetime = {sessions, outputTokens, aiLines, codeLines, daysActive, totalTurns}
+  // pi.achievements = [{id, cat, icon, title, desc, earned, threshold}]
+  // pi.goldenHours = [{hour, avgQuality, sessionCount}]
+  // pi.heatmap = [{date, count}]
+  // pi.records = [{label, value, date}]
+
+  const xp = pi.xp || {};
+  const streak = pi.streak || {};
+  const lifetime = pi.lifetime || {};
+  const achievements = (pi.achievements || []).filter(a => a.earned);
+  const records = pi.records || [];
+  const goldenHours = (pi.goldenHours || []).slice(0, 3);
+
   el.innerHTML = `
-    <div style="padding:20px">
-      ${pi.level != null ? `
-        <div style="background:linear-gradient(135deg,#1d1d1b 0%,#333 100%);border-radius:16px;padding:28px;color:#fff;margin-bottom:20px;display:flex;align-items:center;gap:20px">
-          <div style="text-align:center">
-            <div style="font-size:2.5rem;font-weight:900;color:#F15A2B">Lv.${pi.level}</div>
-            <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;opacity:.7">${pi.rank || 'Apprentice'}</div>
+    <div style="padding:20px;max-width:1200px;margin:0 auto">
+
+      ${xp.level != null ? `
+      <!-- Level / XP Hero -->
+      <div style="background:linear-gradient(135deg,var(--bg-card) 0%,rgba(241,90,43,0.06) 100%);border:1px solid rgba(241,90,43,0.15);border-radius:16px;padding:28px;margin-bottom:20px;display:flex;align-items:center;gap:24px;flex-wrap:wrap">
+        <div style="text-align:center;min-width:80px">
+          <div style="font-size:2.8rem;font-weight:900;color:var(--primary);font-family:var(--font-mono)">Lv.${xp.level}</div>
+          <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-s);font-weight:700">${xp.rank || 'Apprentice'}</div>
+        </div>
+        <div style="flex:1;min-width:200px">
+          <div style="display:flex;justify-content:space-between;font-size:.78rem;color:var(--text-s);margin-bottom:6px">
+            <span>${fmt(xp.currentLevelXP || 0)} XP</span>
+            <span>${fmt(xp.nextLevelXP || 0)} XP to next level</span>
           </div>
-          <div style="flex:1">
-            <div style="font-size:.78rem;opacity:.7;margin-bottom:6px">${fmt(pi.xp || 0)} XP \u00B7 ${fmt(pi.xpToNext || 0)} to next level</div>
-            <div style="height:8px;background:rgba(255,255,255,0.15);border-radius:50px;overflow:hidden">
-              <div style="height:100%;background:#F15A2B;border-radius:50px;width:${Math.min(100, Math.round((pi.xpProgress || 0) * 100))}%"></div>
-            </div>
-            <div style="font-size:.78rem;opacity:.7;margin-top:6px">\uD83D\uDD25 ${pi.streak || 0}-day streak</div>
+          <div style="height:10px;background:rgba(255,255,255,0.08);border-radius:50px;overflow:hidden">
+            <div style="height:100%;background:var(--primary);border-radius:50px;width:${Math.min(100, Math.round((xp.progress || 0) * 100))}%;transition:width .6s ease"></div>
           </div>
-        </div>` : ''}
+          <div style="display:flex;gap:20px;margin-top:12px;flex-wrap:wrap">
+            <span style="font-size:.8rem;color:var(--text-s)">\uD83D\uDD25 <strong style="color:var(--text-h)">${streak.current || 0}</strong>-day streak</span>
+            <span style="font-size:.8rem;color:var(--text-s)">\uD83C\uDFC6 Best: <strong style="color:var(--text-h)">${streak.longest || 0}</strong> days</span>
+            <span style="font-size:.8rem;color:var(--text-s)">\uD83D\uDCC5 <strong style="color:var(--text-h)">${lifetime.daysActive || 0}</strong> days active</span>
+          </div>
+        </div>
+      </div>` : ''}
+
+      <!-- Lifetime Stats -->
       <div class="bento" style="padding:0;margin-bottom:20px">
         <div class="bento-card" style="cursor:default">
-          <div class="bento-label">Estimated Cost</div>
+          <div class="bento-label">Sessions</div>
+          <div class="bento-value">${fmt(lifetime.sessions || 0)}</div>
+          <div class="bento-sub">lifetime total</div>
+        </div>
+        <div class="bento-card" style="cursor:default">
+          <div class="bento-label">Total Turns</div>
+          <div class="bento-value">${fmt(lifetime.totalTurns || 0)}</div>
+          <div class="bento-sub">messages sent</div>
+        </div>
+        <div class="bento-card" style="cursor:default">
+          <div class="bento-label">AI Lines</div>
+          <div class="bento-value">${fmt(lifetime.aiLines || 0)}</div>
+          <div class="bento-sub">AI-assisted code</div>
+        </div>
+        <div class="bento-card" style="cursor:default">
+          <div class="bento-label">Est. Cost</div>
           <div class="bento-value">$${(costs.totalCost || 0).toFixed(2)}</div>
           <div class="bento-sub">all sessions</div>
         </div>
-        <div class="bento-card" style="cursor:default">
-          <div class="bento-label">Code Lines</div>
-          <div class="bento-value">${fmt(pi.lifetimeStats?.totalCodeLines || 0)}</div>
-          <div class="bento-sub">AI-assisted</div>
-        </div>
-        <div class="bento-card" style="cursor:default">
-          <div class="bento-label">Sessions</div>
-          <div class="bento-value">${fmt(pi.lifetimeStats?.totalSessions || 0)}</div>
-          <div class="bento-sub">lifetime</div>
-        </div>
       </div>
-      ${(pi.achievements || []).filter(a => a.unlocked).length > 0 ? `
-        <h3 style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-s);margin-bottom:12px">Recent Achievements</h3>
-        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
-          ${(pi.achievements || []).filter(a => a.unlocked).slice(0, 8).map(a => `
-            <div style="background:var(--bg-card);border-radius:10px;padding:10px 14px;text-align:center;min-width:80px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
-              <div style="font-size:1.5rem">${a.icon || '\uD83C\uDFC6'}</div>
-              <div style="font-size:.7rem;font-weight:600;margin-top:4px">${a.name}</div>
-            </div>`).join('')}
-        </div>` : ''}
+
+      ${achievements.length > 0 ? `
+      <!-- Achievements -->
+      <h3 style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-s);margin-bottom:12px">Achievements (${achievements.length} unlocked)</h3>
+      <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:24px">
+        ${achievements.slice(0, 12).map(a => `
+          <div title="${a.desc}" style="background:var(--bg-card);border:1px solid rgba(241,90,43,0.2);border-radius:10px;padding:10px 14px;text-align:center;min-width:80px;cursor:default">
+            <div style="font-size:1.4rem">${a.icon || '\uD83C\uDFC6'}</div>
+            <div style="font-size:.68rem;font-weight:600;margin-top:4px;color:var(--text-h)">${a.title}</div>
+            <div style="font-size:.62rem;color:var(--text-s)">${a.cat}</div>
+          </div>`).join('')}
+      </div>` : ''}
+
+      ${goldenHours.length > 0 ? `
+      <!-- Golden Hours -->
+      <h3 style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-s);margin-bottom:12px">Golden Hours</h3>
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-bottom:24px">
+        ${goldenHours.map((h) => {
+          const hr = h.hour != null ? (h.hour % 12 || 12) + (h.hour < 12 ? 'am' : 'pm') : '--';
+          return `<div style="background:var(--bg-card);border-radius:10px;padding:14px;border-left:3px solid var(--primary)">
+            <div style="font-size:1.2rem;font-weight:700;font-family:var(--font-mono)">${hr}</div>
+            <div style="font-size:.74rem;color:var(--text-s)">${h.sessionCount || 0} sessions \u00B7 ${h.avgQuality != null ? h.avgQuality.toFixed(0) : '--'} quality</div>
+          </div>`;
+        }).join('')}
+      </div>` : ''}
+
+      ${records.length > 0 ? `
+      <!-- Personal Records -->
+      <h3 style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-s);margin-bottom:12px">Personal Records</h3>
+      <div style="display:grid;gap:6px;margin-bottom:24px">
+        ${records.slice(0, 8).map(r => `
+          <div style="background:var(--bg-card);border-radius:8px;padding:10px 16px;display:flex;justify-content:space-between;align-items:center">
+            <span style="font-size:.82rem;color:var(--text-s)">${r.label}</span>
+            <span style="font-weight:700;font-family:var(--font-mono);color:var(--text-h)">${typeof r.value === 'number' ? fmt(r.value) : r.value}</span>
+          </div>`).join('')}
+      </div>` : ''}
+
     </div>`;
 }
 

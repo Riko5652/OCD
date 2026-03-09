@@ -14,85 +14,7 @@
   <title>AI Productivity Dashboard</title>
   <link rel="manifest" href="/manifest.json">
   <script src="/lib/chart.umd.min.js"></script>
-  <style>
-    :root {
-      --bg-body:#f4f6f8; --bg-card:#fff; --bg-header:#1d1d1b;
-      --text-h:#1a1a1a; --text-m:#3f444b; --text-s:#64748b; --text-on-dark:#fff;
-      --primary:#F15A2B; --primary-light:rgba(241,90,43,0.08);
-      --c-input:#3b82f6; --c-cache-read:#10b981; --c-cache-create:#8b5cf6; --c-output:#f59e0b;
-      --lv-good:#10b981; --lv-good-bg:rgba(16,185,129,0.08);
-      --lv-ok:#f59e0b; --lv-ok-bg:rgba(245,158,11,0.08);
-      --lv-warn:#ef4444; --lv-warn-bg:rgba(239,68,68,0.08);
-      --lv-tip:#3b82f6; --lv-tip-bg:rgba(59,130,246,0.08);
-      --radius:12px; --radius-sm:8px; --radius-pill:50px;
-      --shadow:0 1px 3px rgba(0,0,0,0.04),0 4px 12px rgba(0,0,0,0.03);
-      /* Tool colors */
-      --t-claude:#d97706; --t-cursor:#8b5cf6; --t-antigravity:#06b6d4;
-      --t-aider:#10b981; --t-windsurf:#6366f1; --t-copilot:#24292f;
-    }
-    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:var(--bg-body);color:var(--text-m)}
-    #hdr{position:sticky;top:0;z-index:100;background:var(--bg-header);color:var(--text-on-dark);height:50px;display:flex;align-items:center;justify-content:space-between;padding:0 24px}
-    #hdr h1{font-size:1.05rem;font-weight:700;letter-spacing:-.3px}
-    .hdr-r{display:flex;align-items:center;gap:14px;font-size:.78rem;color:#aaa}
-    #dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px;background:#ef4444;vertical-align:middle}
-    #dot.on{background:var(--lv-good);animation:pulse 1.5s infinite alternate}
-    @keyframes pulse{from{box-shadow:0 0 0 0 rgba(16,185,129,.5)}to{box-shadow:0 0 0 4px rgba(16,185,129,0)}}
-    #nav{display:flex;gap:4px;padding:12px 24px 0;flex-wrap:wrap;overflow-x:auto;-webkit-overflow-scrolling:touch}
-    .tb{border:none;padding:7px 18px;border-radius:var(--radius-pill);background:0;cursor:pointer;font-size:.83rem;color:var(--text-s);font-weight:500;transition:.15s;white-space:nowrap}
-    .tb:hover{background:rgba(0,0,0,.04)}.tb.a{background:var(--primary);color:#fff;font-weight:600}
-    .tp{display:none;padding:16px 24px 40px;max-width:1400px;margin:0 auto}.tp.a{display:block}
-    .kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px}
-    .kc{background:var(--bg-card);border-radius:var(--radius);padding:16px 18px;box-shadow:var(--shadow);border-left:4px solid var(--primary)}
-    .kv{font-size:1.6rem;font-weight:700;font-variant-numeric:tabular-nums;color:var(--text-h)}
-    .kl{font-size:.74rem;color:var(--text-s);margin-top:3px}
-    .card{background:var(--bg-card);border-radius:var(--radius);padding:18px;box-shadow:var(--shadow);margin-bottom:14px}
-    .card h2{font-size:.92rem;font-weight:600;color:var(--text-h);margin-bottom:12px}
-    .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-bottom:14px}
-    .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px}
-    table{width:100%;border-collapse:collapse;font-size:.8rem}
-    th{background:#f8f9fa;padding:8px 10px;text-align:left;font-weight:600;color:var(--text-s);border-bottom:2px solid #eee;white-space:nowrap}
-    td{padding:8px 10px;border-bottom:1px solid #f0f0f0;vertical-align:middle}
-    tr:last-child td{border-bottom:0}tbody tr:hover td{background:var(--primary-light)}
-    .sr{cursor:pointer}.num{text-align:right;font-variant-numeric:tabular-nums}
-    .ea{display:inline-block;transition:transform .2s;font-size:.65rem;color:#aaa}.ea.open{transform:rotate(90deg)}
-    .td-cell{padding:0!important;border-bottom:0!important}
-    .td-wrap{background:var(--bg-body);padding:10px 14px;border-radius:0 0 var(--radius-sm) var(--radius-sm)}
-    .td-wrap table{font-size:.76rem}.td-wrap th{background:#eef0f3}
-    .ts{display:flex;height:9px;border-radius:5px;overflow:hidden;min-width:60px}
-    .ts-i{background:var(--c-input)}.ts-cr{background:var(--c-cache-read)}.ts-cc{background:var(--c-cache-create)}.ts-o{background:var(--c-output)}
-    .chip{display:inline-block;background:#e8f0fe;color:#1a56db;border-radius:4px;padding:1px 5px;font-size:.68rem;margin:1px;white-space:nowrap}
-    .chip.tool-claude{background:rgba(217,119,6,.1);color:var(--t-claude)}
-    .chip.tool-cursor{background:rgba(139,92,246,.1);color:var(--t-cursor)}
-    .chip.tool-antigravity{background:rgba(6,182,212,.1);color:var(--t-antigravity)}
-    .br{display:flex;align-items:center;gap:8px;margin-bottom:7px;font-size:.8rem}
-    .bl{min-width:130px;color:var(--text-s)}.bt{flex:1;height:14px;background:#f0f0f0;border-radius:7px;overflow:hidden}
-    .bf{height:100%;border-radius:7px;transition:width .4s}.bv{min-width:80px;text-align:right;color:var(--text-h);font-weight:500;font-size:.78rem}
-    .rg{display:grid;grid-template-columns:repeat(auto-fill,minmax(310px,1fr));gap:12px;margin-bottom:18px}
-    .rc{border-left:4px solid;border-radius:var(--radius-sm);padding:14px 18px;background:var(--bg-card);box-shadow:var(--shadow)}
-    .rc.good,.rc.info{border-color:var(--lv-good);background:var(--lv-good-bg)}
-    .rc.ok,.rc.warning{border-color:var(--lv-ok);background:var(--lv-ok-bg)}
-    .rc.warn,.rc.critical{border-color:var(--lv-warn);background:var(--lv-warn-bg)}
-    .rc.tip{border-color:var(--lv-tip);background:var(--lv-tip-bg)}
-    .rc-cat{display:inline-block;font-size:.66rem;font-weight:600;text-transform:uppercase;letter-spacing:.5px;padding:2px 7px;border-radius:var(--radius-pill);margin-bottom:5px;background:rgba(0,0,0,.06);color:var(--text-s)}
-    .rc-t{font-weight:600;font-size:.87rem;color:var(--text-h);margin-bottom:5px}
-    .rc-d{font-size:.8rem;color:var(--text-m);line-height:1.5}
-    .sc{display:flex;gap:10px;margin-bottom:12px;align-items:center;flex-wrap:wrap}
-    .sc input{padding:6px 12px;border:1px solid #ddd;border-radius:var(--radius-sm);font-size:.82rem;width:220px}
-    .sc select{padding:6px 8px;border:1px solid #ddd;border-radius:var(--radius-sm);font-size:.82rem;background:#fff}
-    .snip{max-width:260px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--text-s);font-size:.76rem}
-    .cb{display:flex;height:24px;border-radius:var(--radius-sm);overflow:hidden;margin:4px 0}
-    .cb .seg{transition:width .3s}
-    .tool-dots{display:flex;gap:6px;align-items:center;font-size:.75rem;color:var(--text-s);margin-top:6px}
-    .tool-dot{width:10px;height:10px;border-radius:50%;display:inline-block}
-    #issue-banner{display:none;position:sticky;top:50px;z-index:90;padding:8px 24px;font-size:.8rem;align-items:center;gap:10px;border-bottom:1px solid}
-    #issue-banner.has-warn{background:rgba(245,158,11,0.08);border-color:#f59e0b;color:#92400e;display:flex}
-    #issue-banner.has-crit{background:rgba(239,68,68,0.08);border-color:#ef4444;color:#b91c1c;display:flex}
-    #issue-banner .ib-msg{flex:1}
-    #issue-banner .ib-link{color:inherit;font-weight:600;cursor:pointer;text-decoration:underline;background:none;border:none;font-size:.8rem}
-    #issue-banner .ib-close{background:none;border:none;cursor:pointer;color:inherit;font-size:1rem;padding:0 4px;line-height:1;margin-left:4px}
-    @media(max-width:768px){.kpi{grid-template-columns:repeat(2,1fr)}.g2,.g3{grid-template-columns:1fr}.rg{grid-template-columns:1fr}}
-  </style>
+  <link rel="stylesheet" href="/css/style.css">
 </head>
 <body>
   <header id="hdr"><h1>AI Productivity Dashboard</h1><div class="hdr-r"><button id="theme-toggle" title="Toggle dark/light mode">&#9680;</button><span><span id="dot"></span><span id="dtxt">Connecting...</span></span><span id="upd"></span></div></header>
@@ -161,15 +83,16 @@
     <button class="ib-close" id="ib-close" aria-label="Dismiss">✕</button>
   </div>
 
-  <!-- OVERVIEW -->
-  <section id="t-overview" class="tp a">
+  <!-- OVERVIEW (legacy — mounted into pillar sub-panels by _mountV2Tab) -->
+  <section id="t-overview" class="tp">
     <div class="kpi" id="k-ov"></div>
     <div id="ov-recs" class="rg" style="margin-bottom:18px"></div>
     <div class="sc" style="margin-bottom:8px">
       <select id="ov-range">
+        <option value="0" selected>All time</option>
         <option value="30">Last 30 days</option>
         <option value="90">Last 90 days</option>
-        <option value="180" selected>Last 6 months</option>
+        <option value="180">Last 6 months</option>
         <option value="365">Last year</option>
       </select>
     </div>
@@ -455,13 +378,6 @@
     </div>
   </section>
 
-<footer style="text-align:center;padding:24px 16px 32px;color:var(--text-s);font-size:12px;border-top:1px solid var(--border,#e5e7eb);margin-top:32px;">
-  Built by <a href="https://github.com/Riko5652" target="_blank" rel="noopener" style="color:var(--primary);text-decoration:none;font-weight:600;">Dor Lipetz</a>
-  &nbsp;·&nbsp;
-  <a href="https://github.com/Riko5652/ai-productivity-dashboard" target="_blank" rel="noopener" style="color:var(--text-s);text-decoration:none;">⭐ Star on GitHub</a>
-  &nbsp;·&nbsp; MIT License
-</footer>
-
 <!-- ═══ PILLAR SECTIONS ═══ -->
 
 <!-- Command Center -->
@@ -471,27 +387,52 @@
 
 <!-- Workspaces -->
 <section id="p-workspaces" class="pillar-section pillar-content">
-  <div class="filter-pills">
-    <input id="ws-search" type="search" placeholder="Search sessions, projects…" style="flex:1;padding:8px 14px;border-radius:50px;border:1.5px solid var(--border,#e2e8f0);font-size:.85rem;outline:none;max-width:320px">
+  <div class="sub-tab-bar">
+    <button class="sub-tab active" data-stab="ws-sessions">Sessions</button>
+    <button class="sub-tab" data-stab="ws-projects">Projects</button>
+    <button class="sub-tab" data-stab="ws-tokens">Token Deep Dive</button>
   </div>
-  <div id="p-workspaces-inner" style="padding:16px 20px"></div>
+  <div id="ws-sessions" class="sub-tab-panel active"></div>
+  <div id="ws-projects" class="sub-tab-panel"></div>
+  <div id="ws-tokens" class="sub-tab-panel"></div>
 </section>
 
 <!-- Performance -->
 <section id="p-performance" class="pillar-section pillar-content">
-  <div class="filter-pills" id="perf-pills">
-    <button class="filter-pill active" data-perf="tools">By Tool</button>
-    <button class="filter-pill" data-perf="models">By Model</button>
-    <button class="filter-pill" data-perf="tasks">By Task Type</button>
-    <button class="filter-pill" data-perf="codegen">Code Gen</button>
+  <div class="sub-tab-bar">
+    <button class="sub-tab active" data-stab="perf-tools">Tool Compare</button>
+    <button class="sub-tab" data-stab="perf-models">Models</button>
+    <button class="sub-tab" data-stab="perf-codegen">Code Gen</button>
+    <button class="sub-tab" data-stab="perf-cursor">Cursor Deep Dive</button>
+    <button class="sub-tab" data-stab="perf-analytics">Analytics</button>
   </div>
-  <div id="p-performance-inner" style="padding:16px 20px"></div>
+  <div id="perf-tools" class="sub-tab-panel active"></div>
+  <div id="perf-models" class="sub-tab-panel"></div>
+  <div id="perf-codegen" class="sub-tab-panel"></div>
+  <div id="perf-cursor" class="sub-tab-panel"></div>
+  <div id="perf-analytics" class="sub-tab-panel"></div>
 </section>
 
 <!-- Profile -->
 <section id="p-profile" class="pillar-section pillar-content">
-  <div id="p-profile-inner"></div>
+  <div class="sub-tab-bar">
+    <button class="sub-tab active" data-stab="prof-personal">Personal</button>
+    <button class="sub-tab" data-stab="prof-costs">Costs</button>
+    <button class="sub-tab" data-stab="prof-insights">Insights & Optimize</button>
+  </div>
+  <div id="prof-personal" class="sub-tab-panel active">
+    <div id="p-profile-inner"></div>
+  </div>
+  <div id="prof-costs" class="sub-tab-panel"></div>
+  <div id="prof-insights" class="sub-tab-panel"></div>
 </section>
+
+<footer style="text-align:center;padding:24px 16px 32px;color:var(--text-s);font-size:12px;border-top:1px solid var(--border,#e5e7eb);margin-top:32px;">
+  Built by <a href="https://github.com/Riko5652" target="_blank" rel="noopener" style="color:var(--primary);text-decoration:none;font-weight:600;">Dor Lipetz</a>
+  &nbsp;·&nbsp;
+  <a href="https://github.com/Riko5652/ai-productivity-dashboard" target="_blank" rel="noopener" style="color:var(--text-s);text-decoration:none;">⭐ Star on GitHub</a>
+  &nbsp;·&nbsp; MIT License
+</footer>
 
 <!-- Mobile FAB -->
 <button class="fab" id="fab-cmdk" title="Search (&#8984;K)">&#8984;</button>
