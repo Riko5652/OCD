@@ -1,13 +1,29 @@
-# AI Productivity Dashboard
+# AI Productivity Dashboard v3.0
 
 > A local-first tool that tracks your AI coding sessions, benchmarks every tool and model against each other, and tells you which one actually works best for the work you do.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
-[![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0-green)](LICENSE)
 [![Tools](https://img.shields.io/badge/tools-7-blue)](#what-gets-tracked)
 [![MCP](https://img.shields.io/badge/MCP-9%20tools-purple)](SETUP.md#mcp-server-setup)
 [![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
+[![PWA](https://img.shields.io/badge/PWA-installable-orange)](#pwa-support)
 [![npm](https://img.shields.io/npm/v/ai-productivity-dashboard)](https://www.npmjs.com/package/ai-productivity-dashboard)
+
+---
+
+## What's new in v3.0
+
+- **Dark-first design system** — DM Mono + DM Sans fonts, bento grid accents, skeleton loading states, spring animations, and a one-click dark/light theme toggle
+- **4-pillar navigation** — Command Center, Workspaces, Performance, and Profile replace the old tab bar. Plus a Cmd+K command palette for instant access to anything
+- **All-time data by default** — no more arbitrary time cutoffs. Every session you've ever had is available from day one
+- **Cursor Deep Dive** — a dedicated tab for Cursor-specific analytics (composer sessions, code authorship breakdown)
+- **Consolidated Insights** — behavioral profile, trends, prompt signal correlations, and Deep Analyze all in one place
+- **Dogfooding badge** — sessions from this repo itself are auto-tagged with a Meta indicator
+- **PWA support** — installable as a standalone app with offline caching (service worker with 5-min API TTL)
+- **GitHub Codespaces** — one-click dev environment via devcontainer (Node 20, auto-seeds mock data)
+- **Single Executable Application (SEA)** — build standalone binaries for Linux, macOS, and Windows (no Node required)
+- **Privacy & legal docs** — [PRIVACY.md](PRIVACY.md) and [ACCEPTABLE-USE.md](ACCEPTABLE-USE.md) formalize the zero-telemetry commitment
 
 ---
 
@@ -59,6 +75,10 @@ npm start              # .env is auto-created from .env.example on first run
 git clone https://github.com/Riko5652/ai-productivity-dashboard
 cd ai-productivity-dashboard
 docker compose up
+
+# GitHub Codespaces (zero setup)
+# Click "Code" → "Codespaces" → "Create codespace on main"
+# Everything auto-installs and seeds mock data
 ```
 
 Open **http://localhost:3030**. The first thing you'll see in the terminal is a discovery report showing which tools were found and which weren't — with exact paths and hints for anything missing.
@@ -74,16 +94,28 @@ All data is read-only. Nothing is ever written to your AI tools' files.
 | Tool | How |
 |------|-----|
 | **Claude Code** | Reads `~/.claude/projects/*/` JSONL session files |
-| **Cursor** | Reads local SQLite DB (chat history, code authorship stats) |
+| **Cursor** | Reads local SQLite DB (chat history, composer sessions, code authorship stats) |
 | **Aider** | Reads `.aider.chat.history.md` files in your project directories |
 | **Windsurf** | Reads Codeium's local SQLite DB (chat sessions, token counts) |
 | **GitHub Copilot** | Reads VS Code extension telemetry (suggestion acceptance by model) |
 | **Continue.dev** | Reads `~/.continue/sessions/*.json` |
-| **Gemini/Antigravity** | Reads `~/.gemini/antigravity/` session logs |
+| **Gemini/Antigravity** | Reads `~/.gemini/antigravity/` session logs (conversations, artifacts, code tracker) |
 
 ---
 
-## Dashboard tabs
+## Dashboard navigation
+
+### 4-pillar layout
+
+**Command Center** — your home base. KPI cards, daily activity charts, quick actions, and the command palette (Cmd+K).
+
+**Workspaces** — project-centric view. Per-project rollup of tokens, lines added, dominant tool/model, and drill-down into per-tool+model performance.
+
+**Performance** — all the deep analytics: token breakdowns, tool comparisons, model benchmarks, cost tracking, code gen metrics.
+
+**Profile** — gamified personal stats: level, XP, streak, achievements, activity heatmap, flow state trend, personal records.
+
+### Dashboard tabs
 
 **Overview** — KPIs at a glance: sessions, turns, output tokens, cache hit rate, AI code authorship, today's activity. Daily charts by tool.
 
@@ -93,11 +125,13 @@ All data is read-only. Nothing is ever written to your AI tools' files.
 
 **Compare Tools** — Side-by-side: which tool you use most, where each one performs differently, distribution across time.
 
+**Cursor Deep Dive** — Cursor-specific analytics: composer session breakdown, code authorship stats, model usage within Cursor.
+
 **Code Authorship** — What percentage of your committed code was AI-generated. Scored per commit, trended over time.
 
 **Code Gen** — First-attempt success rate, error rate trend, thinking depth, lines added. Model quality comparison table.
 
-**Analytics** — Model usage distribution, turns per day, efficiency trend (O × Q × S score).
+**Analytics** — Model usage distribution, turns per day, efficiency trend (O x Q x S score).
 
 **Costs** — Estimated spend by tool and model. Cost per session. Trend charts.
 
@@ -110,6 +144,18 @@ All data is read-only. Nothing is ever written to your AI tools' files.
 **Projects** — Per-project rollup: total tokens, lines added, dominant tool and model, tool breakdown. Click any project to drill into per-tool+model performance and AI suggestions.
 
 **Models** — Cross-tool model comparison: avg turns, cache hit %, latency, error rate. Win-rate matrix by task type. Interactive routing recommendation: describe a task, get a data-driven suggestion.
+
+---
+
+## PWA support
+
+The dashboard is installable as a Progressive Web App. It works offline with cached API data (5-minute TTL) and falls back gracefully when the server is unavailable.
+
+- **Standalone mode** — runs in its own window, no browser chrome
+- **Offline caching** — network-first strategy with automatic fallback to cached data
+- **Shortcuts** — Command Center and Sessions available as app shortcuts
+
+Install it from your browser's address bar or the install prompt.
 
 ---
 
@@ -153,6 +199,8 @@ Register it with Claude Code by adding to `.mcp.json` in your project:
 - **Read-only access** to all AI tool databases. Windsurf and Copilot DBs are opened with `{ readonly: true }`.
 - **Prompt injection protection** — all session text is sanitized before being passed to any LLM.
 - **No telemetry.** No analytics. No opt-in tracking. The source is short and auditable.
+
+See [PRIVACY.md](PRIVACY.md) for the full privacy policy and [ACCEPTABLE-USE.md](ACCEPTABLE-USE.md) for usage guidelines.
 
 ---
 
@@ -220,8 +268,18 @@ ANTHROPIC_MODEL=claude-haiku-4-5-20251001 npm start
 - **Chart.js** (CDN) — all charts rendered in the browser, no bundler
 - **@modelcontextprotocol/sdk** — MCP stdio server
 - **chokidar** — file watching for live session updates
+- **Service Worker** — offline-capable PWA with network-first caching
 
 No React. No Webpack. No TypeScript compilation. Loads in under a second on any hardware made after 2015.
+
+### Standalone binaries (SEA)
+
+Build single-file executables with no Node.js dependency (requires Node 21.7+ to build):
+
+```bash
+node scripts/build-sea.mjs
+# Outputs: ai-dashboard-linux-x64, ai-dashboard-macos-arm64, ai-dashboard-win.exe
+```
 
 ---
 
@@ -233,6 +291,7 @@ See **[SETUP.md](SETUP.md)** for:
 - Path override reference (all env vars)
 - MCP registration for Claude Code and Cursor
 - Docker setup
+- GitHub Codespaces setup
 - Troubleshooting
 
 ---
@@ -258,8 +317,15 @@ src/
   db.js            # SQLite schema + migration
   config.js        # Auto-detected paths + startup discovery report
 public/            # Static frontend (HTML + vanilla JS, no build step)
+  sw.js            # Service worker (offline caching)
+  manifest.json    # PWA manifest
+  css/style.css    # Dark-first design system (DM Mono + DM Sans)
+scripts/
+  build-sea.mjs    # Single Executable Application builder
 bin/
   ai-dashboard.js  # CLI entrypoint (version check, auto-open browser)
+docs/
+  design/          # Design specifications
 ```
 
 ---
@@ -283,12 +349,12 @@ These are things that would make it meaningfully better — contributions welcom
 - [ ] Devin / OpenHands adapter (REST API polling)
 - [ ] PostgreSQL backend + team mode (opt-in, shared leaderboard)
 - [ ] Crowd-sourced benchmarks (opt-in, no session content, anonymized)
-- [ ] `pkg` binary builds for Windows/macOS/Linux (no Node required)
+- [x] ~~`pkg` binary builds for Windows/macOS/Linux (no Node required)~~ — replaced by Node SEA builds
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE). Built and maintained by [Dor Lipetz](https://github.com/Riko5652).
+AGPL-3.0-or-later — see [LICENSE](LICENSE). Built and maintained by [Dor Lipetz](https://github.com/Riko5652).
 
-If this is useful to you, a ⭐ on GitHub goes a long way.
+If this is useful to you, a star on GitHub goes a long way.
