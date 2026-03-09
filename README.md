@@ -179,6 +179,40 @@ AZURE_OPENAI_API_KEY=...
 
 ---
 
+## Enabling AI Deep Analysis
+
+The **Insights** tab includes on-demand LLM analysis of your usage patterns. Configure one provider:
+
+| Provider | Env vars needed | Cost | Speed |
+|----------|----------------|------|-------|
+| **Ollama (local, recommended)** | `OLLAMA_HOST=http://localhost:11434` | Free | Fast if running |
+| **OpenAI / compatible** | `OPENAI_API_KEY=sk-...` | ~$0.001/analyze | Fast |
+| **Anthropic** | `ANTHROPIC_API_KEY=sk-ant-...` | ~$0.001/analyze | Fast |
+| **None** | — | Free | Structural analysis only (profile + trends still work) |
+
+Results are cached for 24 hours — the second click is instant. Without any provider, all other Insights features (behavioral profile, trends, prompt signal correlations) work fully with zero external calls.
+
+```bash
+# Local Ollama (best for privacy — nothing leaves your machine)
+OLLAMA_HOST=http://localhost:11434 npm start
+
+# OpenAI
+OPENAI_API_KEY=sk-... npm start
+
+# Anthropic
+ANTHROPIC_API_KEY=sk-ant-... npm start
+
+# Override model selection
+OLLAMA_MODEL=llama3.2:3b npm start
+OPENAI_MODEL=gpt-4o npm start
+ANTHROPIC_MODEL=claude-haiku-4-5-20251001 npm start
+
+# Force cache refresh for Deep Analyze
+# Append ?refresh=1 to the deep-analyze URL in your browser
+```
+
+---
+
 ## Tech
 
 - **Node.js 18+ ESM** — no build step, no transpilation
