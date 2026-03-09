@@ -40,6 +40,32 @@ const __dirname = dirname(__filename);
 import { config, printConfig } from './config.js';
 
 const app = express();
+
+// Security headers
+app.use((req, res, next) => {
+  res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'");
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('X-Frame-Options', 'DENY');
+  res.setHeader('X-XSS-Protection', '1; mode=block');
+  res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  next();
+});
+
+// Optional auth token — set AUTH_TOKEN env var to require Bearer token on all API routes
+const AUTH_TOKEN = process.env.AUTH_TOKEN || '';
+if (AUTH_TOKEN) {
+  app.use((req, res, next) => {
+    if (req.path === '/api/health') return next();
+    if (!req.path.startsWith('/api/')) return next();
+    const header = req.headers['authorization'] || '';
+    const token = header.startsWith('Bearer ') ? header.slice(7) : '';
+    if (token !== AUTH_TOKEN) {
+      return res.status(401).json({ error: 'Unauthorized — set Authorization: Bearer <AUTH_TOKEN>' });
+    }
+    next();
+  });
+}
+
 const PORT = config.port;
 // Global history window: how many days back to show in charts and stats by default.
 // 0 = all time. Override via HISTORY_DAYS env var or ?days=N query param per request.
@@ -685,6 +711,9 @@ startWatchers(
 // Bind to localhost by default (personal tool — don't expose to LAN).
 // Set BIND=0.0.0.0 to listen on all interfaces (e.g. Docker or remote access).
 const BIND = process.env.BIND || '127.0.0.1';
+if (BIND !== '127.0.0.1' && BIND !== 'localhost') {
+  console.warn('\u26a0\ufe0f  WARNING: Server binding to ' + BIND + ' (network accessible). Set AUTH_TOKEN env var to protect access.');
+}
 
 app.listen(PORT, BIND, () => {
   console.log(`\n  AI Productivity Dashboard v3`);

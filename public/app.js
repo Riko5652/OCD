@@ -1681,3 +1681,468 @@ document.addEventListener('DOMContentLoaded', () => {
   // Commit tool filter
   $('commit-tool-filter').addEventListener('change', e => { commitToolFilter = e.target.value; rCommits(); });
 });
+
+// ═══════════════════════════════════════════════════════════════
+// 4-PILLAR NAVIGATION SYSTEM
+// ═══════════════════════════════════════════════════════════════
+
+// ---- Modal System ----
+function openModal(title, contentHtml) {
+  const root = document.getElementById('modal-root');
+  if (!root) return;
+  root.innerHTML = `
+    <div class="modal-backdrop" id="modal-backdrop" onclick="if(event.target===this)closeModal()">
+      <div class="modal-box">
+        <button class="modal-close" onclick="closeModal()">&#x2715;</button>
+        <div class="modal-title">${title}</div>
+        <div id="modal-content">${contentHtml}</div>
+      </div>
+    </div>`;
+  document.addEventListener('keydown', _modalEsc);
+}
+function closeModal() {
+  const root = document.getElementById('modal-root');
+  if (root) root.innerHTML = '';
+  document.removeEventListener('keydown', _modalEsc);
+}
+function _modalEsc(e) { if (e.key === 'Escape') closeModal(); }
+
+// ---- Drawer System ----
+function openDrawer(title, contentHtml) {
+  const root = document.getElementById('drawer-root');
+  if (!root) return;
+  root.innerHTML = `
+    <div class="drawer-backdrop" onclick="closeDrawer()"></div>
+    <div class="drawer-panel">
+      <div class="drawer-header">
+        <span class="drawer-title">${title}</span>
+        <button class="drawer-close" onclick="closeDrawer()">&#x2715;</button>
+      </div>
+      <div id="drawer-content">${contentHtml}</div>
+    </div>`;
+  document.addEventListener('keydown', _drawerEsc);
+}
+function closeDrawer() {
+  const root = document.getElementById('drawer-root');
+  if (root) root.innerHTML = '';
+  document.removeEventListener('keydown', _drawerEsc);
+}
+function _drawerEsc(e) { if (e.key === 'Escape') closeDrawer(); }
+
+// ---- Command Palette ----
+let _cmdkOpen = false;
+
+function openCmdK() {
+  if (_cmdkOpen) return;
+  _cmdkOpen = true;
+  const root = document.getElementById('cmdk-root');
+  if (!root) return;
+  root.innerHTML = `
+    <div class="cmdk-backdrop" id="cmdk-backdrop" onclick="if(event.target===this)closeCmdK()">
+      <div class="cmdk-box">
+        <input class="cmdk-input" id="cmdk-input" placeholder="Search sessions, projects, navigate\u2026" autocomplete="off">
+        <div class="cmdk-results" id="cmdk-results"></div>
+      </div>
+    </div>`;
+  const input = document.getElementById('cmdk-input');
+  input.focus();
+  input.addEventListener('input', _cmdkSearch);
+  input.addEventListener('keydown', _cmdkNav);
+  document.addEventListener('keydown', _cmdkEsc);
+  _cmdkSearch();
+}
+
+function closeCmdK() {
+  _cmdkOpen = false;
+  const root = document.getElementById('cmdk-root');
+  if (root) root.innerHTML = '';
+  document.removeEventListener('keydown', _cmdkEsc);
+}
+
+function _cmdkEsc(e) { if (e.key === 'Escape') closeCmdK(); }
+
+function _cmdkSearch() {
+  const q = (document.getElementById('cmdk-input')?.value || '').toLowerCase().trim();
+  const results = document.getElementById('cmdk-results');
+  if (!results) return;
+
+  const navItems = [
+    { icon: '\uD83C\uDFE0', label: 'Command Center', sub: 'KPIs, recommendations, insights', pillar: 'command' },
+    { icon: '\uD83D\uDCC1', label: 'Workspaces', sub: 'Projects and sessions', pillar: 'workspaces' },
+    { icon: '\uD83D\uDCCA', label: 'Performance', sub: 'Tools, models, code gen', pillar: 'performance' },
+    { icon: '\uD83D\uDC64', label: 'Profile', sub: 'Level, costs, efficiency', pillar: 'profile' },
+  ];
+
+  const sessions = (S.sessions || []).slice(0, 200);
+  const sessionItems = sessions
+    .filter(s => !q || (s.tool_id + ' ' + (s.label || '') + ' ' + (s.project_name || '')).toLowerCase().includes(q))
+    .slice(0, 6)
+    .map(s => ({
+      icon: '\uD83D\uDCAC',
+      label: s.label || ('Session ' + (s.id || '').slice(0, 8)),
+      sub: s.tool_id + ' \u00B7 ' + fD(s.started_at) + ' \u00B7 ' + s.total_turns + ' turns',
+      pillar: 'workspaces'
+    }));
+
+  const navFiltered = navItems.filter(n => !q || n.label.toLowerCase().includes(q) || n.sub.toLowerCase().includes(q));
+
+  if (!navFiltered.length && !sessionItems.length) {
+    results.innerHTML = '<div class="cmdk-empty">No results for &ldquo;' + q + '&rdquo;</div>';
+    return;
+  }
+
+  let html = '';
+  if (navFiltered.length) {
+    html += '<div class="cmdk-section-label">Navigate</div>';
+    html += navFiltered.map(n => `
+      <div class="cmdk-item" data-pillar="${n.pillar}" onclick="switchPillar('${n.pillar}');closeCmdK()">
+        <div class="cmdk-item-icon" style="background:rgba(241,90,43,0.1)">${n.icon}</div>
+        <div><div class="cmdk-item-label">${n.label}</div><div class="cmdk-item-sub">${n.sub}</div></div>
+      </div>`).join('');
+  }
+  if (sessionItems.length) {
+    html += '<div class="cmdk-section-label">Sessions</div>';
+    html += sessionItems.map(n => `
+      <div class="cmdk-item" onclick="switchPillar('workspaces');closeCmdK()">
+        <div class="cmdk-item-icon" style="background:rgba(59,130,246,0.1)">${n.icon}</div>
+        <div><div class="cmdk-item-label">${n.label}</div><div class="cmdk-item-sub">${n.sub}</div></div>
+      </div>`).join('');
+  }
+  results.innerHTML = html;
+}
+
+function _cmdkNav(e) {
+  if (e.key === 'Enter') {
+    const first = document.querySelector('.cmdk-item');
+    if (first) first.click();
+  }
+}
+
+// ---- Pillar Navigation ----
+let _currentPillar = 'command';
+
+function switchPillar(name) {
+  _currentPillar = name;
+  // Update desktop nav
+  document.querySelectorAll('.pillar-btn').forEach(b => b.classList.toggle('active', b.dataset.pillar === name));
+  // Update mobile nav
+  document.querySelectorAll('.pillar-bottom-btn').forEach(b => b.classList.toggle('active', b.dataset.pillar === name));
+  // Show/hide sections
+  document.querySelectorAll('.pillar-section').forEach(s => s.classList.remove('active'));
+  const target = document.getElementById('p-' + name);
+  if (target) target.classList.add('active');
+  // Render content
+  renderPillar(name);
+}
+
+async function renderPillar(name) {
+  if (name === 'command') await renderCommandCenter();
+  else if (name === 'workspaces') await renderWorkspaces();
+  else if (name === 'performance') await renderPerformance();
+  else if (name === 'profile') await renderProfilePillar();
+}
+
+// ---- Command Center ----
+async function renderCommandCenter() {
+  const el = document.getElementById('p-command-inner');
+  if (!el) return;
+
+  if (!S.overview) S.overview = await fJ('/api/overview');
+  if (!S.recs) S.recs = await fJ('/api/recommendations');
+  if (!S.insProfile) S.insProfile = await fJ('/api/insights/profile');
+  if (!S.insLlmStatus) S.insLlmStatus = await fJ('/api/ollama/status');
+
+  const ov = S.overview || {};
+  const recs = (S.recs || []).filter(r => !r.dismissed).slice(0, 4);
+  const profile = S.insProfile || {};
+
+  const hour12 = h => h != null ? (h % 12 || 12) + (h < 12 ? 'am' : 'pm') : '--';
+
+  el.innerHTML = `
+    <div class="bento">
+      <div class="bento-card" onclick="openModal('Total Sessions','<p>Sessions tracked across all AI tools. Each session is one task or conversation.</p>')">
+        <div class="bento-icon">\uD83D\uDCAC</div>
+        <div class="bento-label">Total Sessions</div>
+        <div class="bento-value">${fmt(ov.totalSessions || 0)}</div>
+        <div class="bento-sub">across all tools</div>
+      </div>
+      <div class="bento-card" onclick="openModal('Token Usage','<p>Total tokens consumed across all sessions.</p>')">
+        <div class="bento-icon">\uD83D\uDD24</div>
+        <div class="bento-label">Total Tokens</div>
+        <div class="bento-value">${fmt(ov.totalTokens || 0)}</div>
+        <div class="bento-sub">input + output + cache</div>
+      </div>
+      <div class="bento-card" onclick="openModal('Cache Efficiency','<p>Prompt cache hit rate. Higher means better reuse of previous context, saving tokens and cost.</p>')">
+        <div class="bento-icon">\u26A1</div>
+        <div class="bento-label">Cache Hit Rate</div>
+        <div class="bento-value">${ov.avgCacheHitPct != null ? ov.avgCacheHitPct.toFixed(1) + '%' : '--'}</div>
+        <div class="bento-sub">prompt cache efficiency</div>
+      </div>
+      <div class="bento-card" onclick="openModal('Quality Score','<p>Average session quality score (0\u2013100) based on turn efficiency, cache usage, error rate, and code output.</p>')">
+        <div class="bento-icon">\u2B50</div>
+        <div class="bento-label">Avg Quality</div>
+        <div class="bento-value">${ov.avgQualityScore != null ? ov.avgQualityScore.toFixed(0) : '--'}</div>
+        <div class="bento-sub">session quality score</div>
+      </div>
+      ${profile.peakHour != null ? `
+      <div class="bento-card" onclick="switchPillar('profile')">
+        <div class="bento-icon">\uD83D\uDD50</div>
+        <div class="bento-label">Peak Hour</div>
+        <div class="bento-value">${hour12(profile.peakHour)}</div>
+        <div class="bento-sub">most productive time \u00B7 ${profile.medianTurns || '--'} median turns</div>
+      </div>` : ''}
+      ${recs.length > 0 ? `
+      <div class="bento-card full" style="cursor:default">
+        <div class="bento-label" style="margin-bottom:12px">Active Recommendations</div>
+        <div style="display:grid;gap:8px">
+          ${recs.map(r => `
+            <div style="padding:10px 14px;border-radius:8px;background:${r.severity === 'critical' ? 'rgba(239,68,68,0.06)' : r.severity === 'warning' ? 'rgba(245,158,11,0.06)' : 'rgba(59,130,246,0.06)'};border-left:3px solid ${r.severity === 'critical' ? '#ef4444' : r.severity === 'warning' ? '#f59e0b' : '#3b82f6'}">
+              <div style="font-weight:600;font-size:.84rem;color:var(--text-h)">${r.title}</div>
+              <div style="font-size:.78rem;color:var(--text-s);margin-top:2px">${r.description}</div>
+            </div>`).join('')}
+        </div>
+      </div>` : ''}
+    </div>`;
+}
+
+// ---- Workspaces ----
+async function renderWorkspaces() {
+  const el = document.getElementById('p-workspaces-inner');
+  if (!el) return;
+
+  if (!S.projects) S.projects = await fJ('/api/projects');
+  if (!S.sessions) S.sessions = await fJ('/api/sessions');
+
+  const projects = (S.projects?.projects || []).slice(0, 20);
+  const sessions = (S.sessions || []).slice(0, 10);
+
+  el.innerHTML = `
+    <h3 style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-s);margin-bottom:12px">Projects</h3>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-bottom:28px">
+      ${projects.map(p => `
+        <div class="bento-card" style="padding:16px" onclick="openProjectDrawer('${encodeURIComponent(p.project_name || '')}','${encodeURIComponent(p.project_name || 'Unnamed')}')">
+          <div style="font-weight:600;font-size:.9rem;color:var(--text-h);margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.project_name || 'Unnamed'}</div>
+          <div style="font-size:.76rem;color:var(--text-s)">${p.session_count} sessions \u00B7 ${fmt(p.total_tokens || 0)} tokens</div>
+          <div style="font-size:.72rem;color:var(--text-s);margin-top:4px">${p.dominant_tool || '--'}</div>
+        </div>`).join('') || '<p style="color:var(--text-s)">No projects yet.</p>'}
+    </div>
+    <h3 style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-s);margin-bottom:12px">Recent Sessions</h3>
+    <div id="ws-sessions-list" style="display:grid;gap:8px">
+      ${_renderSessionRows(sessions)}
+    </div>`;
+
+  // Wire up workspace search
+  const searchEl = document.getElementById('ws-search');
+  if (searchEl) {
+    searchEl.oninput = (e) => {
+      const q = e.target.value.toLowerCase();
+      const filtered = (S.sessions || []).filter(s =>
+        (s.label || '').toLowerCase().includes(q) ||
+        (s.tool_id || '').toLowerCase().includes(q) ||
+        (s.project_name || '').toLowerCase().includes(q)
+      ).slice(0, 10);
+      const list = document.getElementById('ws-sessions-list');
+      if (list) list.innerHTML = _renderSessionRows(filtered, true);
+    };
+  }
+}
+
+function _renderSessionRows(sessions, noQuality) {
+  if (!sessions || !sessions.length) return '<p style="color:var(--text-s)">No sessions yet.</p>';
+  return sessions.map(s => `
+    <div style="background:var(--bg-card);border-radius:10px;padding:14px 16px;display:flex;align-items:center;gap:12px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+      <div style="width:8px;height:8px;border-radius:50%;background:${toolColor(s.tool_id)};flex-shrink:0"></div>
+      <div style="flex:1;min-width:0">
+        <div style="font-weight:500;font-size:.84rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${s.label || 'Session ' + (s.id || '').slice(0, 8)}</div>
+        <div style="font-size:.74rem;color:var(--text-s)">${s.tool_id} \u00B7 ${fD(s.started_at)} \u00B7 ${s.total_turns} turns</div>
+      </div>
+      ${!noQuality && s.quality_score != null ? `<div style="font-size:.78rem;font-weight:600;color:${s.quality_score > 70 ? '#10b981' : s.quality_score > 40 ? '#f59e0b' : '#ef4444'}">${s.quality_score.toFixed(0)}</div>` : ''}
+    </div>`).join('');
+}
+
+async function openProjectDrawer(encodedName, encodedDisplay) {
+  const name = decodeURIComponent(encodedName);
+  const display = decodeURIComponent(encodedDisplay);
+  openDrawer(display, '<div style="text-align:center;padding:20px;color:var(--text-s)">Loading\u2026</div>');
+  const data = await fJ('/api/projects/' + encodeURIComponent(name) + '/insights');
+  const sessions = (S.sessions || []).filter(s => s.project_name === name).slice(0, 5);
+  const contentEl = document.getElementById('drawer-content');
+  if (!contentEl) return;
+  contentEl.innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:20px">
+      <div style="background:var(--bg-body,#f4f6f8);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:1.5rem;font-weight:700">${data?.sessionCount || '--'}</div>
+        <div style="font-size:.74rem;color:var(--text-s)">Sessions</div>
+      </div>
+      <div style="background:var(--bg-body,#f4f6f8);border-radius:10px;padding:14px;text-align:center">
+        <div style="font-size:1.5rem;font-weight:700">${fmt(data?.totalTokens || 0)}</div>
+        <div style="font-size:.74rem;color:var(--text-s)">Tokens</div>
+      </div>
+    </div>
+    <h4 style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-s);margin-bottom:10px">Recent Sessions</h4>
+    ${sessions.map(s => `
+      <div style="padding:10px 0;border-bottom:1px solid rgba(0,0,0,0.06)">
+        <div style="font-size:.84rem;font-weight:500">${s.label || 'Session ' + (s.id || '').slice(0, 8)}</div>
+        <div style="font-size:.74rem;color:var(--text-s)">${s.tool_id} \u00B7 ${fD(s.started_at)} \u00B7 ${s.total_turns} turns</div>
+      </div>`).join('') || '<p style="color:var(--text-s);font-size:.84rem">No sessions yet.</p>'}`;
+}
+
+// ---- Performance ----
+let _perfView = 'tools';
+
+async function renderPerformance() {
+  const el = document.getElementById('p-performance-inner');
+  if (!el) return;
+
+  // Wire up filter pills
+  document.querySelectorAll('#perf-pills .filter-pill').forEach(btn => {
+    btn.onclick = () => {
+      _perfView = btn.dataset.perf;
+      document.querySelectorAll('#perf-pills .filter-pill').forEach(b => b.classList.toggle('active', b.dataset.perf === _perfView));
+      renderPerfContent(el);
+    };
+  });
+  await renderPerfContent(el);
+}
+
+async function renderPerfContent(el) {
+  el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-s)">Loading\u2026</div>';
+
+  if (_perfView === 'tools') {
+    if (!S.compare) S.compare = await fJ('/api/compare');
+    const tools = S.compare?.tools || [];
+    el.innerHTML = `
+      <div style="display:grid;gap:10px">
+        ${tools.map(t => `
+          <div style="background:var(--bg-card);border-radius:12px;padding:16px 20px;display:grid;grid-template-columns:1fr repeat(4,auto);gap:16px;align-items:center">
+            <div>
+              <div style="font-weight:600;font-size:.9rem">${toolChip(t.tool_id)} ${t.tool_id}</div>
+              <div style="font-size:.74rem;color:var(--text-s)">${t.sessionCount} sessions</div>
+            </div>
+            <div style="text-align:center"><div style="font-weight:700">${fmt(t.totalTokens || 0)}</div><div style="font-size:.7rem;color:var(--text-s)">tokens</div></div>
+            <div style="text-align:center"><div style="font-weight:700">${t.avgQuality != null ? t.avgQuality.toFixed(0) : '--'}</div><div style="font-size:.7rem;color:var(--text-s)">quality</div></div>
+            <div style="text-align:center"><div style="font-weight:700">${t.avgCacheHit != null ? t.avgCacheHit.toFixed(0) : '--'}%</div><div style="font-size:.7rem;color:var(--text-s)">cache</div></div>
+            <div style="text-align:center"><div style="font-weight:700">${t.avgTurns != null ? t.avgTurns.toFixed(0) : '--'}</div><div style="font-size:.7rem;color:var(--text-s)">avg turns</div></div>
+          </div>`).join('') || '<p style="color:var(--text-s)">No tool comparison data yet.</p>'}
+      </div>`;
+  } else if (_perfView === 'models') {
+    if (!S.models) S.models = await fJ('/api/models');
+    const rows = S.models?.byModel || [];
+    el.innerHTML = `
+      <div style="overflow-x:auto">
+        <table style="width:100%;border-collapse:collapse;font-size:.84rem">
+          <thead><tr style="border-bottom:2px solid rgba(0,0,0,0.06)">${['Model', 'Sessions', 'Tokens', 'Avg Latency', 'Quality'].map(h => `<th style="text-align:left;padding:8px 12px;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text-s)">${h}</th>`).join('')}</tr></thead>
+          <tbody>${rows.slice(0, 15).map((r, i) => `<tr style="border-bottom:1px solid rgba(0,0,0,0.04);${i % 2 ? 'background:rgba(0,0,0,0.015)' : ''}">${[r.model, r.sessionCount, fmt(r.totalTokens || 0), (r.avgLatency ? r.avgLatency.toFixed(0) + 'ms' : '--'), (r.avgQuality ? r.avgQuality.toFixed(0) : '--')].map(v => `<td style="padding:10px 12px">${v}</td>`).join('')}</tr>`).join('')}</tbody>
+        </table>
+      </div>`;
+  } else if (_perfView === 'codegen') {
+    if (!S.codeGen) S.codeGen = await fJ('/api/code-generation');
+    const cg = S.codeGen || {};
+    el.innerHTML = `
+      <div class="bento" style="padding:0;margin:0">
+        <div class="bento-card">
+          <div class="bento-label">Lines Added</div>
+          <div class="bento-value">${fmt(cg.totalLinesAdded || 0)}</div>
+        </div>
+        <div class="bento-card">
+          <div class="bento-label">Lines Deleted</div>
+          <div class="bento-value">${fmt(cg.totalLinesDeleted || 0)}</div>
+        </div>
+        <div class="bento-card">
+          <div class="bento-label">Avg Quality</div>
+          <div class="bento-value">${cg.avgQuality != null ? cg.avgQuality.toFixed(0) : '--'}</div>
+        </div>
+      </div>`;
+  } else {
+    el.innerHTML = '<p style="color:var(--text-s);padding:20px">Task type routing coming soon.</p>';
+  }
+}
+
+// ---- Profile Pillar ----
+async function renderProfilePillar() {
+  const el = document.getElementById('p-profile-inner');
+  if (!el) return;
+
+  if (!S.personal) S.personal = await fJ('/api/personal-insights');
+  if (!S.costs) S.costs = await fJ('/api/costs');
+
+  const pi = S.personal || {};
+  const costs = S.costs || {};
+
+  el.innerHTML = `
+    <div style="padding:20px">
+      ${pi.level != null ? `
+        <div style="background:linear-gradient(135deg,#1d1d1b 0%,#333 100%);border-radius:16px;padding:28px;color:#fff;margin-bottom:20px;display:flex;align-items:center;gap:20px">
+          <div style="text-align:center">
+            <div style="font-size:2.5rem;font-weight:900;color:#F15A2B">Lv.${pi.level}</div>
+            <div style="font-size:.72rem;text-transform:uppercase;letter-spacing:.08em;opacity:.7">${pi.rank || 'Apprentice'}</div>
+          </div>
+          <div style="flex:1">
+            <div style="font-size:.78rem;opacity:.7;margin-bottom:6px">${fmt(pi.xp || 0)} XP \u00B7 ${fmt(pi.xpToNext || 0)} to next level</div>
+            <div style="height:8px;background:rgba(255,255,255,0.15);border-radius:50px;overflow:hidden">
+              <div style="height:100%;background:#F15A2B;border-radius:50px;width:${Math.min(100, Math.round((pi.xpProgress || 0) * 100))}%"></div>
+            </div>
+            <div style="font-size:.78rem;opacity:.7;margin-top:6px">\uD83D\uDD25 ${pi.streak || 0}-day streak</div>
+          </div>
+        </div>` : ''}
+      <div class="bento" style="padding:0;margin-bottom:20px">
+        <div class="bento-card" style="cursor:default">
+          <div class="bento-label">Estimated Cost</div>
+          <div class="bento-value">$${(costs.totalCost || 0).toFixed(2)}</div>
+          <div class="bento-sub">all sessions</div>
+        </div>
+        <div class="bento-card" style="cursor:default">
+          <div class="bento-label">Code Lines</div>
+          <div class="bento-value">${fmt(pi.lifetimeStats?.totalCodeLines || 0)}</div>
+          <div class="bento-sub">AI-assisted</div>
+        </div>
+        <div class="bento-card" style="cursor:default">
+          <div class="bento-label">Sessions</div>
+          <div class="bento-value">${fmt(pi.lifetimeStats?.totalSessions || 0)}</div>
+          <div class="bento-sub">lifetime</div>
+        </div>
+      </div>
+      ${(pi.achievements || []).filter(a => a.unlocked).length > 0 ? `
+        <h3 style="font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text-s);margin-bottom:12px">Recent Achievements</h3>
+        <div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:20px">
+          ${(pi.achievements || []).filter(a => a.unlocked).slice(0, 8).map(a => `
+            <div style="background:var(--bg-card);border-radius:10px;padding:10px 14px;text-align:center;min-width:80px;box-shadow:0 1px 3px rgba(0,0,0,0.04)">
+              <div style="font-size:1.5rem">${a.icon || '\uD83C\uDFC6'}</div>
+              <div style="font-size:.7rem;font-weight:600;margin-top:4px">${a.name}</div>
+            </div>`).join('')}
+        </div>` : ''}
+    </div>`;
+}
+
+// ---- Init Pillar System ----
+function initPillarNav() {
+  // Desktop nav
+  document.querySelectorAll('.pillar-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchPillar(btn.dataset.pillar));
+  });
+  // Mobile nav
+  document.querySelectorAll('.pillar-bottom-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchPillar(btn.dataset.pillar));
+  });
+  // Command palette triggers
+  const trigger = document.getElementById('cmdk-trigger');
+  if (trigger) trigger.addEventListener('click', openCmdK);
+  const fab = document.getElementById('fab-cmdk');
+  if (fab) fab.addEventListener('click', openCmdK);
+  // Keyboard shortcut
+  document.addEventListener('keydown', e => {
+    if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+      e.preventDefault();
+      _cmdkOpen ? closeCmdK() : openCmdK();
+    }
+  });
+  // Render initial pillar
+  switchPillar('command');
+}
+
+// Start the pillar system after DOM is loaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', initPillarNav);
+} else {
+  initPillarNav();
+}

@@ -7,7 +7,7 @@
     "name": "Dor Lipetz",
     "url": "https://github.com/Riko5652"
   },
-  "license": "MIT",
+  "license": "AGPL-3.0-or-later",
   "homepage": "https://github.com/Riko5652/ai-productivity-dashboard",
   "repository": {
     "type": "git",
@@ -37,7 +37,8 @@
     "mcp": "node src/mcp-handoff.js",
     "docker:build": "docker build -t ai-dashboard .",
     "docker:up": "docker compose up",
-    "docker:down": "docker compose down"
+    "docker:down": "docker compose down",
+    "audit": "npm audit --production"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

@@ -3,8 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" content="#1d1d1b">
+  <meta name="theme-color" content="#F15A2B">
   <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="AI Dashboard">
+  <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='22' fill='%231d1d1b'/><text y='.9em' font-size='80' x='10'>📊</text></svg>">
   <title>AI Productivity Dashboard</title>
   <link rel="manifest" href="/manifest.json">
   <script src="/lib/chart.umd.min.js"></script>
@@ -90,7 +93,7 @@
 </head>
 <body>
   <header id="hdr"><h1>AI Productivity Dashboard</h1><div class="hdr-r"><span><span id="dot"></span><span id="dtxt">Connecting...</span></span><span id="upd"></span></div></header>
-  <nav id="nav">
+  <nav id="nav" style="display:none">
     <button class="tb a" data-t="overview">Overview</button>
     <button class="tb" data-t="sessions">Sessions</button>
     <button class="tb" data-t="tokens">Token Deep Dive</button>
@@ -104,6 +107,49 @@
     <button class="tb" data-t="insights">Insights</button>
     <button class="tb" data-t="projects">Projects</button>
     <button class="tb" data-t="models">Models</button>
+  </nav>
+
+  <nav class="pillar-nav" id="pillar-nav">
+    <button class="pillar-btn active" data-pillar="command">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V2zM1 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V7z"/></svg>
+      Command Center
+    </button>
+    <button class="pillar-btn" data-pillar="workspaces">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.311 1.184C7.985 3.648 8.48 4 9 4h4.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z"/></svg>
+      Workspaces
+    </button>
+    <button class="pillar-btn" data-pillar="performance">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M0 0h1v15h15v1H0V0Zm14.817 3.113a.5.5 0 0 1 .07.704l-4.5 5.5a.5.5 0 0 1-.74.037L7.06 6.767l-3.656 5.027a.5.5 0 0 1-.808-.588l4-5.5a.5.5 0 0 1 .758-.06l2.609 2.61 4.15-5.073a.5.5 0 0 1 .704-.07z"/></svg>
+      Performance
+    </button>
+    <button class="pillar-btn" data-pillar="profile">
+      <svg viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4Zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/></svg>
+      Profile
+    </button>
+    <div style="flex:1"></div>
+    <button id="cmdk-trigger" style="background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.12);color:rgba(255,255,255,0.5);border-radius:8px;padding:6px 12px;font-size:0.78rem;cursor:pointer;display:flex;align-items:center;gap:8px">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.099zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0z"/></svg>
+      Search <kbd style="font-size:.7rem;background:rgba(255,255,255,0.1);padding:1px 5px;border-radius:4px">&#8984;K</kbd>
+    </button>
+  </nav>
+
+  <nav class="pillar-bottom-nav" id="pillar-bottom-nav">
+    <button class="pillar-bottom-btn active" data-pillar="command">
+      <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M1 2a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V2zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V2zM1 7a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H2a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V7zm5 0a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1v2a1 1 0 0 1-1 1h-2a1 1 0 0 1-1-1V7z"/></svg>
+      Home
+    </button>
+    <button class="pillar-bottom-btn" data-pillar="workspaces">
+      <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.311 1.184C7.985 3.648 8.48 4 9 4h4.5A1.5 1.5 0 0 1 15 5.5v7a1.5 1.5 0 0 1-1.5 1.5h-11A1.5 1.5 0 0 1 1 12.5v-9z"/></svg>
+      Spaces
+    </button>
+    <button class="pillar-bottom-btn" data-pillar="performance">
+      <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M0 0h1v15h15v1H0V0Zm14.817 3.113a.5.5 0 0 1 .07.704l-4.5 5.5a.5.5 0 0 1-.74.037L7.06 6.767l-3.656 5.027a.5.5 0 0 1-.808-.588l4-5.5a.5.5 0 0 1 .758-.06l2.609 2.61 4.15-5.073a.5.5 0 0 1 .704-.07z"/></svg>
+      Perf
+    </button>
+    <button class="pillar-bottom-btn" data-pillar="profile">
+      <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0Zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4Zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/></svg>
+      Me
+    </button>
   </nav>
 
   <div id="issue-banner" role="alert" aria-live="polite">
@@ -412,6 +458,50 @@
   <a href="https://github.com/Riko5652/ai-productivity-dashboard" target="_blank" rel="noopener" style="color:var(--text-s);text-decoration:none;">⭐ Star on GitHub</a>
   &nbsp;·&nbsp; MIT License
 </footer>
+
+<!-- ═══ PILLAR SECTIONS ═══ -->
+
+<!-- Command Center -->
+<section id="p-command" class="pillar-section active pillar-content">
+  <div id="p-command-inner"></div>
+</section>
+
+<!-- Workspaces -->
+<section id="p-workspaces" class="pillar-section pillar-content">
+  <div class="filter-pills">
+    <input id="ws-search" type="search" placeholder="Search sessions, projects…" style="flex:1;padding:8px 14px;border-radius:50px;border:1.5px solid var(--border,#e2e8f0);font-size:.85rem;outline:none;max-width:320px">
+  </div>
+  <div id="p-workspaces-inner" style="padding:16px 20px"></div>
+</section>
+
+<!-- Performance -->
+<section id="p-performance" class="pillar-section pillar-content">
+  <div class="filter-pills" id="perf-pills">
+    <button class="filter-pill active" data-perf="tools">By Tool</button>
+    <button class="filter-pill" data-perf="models">By Model</button>
+    <button class="filter-pill" data-perf="tasks">By Task Type</button>
+    <button class="filter-pill" data-perf="codegen">Code Gen</button>
+  </div>
+  <div id="p-performance-inner" style="padding:16px 20px"></div>
+</section>
+
+<!-- Profile -->
+<section id="p-profile" class="pillar-section pillar-content">
+  <div id="p-profile-inner"></div>
+</section>
+
+<!-- Mobile FAB -->
+<button class="fab" id="fab-cmdk" title="Search (&#8984;K)">&#8984;</button>
+
+<!-- Modal container -->
+<div id="modal-root"></div>
+
+<!-- Drawer container -->
+<div id="drawer-root"></div>
+
+<!-- Command palette container -->
+<div id="cmdk-root"></div>
+
 <script src="/app.js"></script>
 </body>
 </html>
