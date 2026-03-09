@@ -2146,3 +2146,26 @@ if (document.readyState === 'loading') {
 } else {
   initPillarNav();
 }
+
+// ── Theme Toggle ──────────────────────────────────────────────────────────────
+(function() {
+  const saved = localStorage.getItem('theme');
+  if (saved) document.documentElement.setAttribute('data-theme', saved);
+  document.addEventListener('DOMContentLoaded', () => {
+    const btn = document.getElementById('theme-toggle');
+    if (!btn) return;
+    const update = () => {
+      const t = document.documentElement.getAttribute('data-theme');
+      btn.textContent = t === 'light' ? '☽' : '◐';
+      btn.title = t === 'light' ? 'Switch to dark mode' : 'Switch to light mode';
+    };
+    update();
+    btn.addEventListener('click', () => {
+      const current = document.documentElement.getAttribute('data-theme');
+      const next = current === 'light' ? 'dark' : 'light';
+      document.documentElement.setAttribute('data-theme', next);
+      localStorage.setItem('theme', next);
+      update();
+    });
+  });
+})();
