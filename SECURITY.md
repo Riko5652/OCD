@@ -4,7 +4,8 @@
 
 | Version | Supported |
 |---------|-----------|
-| 2.x     | ✅ Active |
+| 3.x     | ✅ Active |
+| 2.x     | ⚠️ Security fixes only |
 | 1.x     | ❌ No longer supported |
 
 ## Privacy & Threat Model

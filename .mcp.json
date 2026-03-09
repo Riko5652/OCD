@@ -1,8 +1,8 @@
 {
   "mcpServers": {
     "ai-brain": {
-      "command": "node",
-      "args": ["C:/Projects/ai-productivity-dashboard/src/mcp-handoff.js"]
+      "command": "npx",
+      "args": ["ai-productivity-dashboard", "--mcp"]
     }
   }
 }

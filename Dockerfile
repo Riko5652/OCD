@@ -1,4 +1,4 @@
-# AI Productivity Dashboard — Docker image
+# AI Productivity Dashboard v3.0 — Docker image
 # Runs the dashboard server; your AI tool data is mounted from the host.
 #
 # Quick start:

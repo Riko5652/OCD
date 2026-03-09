@@ -1,7 +1,7 @@
 {
   "name": "AI Productivity Dashboard",
   "short_name": "AI Dashboard",
-  "description": "Local-first analytics for AI coding tools — track Claude Code, Cursor, Copilot and more",
+  "description": "Universal Brain for AI-assisted coding — tracks Claude Code, Cursor, Aider, Windsurf, Copilot & Gemini with 4-pillar navigation, PWA offline support, and live MCP server",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#1d1d1b",
