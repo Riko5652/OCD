@@ -15,5 +15,11 @@ ai_best_practices.md
 *.csv
 *.log
 
+# Credentials & tokens
+scripts/.gdrive-token.json
+
 # Git worktrees
 .worktrees/
+
+# Firecrawl cache
+.firecrawl/

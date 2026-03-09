@@ -22,6 +22,7 @@
   },
   "files": [
     "bin/",
+    "scripts/",
     "src/",
     "public/",
     "Dockerfile",
@@ -32,6 +33,8 @@
     "LICENSE"
   ],
   "scripts": {
+    "prestart": "node scripts/ensure-env.js",
+    "predev": "node scripts/ensure-env.js",
     "start": "node --env-file=.env src/server.js",
     "dev": "node --env-file=.env --watch src/server.js",
     "mcp": "node src/mcp-handoff.js",

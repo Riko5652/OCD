@@ -1319,7 +1319,7 @@ function rInsActions(prompt, llmStatus) {
       statusEl.textContent = `${llmStatus.provider} · ${llmStatus.model} · results cached 24h`;
     } else {
       if (!btn._streaming) { btn.disabled = true; btn.style.opacity = '0.4'; btn.style.cursor = 'not-allowed'; }
-      statusEl.textContent = 'No LLM configured — check server .env';
+      statusEl.textContent = 'Optional: add an LLM provider in .env for AI-powered analysis';
     }
   }
 
@@ -1960,6 +1960,40 @@ async function renderCommandCenter() {
 
   // Top agentic sessions
   const topAgentic = agentic.slice(0, 3);
+
+  // Empty state for new users with no data
+  if (totalSessions === 0) {
+    el.innerHTML = `
+      <div style="text-align:center;padding:60px 24px;max-width:600px;margin:0 auto">
+        <div style="font-size:3rem;margin-bottom:16px">🚀</div>
+        <h2 style="font-size:1.4rem;font-weight:700;color:var(--text-h);margin-bottom:12px">Welcome to AI Productivity Dashboard</h2>
+        <p style="color:var(--text-s);font-size:.92rem;line-height:1.7;margin-bottom:24px">
+          No sessions detected yet. The dashboard auto-discovers data from your AI coding tools.
+          Start a session in any supported tool and it will appear here automatically.
+        </p>
+        <div style="text-align:left;background:var(--bg-alt,#f8f8f8);border-radius:12px;padding:20px 24px;margin-bottom:20px">
+          <h3 style="font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-s);margin-bottom:12px">Supported Tools</h3>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:.84rem">
+            <div>✅ Claude Code</div><div>✅ Cursor</div>
+            <div>✅ Aider</div><div>✅ Windsurf</div>
+            <div>✅ GitHub Copilot</div><div>✅ Continue.dev</div>
+            <div>✅ Gemini / Antigravity</div><div></div>
+          </div>
+        </div>
+        <div style="text-align:left;background:var(--bg-alt,#f8f8f8);border-radius:12px;padding:20px 24px;margin-bottom:20px">
+          <h3 style="font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-s);margin-bottom:12px">Quick Start</h3>
+          <ol style="font-size:.84rem;color:var(--text-m);line-height:1.8;padding-left:20px;margin:0">
+            <li>Use any supported AI coding tool (Claude Code, Cursor, etc.)</li>
+            <li>The dashboard scans for session data every 60 seconds</li>
+            <li>Check the terminal for the auto-discovery report showing detected tools</li>
+          </ol>
+        </div>
+        <p style="font-size:.78rem;color:var(--text-s)">
+          Need help? See <a href="https://github.com/Riko5652/ai-productivity-dashboard/blob/main/SETUP.md" target="_blank" style="color:var(--primary);text-decoration:none;font-weight:600">SETUP.md</a> for path overrides and troubleshooting.
+        </p>
+      </div>`;
+    return;
+  }
 
   el.innerHTML = `
     <!-- Hero stats row -->
