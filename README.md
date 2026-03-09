@@ -3,11 +3,11 @@
 > A local-first tool that tracks your AI coding sessions, benchmarks every tool and model against each other, and tells you which one actually works best for the work you do.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
-[![License](https://img.shields.io/badge/license-AGPL--3.0-green)](LICENSE)
+[![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-green)](LICENSE)
 [![Tools](https://img.shields.io/badge/tools-7-blue)](#what-gets-tracked)
 [![MCP](https://img.shields.io/badge/MCP-9%20tools-purple)](SETUP.md#mcp-server-setup)
 [![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
-[![PWA](https://img.shields.io/badge/PWA-installable-orange)](#pwa-support)
+[![PWA](https://img.shields.io/badge/PWA-offline%20ready-blueviolet)](#pwa-support)
 [![npm](https://img.shields.io/npm/v/ai-productivity-dashboard)](https://www.npmjs.com/package/ai-productivity-dashboard)
 
 ---
