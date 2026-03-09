@@ -427,7 +427,12 @@ export function getTurnsForSession(sessionId) {
   ).all(sessionId);
 }
 
-export function getDailyStatsRange(days = 365) {
+export function getDailyStatsRange(days = 0) {
+  if (!days || days <= 0) {
+    return getDb().prepare(
+      'SELECT * FROM daily_stats ORDER BY date, tool_id'
+    ).all();
+  }
   const cutoff = new Date(Date.now() - days * 86400000).toISOString().slice(0, 10);
   return getDb().prepare(
     'SELECT * FROM daily_stats WHERE date >= ? ORDER BY date, tool_id'

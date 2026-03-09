@@ -10,7 +10,7 @@ const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'gemma2:2b';
 // Azure OpenAI (preferred cloud provider)
 const AZURE_OPENAI_API_KEY = process.env.AZURE_OPENAI_API_KEY || '';
 const AZURE_OPENAI_ENDPOINT = process.env.AZURE_OPENAI_ENDPOINT || '';
-const AZURE_OPENAI_DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT_CHAT || 'gpt-4o';
+const AZURE_OPENAI_DEPLOYMENT = process.env.AZURE_OPENAI_DEPLOYMENT_CHAT || 'gpt-5.2-chat';
 
 // Vanilla OpenAI fallback
 const OPENAI_BASE_URL = process.env.OPENAI_BASE_URL || 'https://api.openai.com/v1';

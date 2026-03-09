@@ -52,9 +52,8 @@ ai-dashboard
 # Clone and run
 git clone https://github.com/Riko5652/ai-productivity-dashboard
 cd ai-productivity-dashboard
-cp .env.example .env   # optional — everything works without changes
 npm install
-npm start
+npm start              # .env is auto-created from .env.example on first run
 
 # Docker
 git clone https://github.com/Riko5652/ai-productivity-dashboard

@@ -83,19 +83,31 @@ export function computeProfile() {
 
 // ── Trends ───────────────────────────────────────────────────────────────────
 
-export function computeTrends(days = 90) {
+export function computeTrends(days = 0) {
   const db = getDb();
-  const since = new Date(); since.setDate(since.getDate() - days);
-  const sinceStr = since.toISOString().split('T')[0];
 
-  const daily = db.prepare(`
-    SELECT date, AVG(avg_cache_hit_pct) as cache_hit,
-           AVG(avg_quality_score) as quality,
-           SUM(total_turns) as turns,
-           AVG(avg_latency_ms) as latency
-    FROM daily_stats WHERE date >= ?
-    GROUP BY date ORDER BY date ASC
-  `).all(sinceStr);
+  let daily;
+  if (!days || days <= 0) {
+    daily = db.prepare(`
+      SELECT date, AVG(avg_cache_hit_pct) as cache_hit,
+             AVG(avg_quality_score) as quality,
+             SUM(total_turns) as turns,
+             AVG(avg_latency_ms) as latency
+      FROM daily_stats
+      GROUP BY date ORDER BY date ASC
+    `).all();
+  } else {
+    const since = new Date(); since.setDate(since.getDate() - days);
+    const sinceStr = since.toISOString().split('T')[0];
+    daily = db.prepare(`
+      SELECT date, AVG(avg_cache_hit_pct) as cache_hit,
+             AVG(avg_quality_score) as quality,
+             SUM(total_turns) as turns,
+             AVG(avg_latency_ms) as latency
+      FROM daily_stats WHERE date >= ?
+      GROUP BY date ORDER BY date ASC
+    `).all(sinceStr);
+  }
 
   function rolling7(arr, key) {
     return arr.map((row, i) => {
@@ -111,19 +123,35 @@ export function computeTrends(days = 90) {
     ? validBaseline.reduce((a, r) => a + r.cache_hit, 0) / validBaseline.length
     : null;
 
-  const reaskTrend = db.prepare(`
-    SELECT DATE(s.started_at / 1000, 'unixepoch') as date, AVG(pm.reask_rate) as reask_rate
-    FROM prompt_metrics pm JOIN sessions s ON pm.session_id = s.id
-    WHERE DATE(s.started_at / 1000, 'unixepoch') >= ?
-    GROUP BY date ORDER BY date ASC
-  `).all(sinceStr);
-
-  const errorTrend = db.prepare(`
-    SELECT DATE(started_at / 1000, 'unixepoch') as date,
-           CAST(SUM(error_count) AS REAL) / COUNT(*) as error_rate
-    FROM sessions WHERE DATE(started_at / 1000, 'unixepoch') >= ?
-    GROUP BY date ORDER BY date ASC
-  `).all(sinceStr);
+  let reaskTrend, errorTrend;
+  if (!days || days <= 0) {
+    reaskTrend = db.prepare(`
+      SELECT DATE(s.started_at / 1000, 'unixepoch') as date, AVG(pm.reask_rate) as reask_rate
+      FROM prompt_metrics pm JOIN sessions s ON pm.session_id = s.id
+      GROUP BY date ORDER BY date ASC
+    `).all();
+    errorTrend = db.prepare(`
+      SELECT DATE(started_at / 1000, 'unixepoch') as date,
+             CAST(SUM(error_count) AS REAL) / COUNT(*) as error_rate
+      FROM sessions
+      GROUP BY date ORDER BY date ASC
+    `).all();
+  } else {
+    const since = new Date(); since.setDate(since.getDate() - days);
+    const sinceStr = since.toISOString().split('T')[0];
+    reaskTrend = db.prepare(`
+      SELECT DATE(s.started_at / 1000, 'unixepoch') as date, AVG(pm.reask_rate) as reask_rate
+      FROM prompt_metrics pm JOIN sessions s ON pm.session_id = s.id
+      WHERE DATE(s.started_at / 1000, 'unixepoch') >= ?
+      GROUP BY date ORDER BY date ASC
+    `).all(sinceStr);
+    errorTrend = db.prepare(`
+      SELECT DATE(started_at / 1000, 'unixepoch') as date,
+             CAST(SUM(error_count) AS REAL) / COUNT(*) as error_rate
+      FROM sessions WHERE DATE(started_at / 1000, 'unixepoch') >= ?
+      GROUP BY date ORDER BY date ASC
+    `).all(sinceStr);
+  }
 
   return {
     cacheHit: rolling7(daily, 'cache_hit'),

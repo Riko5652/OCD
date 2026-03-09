@@ -1,5 +1,7 @@
 /* ── Fonts loaded via <link> in index.html ────────────────────────────────── */
 
+/* Legacy .tp sections are moved into sub-panels by _mountV2Tab() */
+
 *, *::before, *::after {
   box-sizing: border-box;
   margin: 0;
@@ -84,28 +86,8 @@
   --transition-spring: 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-/* ── Light mode override ────────────────────────────────────────────────────── */
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --bg:         #f6f8fa;
-    --bg-body:    #f6f8fa;
-    --bg-card:    #ffffff;
-    --bg-surface: #f0f3f6;
-    --bg-hover:   #eaeef2;
-    --bg-header:  #1d1d1b;
-    --border:       rgba(0,0,0,0.08);
-    --border-hover: rgba(0,0,0,0.16);
-    --text-h:    #1f2328;
-    --text-m:    #3f444b;
-    --text-s:    #57606a;
-    --text-xs:   #8c959f;
-    --text-on-dark: #ffffff;
-    --shadow:      0 1px 3px rgba(0,0,0,0.06), 0 4px 12px rgba(0,0,0,0.04);
-    --shadow-lg:   0 8px 24px rgba(0,0,0,0.1);
-    --shadow-card: none;
-  }
-}
+/* ── Light mode override — only via explicit data-theme attribute ─────────── */
+/* Dark is always the default. OS prefers-color-scheme is intentionally ignored. */
 
 [data-theme="light"] {
   --bg:         #f6f8fa;
@@ -179,6 +161,10 @@ h1, h2, h3, h4 { color: var(--text-h); font-weight: 600; }
   padding: 0 20px; height: 50px; gap: 12px;
   box-shadow: 0 1px 0 rgba(255,255,255,0.04);
 }
+#hdr h1 {
+  font-family: var(--font-ui); font-size: 0.95rem; font-weight: 600;
+  color: var(--text-on-dark); letter-spacing: -0.01em;
+}
 #hdr-logo {
   font-family: var(--font-mono); font-size: 0.9rem; font-weight: 500;
   color: var(--text-on-dark); letter-spacing: -0.01em;
@@ -211,6 +197,25 @@ h1, h2, h3, h4 { color: var(--text-h); font-weight: 600; }
 /* Legacy tab sections — hide all, show only active via .a class */
 .tp { display: none; }
 .tp.a { display: block; }
+
+/* ── Sub-tab system (inside each pillar) ───────────────────────────────────── */
+
+.sub-tab-bar {
+  display: flex; gap: 2px; padding: 10px 16px 0;
+  border-bottom: 1px solid var(--border); overflow-x: auto; scrollbar-width: none;
+}
+.sub-tab-bar::-webkit-scrollbar { display: none; }
+.sub-tab {
+  padding: 6px 14px; border: none; border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  background: transparent; color: var(--text-s);
+  font-family: var(--font-ui); font-size: 0.8rem; font-weight: 500;
+  white-space: nowrap; cursor: pointer; border-bottom: 2px solid transparent;
+  transition: all var(--transition);
+}
+.sub-tab:hover { color: var(--text-m); }
+.sub-tab.active { color: var(--primary); border-bottom-color: var(--primary); background: rgba(241,90,43,0.05); }
+.sub-tab-panel { display: none; }
+.sub-tab-panel.active { display: block; }
 
 /* ── Pillar Navigation ──────────────────────────────────────────────────────── */
 
@@ -346,14 +351,18 @@ h1, h2, h3, h4 { color: var(--text-h); font-weight: 600; }
 }
 
 /* Metric type accent colors */
-.bento-card[data-metric="sessions"] { --card-accent: #F15A2B; }
-.bento-card[data-metric="tokens"]   { --card-accent: #3b82f6; }
-.bento-card[data-metric="cache"],
+.bento-card[data-metric="sessions"], .bento-card.accent-sessions { --card-accent: #F15A2B; }
+.bento-card[data-metric="tokens"], .bento-card.accent-tokens   { --card-accent: #3b82f6; }
+.bento-card[data-metric="cache"], .bento-card.accent-cache,
 .bento-card[data-metric="efficiency"]{ --card-accent: #22c55e; }
 .bento-card[data-metric="errors"]   { --card-accent: #f59e0b; }
-.bento-card[data-metric="cost"]     { --card-accent: #a855f7; }
+.bento-card[data-metric="cost"], .bento-card.accent-cost       { --card-accent: #a855f7; }
 .bento-card[data-metric="quality"]  { --card-accent: #14b8a6; }
 .bento-card[data-metric="streak"]   { --card-accent: #f59e0b; }
+.bento-card.accent-turns     { --card-accent: #6366f1; }
+.bento-card.accent-code      { --card-accent: #10b981; }
+.bento-card.accent-agentic   { --card-accent: #ec4899; }
+.bento-card.accent-commits   { --card-accent: #14b8a6; }
 
 .bento-label {
   font-size: 0.68rem; font-weight: 600; text-transform: uppercase;
