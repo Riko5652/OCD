@@ -34,8 +34,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install postject
-        run: npm install -g postject
+      - name: Install build tools
+        run: npm install -g postject esbuild
 
       - name: Build SEA
         run: node scripts/build-sea.mjs
