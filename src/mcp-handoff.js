@@ -17,7 +17,7 @@
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { CallToolRequestSchema, ListToolsRequestSchema } from '@modelcontextprotocol/sdk/types.js';
-import { getDb } from './db.js';
+import { initDb, getDb } from './db.js';
 import { getRoutingRecommendation, computeToolModelWinRates } from './engine/cross-tool-router.js';
 import { computeAllProjects } from './engine/project-insights.js';
 import { sanitizeForPrompt } from './lib/sanitize.js';
@@ -109,6 +109,31 @@ const TOOLS = [
         task_type: { type: 'string', description: 'Task type: migration, component, debug, refactor, test, api, general' },
       },
       required: ['task_type'],
+    },
+  },
+  {
+    name: 'get_similar_solutions',
+    description: "Find proven solutions from past sessions matching your current error or task context. Uses semantic vector search + knowledge graph to find sessions that resolved similar problems across all AI tools.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        query: { type: 'string', description: 'Describe the error, task, or problem you need help with.' },
+        top_k: { type: 'number', description: 'Number of similar solutions to return (default 5, max 10)' },
+      },
+      required: ['query'],
+    },
+  },
+  {
+    name: 'get_knowledge_context',
+    description: "Get the knowledge graph neighborhood for a session or project — related sessions, tools, error patterns, and solutions that connect to your current work.",
+    inputSchema: {
+      type: 'object',
+      properties: {
+        session_id: { type: 'string', description: 'Session ID to get context for (optional — uses most recent if omitted)' },
+        project: { type: 'string', description: 'Project name to focus on (optional)' },
+        depth: { type: 'number', description: 'Graph traversal depth (default 2, max 3)' },
+      },
+      required: [],
     },
   },
   {
@@ -281,6 +306,107 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
       return { content: [{ type: 'text', text: `Handoff note saved. Retrieve it with get_last_session_context from another tool.` }] };
     }
 
+    // ── get_similar_solutions ─────────────────────────────────────────────
+    if (name === 'get_similar_solutions') {
+      try {
+        const { findSimilar } = await import('./lib/vector-store.js');
+        const topK = Math.min(args?.top_k || 5, 10);
+        const results = await findSimilar(args.query, topK);
+
+        if (!results.length) {
+          return { content: [{ type: 'text', text: 'No similar sessions found yet. The semantic memory builds as you use more AI tools.' }] };
+        }
+
+        const lines = [`## Similar Solutions (${results.length} found)\n`];
+        for (const r of results) {
+          const session = db.prepare(`SELECT id, tool_id, primary_model, title, tldr, total_turns, quality_score, error_count FROM sessions WHERE id = ?`).get(r.session_id);
+          if (!session) continue;
+
+          const turns = db.prepare(`SELECT label FROM turns WHERE session_id = ? ORDER BY timestamp LIMIT 5`).all(r.session_id);
+          lines.push(`### ${session.tool_id} / ${session.primary_model} — ${sanitize(session.title, 80)}`);
+          lines.push(`- Quality: ${Math.round(session.quality_score || 0)}/100 | Turns: ${session.total_turns} | Errors: ${session.error_count || 0}`);
+          lines.push(`- Similarity: ${(r.similarity * 100).toFixed(1)}%`);
+          if (session.tldr) lines.push(`- Summary: ${sanitize(session.tldr, 200)}`);
+          if (turns.length) {
+            lines.push(`- Key steps: ${turns.map(t => sanitize(t.label, 60)).join(' → ')}`);
+          }
+          lines.push('');
+        }
+
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
+      } catch (e) {
+        // Vector store may not be initialized yet
+        return { content: [{ type: 'text', text: `Semantic memory not ready: ${e.message}. Sessions will be indexed on next ingestion.` }] };
+      }
+    }
+
+    // ── get_knowledge_context ──────────────────────────────────────────────
+    if (name === 'get_knowledge_context') {
+      try {
+        const { getNeighborhood, getRelatedSolutions, buildGraph } = await import('./lib/knowledge-graph.js');
+
+        // Ensure graph is built
+        try { buildGraph(); } catch (_) {}
+
+        let sessionId = args?.session_id;
+        if (!sessionId) {
+          const last = db.prepare(`SELECT id FROM sessions ORDER BY ended_at DESC LIMIT 1`).get();
+          sessionId = last?.id;
+        }
+        if (!sessionId) {
+          return { content: [{ type: 'text', text: 'No sessions found.' }] };
+        }
+
+        const depth = Math.min(args?.depth || 2, 3);
+        const neighborhood = getNeighborhood(sessionId, depth);
+
+        const lines = [`## Knowledge Context\n`];
+
+        if (neighborhood.nodes.length === 0) {
+          lines.push('No connections found for this session yet.');
+        } else {
+          // Group connections by type
+          const byType = {};
+          for (const edge of neighborhood.edges) {
+            if (!byType[edge.type]) byType[edge.type] = [];
+            byType[edge.type].push(edge);
+          }
+
+          for (const [type, edges] of Object.entries(byType)) {
+            lines.push(`### ${type} (${edges.length} connections)`);
+            for (const edge of edges.slice(0, 5)) {
+              const other = edge.from === sessionId ? edge.to : edge.from;
+              const s = db.prepare(`SELECT tool_id, primary_model, title, quality_score, total_turns FROM sessions WHERE id = ?`).get(other);
+              if (s) {
+                lines.push(`- ${s.tool_id}/${s.primary_model}: ${sanitize(s.title, 60)} (Q:${Math.round(s.quality_score || 0)}, ${s.total_turns}t)`);
+              }
+            }
+            lines.push('');
+          }
+        }
+
+        // If project filter, add project-specific context
+        if (args?.project) {
+          const projectSessions = db.prepare(`
+            SELECT tool_id, primary_model, COUNT(*) as cnt, AVG(quality_score) as avg_q
+            FROM sessions WHERE raw_data LIKE ? OR title LIKE ?
+            GROUP BY tool_id, primary_model ORDER BY avg_q DESC LIMIT 5
+          `).all(`%${args.project}%`, `%${args.project}%`);
+
+          if (projectSessions.length) {
+            lines.push(`### Best combos for ${args.project}`);
+            for (const ps of projectSessions) {
+              lines.push(`- ${ps.tool_id}/${ps.primary_model}: ${ps.cnt} sessions, avg quality ${Math.round(ps.avg_q || 0)}`);
+            }
+          }
+        }
+
+        return { content: [{ type: 'text', text: lines.join('\n') }] };
+      } catch (e) {
+        return { content: [{ type: 'text', text: `Knowledge graph not ready: ${e.message}` }] };
+      }
+    }
+
     // ── get_optimal_prompt_structure ────────────────────────────────────────
     if (name === 'get_optimal_prompt_structure') {
       const { getOptimalPromptStructure } = await import('./engine/prompt-coach.js');
@@ -328,5 +454,6 @@ server.setRequestHandler(CallToolRequestSchema, async (request) => {
   }
 });
 
+await initDb();
 const transport = new StdioServerTransport();
 await server.connect(transport);

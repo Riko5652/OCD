@@ -4,7 +4,7 @@ import express from 'express';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import {
-  getDb, upsertSession, insertTurns, upsertCommitScore,
+  initDb, getDb, upsertSession, insertTurns, upsertCommitScore,
   getAllSessions, getSessionById, getTurnsForSession,
   getDailyStatsRange, getCommitScores as dbGetCommitScores,
   getRecommendations,
@@ -224,6 +224,28 @@ async function ingestAll() {
   runOptimizer();
   invalidateCache();
   console.log(`[ingest] Complete in ${Date.now() - start}ms`);
+  // Embed high-quality sessions for semantic memory (async, non-blocking)
+  setImmediate(async () => {
+    try {
+      const { embedSession } = await import('./lib/vector-store.js');
+      const db = getDb();
+      const unembedded = db.prepare(`
+        SELECT s.id FROM sessions s
+        LEFT JOIN session_embeddings se ON se.session_id = s.id
+        WHERE se.session_id IS NULL AND s.quality_score > 50
+        ORDER BY s.started_at DESC LIMIT 50
+      `).all();
+      if (unembedded.length > 0) {
+        console.log(`[embed] Embedding ${unembedded.length} sessions...`);
+        for (const { id } of unembedded) {
+          try { await embedSession(id); } catch (_) {}
+        }
+        console.log(`[embed] Done`);
+      }
+    } catch (e) {
+      console.warn('[embed] Skipped:', e.message);
+    }
+  });
   // Pre-warm cache in background so first tab load is instant
   setImmediate(() => {
     try {
@@ -248,14 +270,51 @@ async function ingestAll() {
   broadcast('refresh');
 }
 
+// ---- JSON body parsing for import/webhook routes ----
+app.use(express.json({ limit: '5mb' }));
+
+// CORS for session import endpoints (bookmarklet sends from other origins)
+app.use((req, res, next) => {
+  if (req.path.startsWith('/api/sessions/import') || req.path.startsWith('/api/webhook/')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, X-Webhook-Secret');
+    if (req.method === 'OPTIONS') return res.sendStatus(204);
+  }
+  next();
+});
+
 // ---- Static files ----
 app.use(express.static(join(__dirname, '..', 'public')));
 
 // ---- API Routes ----
 
 // Health check (for Docker, uptime monitors, etc.)
+const CURRENT_VERSION = '4.0.0';
+let latestVersionCache = { version: null, checkedAt: 0 };
+
 app.get('/api/health', (_req, res) => {
-  res.json({ status: 'ok', version: '3.0.0', uptime: Math.round(process.uptime()) });
+  res.json({ status: 'ok', version: CURRENT_VERSION, uptime: Math.round(process.uptime()) });
+});
+
+// Version check — polls npm registry at most once per hour
+app.get('/api/version-check', async (_req, res) => {
+  const ONE_HOUR = 3600_000;
+  if (latestVersionCache.version && Date.now() - latestVersionCache.checkedAt < ONE_HOUR) {
+    return res.json({ current: CURRENT_VERSION, latest: latestVersionCache.version, updateAvailable: latestVersionCache.version !== CURRENT_VERSION });
+  }
+  try {
+    const resp = await fetch('https://registry.npmjs.org/ai-productivity-dashboard/latest', {
+      headers: { Accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      latestVersionCache = { version: data.version, checkedAt: Date.now() };
+      return res.json({ current: CURRENT_VERSION, latest: data.version, updateAvailable: data.version !== CURRENT_VERSION });
+    }
+  } catch (_) { /* network error — don't block */ }
+  res.json({ current: CURRENT_VERSION, latest: null, updateAvailable: false });
 });
 
 // Overview KPIs
@@ -765,12 +824,193 @@ app.get('/api/sessions/:id/classify', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Session Import routes ──────────────────────────────────────────────────
+
+const IMPORT_SCHEMA = {
+  type: 'object',
+  properties: {
+    tool: { type: 'string', description: 'Source tool: chatgpt, claude-web, gemini-web, custom, or any adapter id' },
+    title: { type: 'string', description: 'Session title or first user message' },
+    started_at: { type: 'string', description: 'ISO 8601 timestamp' },
+    model: { type: 'string', description: 'Model name (optional)' },
+    turns: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          role: { type: 'string', enum: ['user', 'assistant'] },
+          content: { type: 'string' },
+        },
+        required: ['role', 'content'],
+      },
+    },
+  },
+  required: ['tool', 'turns'],
+};
+
+app.get('/api/sessions/import/schema', (_req, res) => {
+  res.json(IMPORT_SCHEMA);
+});
+
+function importSession(data) {
+  if (!data || typeof data !== 'object') throw new Error('Invalid request body');
+  if (!Array.isArray(data.turns) || data.turns.length === 0) throw new Error('turns must be a non-empty array');
+  if (data.turns.length > 2000) throw new Error('Too many turns (max 2000)');
+  if (data.tool && (typeof data.tool !== 'string' || data.tool.length > 64)) throw new Error('Invalid tool name');
+  if (data.title && (typeof data.title !== 'string' || data.title.length > 500)) throw new Error('Title too long');
+  if (data.started_at) {
+    const ts = new Date(data.started_at).getTime();
+    if (isNaN(ts)) throw new Error('Invalid started_at timestamp');
+  }
+  for (const t of data.turns) {
+    if (!t.role || (t.role !== 'user' && t.role !== 'assistant')) throw new Error('Each turn must have role "user" or "assistant"');
+    if (typeof t.content !== 'string') throw new Error('Each turn must have string content');
+    if (t.content.length > 10000) t.content = t.content.slice(0, 10000);
+  }
+
+  const id = `import-${data.tool || 'custom'}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
+  const turns = data.turns;
+  const userTurns = turns.filter(t => t.role === 'user');
+  const assistantTurns = turns.filter(t => t.role === 'assistant');
+  const totalInput = userTurns.reduce((s, t) => s + (t.content?.length || 0) / 4, 0);
+  const totalOutput = assistantTurns.reduce((s, t) => s + (t.content?.length || 0) / 4, 0);
+  const startedAt = data.started_at ? new Date(data.started_at).getTime() : Date.now();
+
+  // Map tool names to known tool_ids or use 'manual-import'
+  const TOOL_MAP = { chatgpt: 'manual-import', 'claude-web': 'manual-import', 'gemini-web': 'manual-import', custom: 'manual-import' };
+  const toolId = TOOL_MAP[data.tool] || (getAdapters().find(a => a.id === data.tool) ? data.tool : 'manual-import');
+
+  // Ensure the tool exists in DB
+  try {
+    getDb().prepare(`INSERT OR IGNORE INTO tools (id, display_name) VALUES (?, ?)`).run(toolId, data.tool || 'Imported');
+  } catch (_) {}
+
+  const session = {
+    id,
+    tool_id: toolId,
+    title: data.title || (userTurns[0]?.content || '').slice(0, 80) || 'Imported session',
+    started_at: startedAt,
+    ended_at: startedAt + turns.length * 60000,
+    total_turns: turns.length,
+    total_input_tokens: Math.round(totalInput),
+    total_output_tokens: Math.round(totalOutput),
+    primary_model: data.model || 'unknown',
+    raw: { source: 'import', original_tool: data.tool },
+  };
+
+  upsertSession(session);
+  scoreAndSave(session);
+
+  // Insert turns
+  const turnRows = turns.map((t, i) => ({
+    timestamp: startedAt + i * 30000,
+    model: data.model || 'unknown',
+    input_tokens: t.role === 'user' ? Math.round((t.content?.length || 0) / 4) : 0,
+    output_tokens: t.role === 'assistant' ? Math.round((t.content?.length || 0) / 4) : 0,
+    label: (t.content || '').slice(0, 120),
+    type: t.role === 'user' ? 1 : 2,
+  }));
+  insertTurns(id, turnRows);
+
+  // Classify
+  try {
+    const cls = classifySession(session);
+    getDb().prepare(`
+      INSERT OR REPLACE INTO task_classifications (session_id, task_type, language, complexity, classified_at)
+      VALUES (?,?,?,?,?)
+    `).run(id, cls.taskType, cls.language, cls.complexity, Date.now());
+  } catch (_) {}
+
+  return { id, turns: turns.length, tool: toolId };
+}
+
+app.post('/api/sessions/import', (req, res) => {
+  try {
+    const data = Array.isArray(req.body) ? req.body : [req.body];
+    const results = data.map(d => importSession(d));
+    invalidateCache();
+    broadcast('refresh');
+    res.json({ ok: true, imported: results });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+app.post('/api/sessions/upload', (req, res) => {
+  try {
+    // Accept raw JSON body (already parsed by express.json)
+    const data = Array.isArray(req.body) ? req.body : [req.body];
+    const results = data.map(d => importSession(d));
+    invalidateCache();
+    broadcast('refresh');
+    res.json({ ok: true, imported: results });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Webhook receiver for CI/CD and automation
+const WEBHOOK_SECRET = process.env.WEBHOOK_SECRET || '';
+app.post('/api/webhook/session', (req, res) => {
+  if (WEBHOOK_SECRET) {
+    const provided = req.headers['x-webhook-secret'] || '';
+    if (provided !== WEBHOOK_SECRET) {
+      return res.status(401).json({ error: 'Invalid webhook secret' });
+    }
+  }
+  try {
+    const result = importSession(req.body);
+    invalidateCache();
+    broadcast('refresh');
+    res.json({ ok: true, ...result });
+  } catch (e) {
+    res.status(400).json({ error: e.message });
+  }
+});
+
+// Bookmarklet source
+app.get('/api/bookmarklet', async (_req, res) => {
+  try {
+    const { getBookmarkletCode } = await import('../public/bookmarklet.js');
+    const code = getBookmarkletCode();
+    res.type('html').send(`
+      <!DOCTYPE html>
+      <html><head><title>AI Dashboard Bookmarklet</title></head>
+      <body style="font-family:system-ui;max-width:600px;margin:2em auto;padding:1em">
+        <h1>Session Capture Bookmarklet</h1>
+        <p>Drag this link to your bookmarks bar:</p>
+        <p><a href="${code}" style="padding:8px 16px;background:#6366f1;color:white;border-radius:6px;text-decoration:none;font-weight:bold">
+          Capture AI Session
+        </a></p>
+        <h2>Supported platforms</h2>
+        <ul>
+          <li>ChatGPT (chat.openai.com / chatgpt.com)</li>
+          <li>Claude.ai</li>
+          <li>Google Gemini</li>
+        </ul>
+        <p>Click the bookmarklet while on any supported AI chat page. It will capture the conversation and send it to your local dashboard.</p>
+      </body></html>
+    `);
+  } catch (e) {
+    const safe = String(e.message).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    res.type('html').send(`<p>Bookmarklet not available: ${safe}</p>`);
+  }
+});
+
+// ── Savings Report ────────────────────────────────────────────────────────
+app.get('/api/savings-report', async (_req, res) => {
+  try {
+    const { computeSavingsReport } = await import('./engine/savings-report.js');
+    res.json(cached('savings-report', computeSavingsReport));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ---- Start ----
 
-// Initialize DB
-getDb();
-
-// Run initial ingestion
+// Initialize DB (async — loads sql.js WASM) then run initial ingestion
+await initDb();
 ingestAll().catch(e => console.error('[startup] Ingestion error:', e.message));
 
 // Start file watchers
@@ -797,6 +1037,17 @@ app.listen(PORT, BIND, () => {
 
   // Score unscored sessions for agentic leaderboard
   setTimeout(() => scoreAllSessions(), 5000);
+
+  // Build knowledge graph
+  setTimeout(async () => {
+    try {
+      const { buildGraph } = await import('./lib/knowledge-graph.js');
+      buildGraph();
+      console.log('[knowledge-graph] Built');
+    } catch (e) {
+      console.warn('[knowledge-graph] Skipped:', e.message);
+    }
+  }, 10000);
 
   // Classify session topics on startup
   setTimeout(() => classifyAllSessionTopics(), 8000);

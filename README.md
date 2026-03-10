@@ -1,57 +1,92 @@
-# AI Productivity Dashboard v3.0
+# AI Productivity Dashboard v4.0
 
-> A local-first tool that tracks your AI coding sessions, benchmarks every tool and model against each other, and tells you which one actually works best for the work you do.
+> An AI memory engine that learns from your coding sessions, recommends the right tool for every task, and injects proven solutions into your workflow — all local, no API keys required.
 
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-green)](LICENSE)
 [![Tools](https://img.shields.io/badge/tools-7-blue)](#what-gets-tracked)
-[![MCP](https://img.shields.io/badge/MCP-9%20tools-purple)](SETUP.md#mcp-server-setup)
+[![MCP](https://img.shields.io/badge/MCP-11%20tools-purple)](#mcp-universal-brain)
 [![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
 [![PWA](https://img.shields.io/badge/PWA-offline%20ready-blueviolet)](#pwa-support)
 [![npm](https://img.shields.io/npm/v/ai-productivity-dashboard)](https://www.npmjs.com/package/ai-productivity-dashboard)
 
 ---
 
-## What's new in v3.0
+## What it actively does for you
 
-- **Dark-first design system** — DM Mono + DM Sans fonts, bento grid accents, skeleton loading states, spring animations, and a one-click dark/light theme toggle
-- **4-pillar navigation** — Command Center, Workspaces, Performance, and Profile replace the old tab bar. Plus a Cmd+K command palette for instant access to anything
-- **All-time data by default** — no more arbitrary time cutoffs. Every session you've ever had is available from day one
-- **Cursor Deep Dive** — a dedicated tab for Cursor-specific analytics (composer sessions, code authorship breakdown)
-- **Consolidated Insights** — behavioral profile, trends, prompt signal correlations, and Deep Analyze all in one place
-- **Dogfooding badge** — sessions from this repo itself are auto-tagged with a Meta indicator
-- **PWA support** — installable as a standalone app with offline caching (service worker with 5-min API TTL)
-- **GitHub Codespaces** — one-click dev environment via devcontainer (Node 20, auto-seeds mock data)
-- **Single Executable Application (SEA)** — build standalone binaries for Linux, macOS, and Windows (no Node required)
-- **Privacy & legal docs** — [PRIVACY.md](PRIVACY.md) and [ACCEPTABLE-USE.md](ACCEPTABLE-USE.md) formalize the zero-telemetry commitment
+This is not a passive analytics dashboard. It's a system that makes you faster:
 
----
+**Semantic Memory** — When Claude Code solves a complex migration in 15 turns, the system vectorizes the solution, the context, and the error logs. Two weeks later, when you hit a similar error in Cursor, the MCP server bypasses the LLM's knowledge cutoff and injects the exact, locally-proven solution into your prompt context. It's a self-building brain across all your AI tools.
 
-## What it does
+**Routing Recommendations** — "For postgres migrations, use Claude Code + claude-sonnet-4-6 (resolves in 4 turns, 87% win rate). Cursor + gpt-4o takes 11 turns." Based on your actual session history, not benchmarks.
 
-When you switch between Claude Code, Cursor, Aider, Windsurf, or Copilot every day, you're building up a huge amount of data about what actually works — but most of it just disappears. This dashboard reads your local session data, stores it in a local SQLite database, and gives you a clear picture of patterns you can act on.
+**Real-time Coaching** — SSE-pushed nudges every 60 seconds: alerts when sessions run too long, cache hit rate drops, error spikes occur, or you're idle. Dismissible, actionable, and based on your patterns.
 
-It's not meant to replace any tool. It's meant to help you use all of them better.
+**Prompt Optimization** — Extracts high-quality prompt patterns from your best sessions (quality > 75), grouped by task type. Shows you what works and what doesn't.
 
-**Some things it can tell you:**
-- "For postgres migrations, Claude Code with claude-sonnet-4-6 resolves them in 4 turns on average. Cursor with gpt-4o takes 11."
-- "Your cache hit rate dropped 20% this week — here's why."
-- "This session touched 12 files in 8 turns. That's your most agentic session this month."
-- "3 sessions in pm-dashboard/ were about writing blog posts, not code. They've been flagged so they don't skew your project metrics."
-
-It also runs an MCP server so any AI agent (Claude Code, Cursor, Aider) can query your live stats mid-session: which tool should I use for this task, what were you working on last, how efficient have you been this week.
+**Savings Report** — Concrete metrics on what the system saves you: cache hit savings ($), turns saved vs baseline, time estimates. Toggle between relative metrics and dollar estimates.
 
 ---
 
-## Screenshots
+## MCP Setup (30 seconds, no API key)
 
-| Overview | Personal Insights |
-|----------|------------------|
-| ![Overview](screenshots/01-overview.png) | ![Personal](screenshots/02-personal.png) |
+The dashboard exposes an MCP server with 11 tools that any AI agent can call mid-session. Zero API keys needed.
 
-| Compare Tools | Session History |
-|--------------|----------------|
-| ![Compare](screenshots/03-compare-tools.png) | ![Sessions](screenshots/04-sessions.png) |
+```bash
+# Auto-setup for all detected MCP clients
+npx ai-productivity-dashboard --setup-mcp
+
+# Or add to a specific project
+npx ai-productivity-dashboard --setup-mcp --project
+```
+
+This writes the correct config to Claude Code, Cursor, and Windsurf automatically. Or manually add to your `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "ai-brain": {
+      "command": "npx",
+      "args": ["ai-productivity-dashboard", "--mcp"]
+    }
+  }
+}
+```
+
+**Available MCP tools:**
+
+| Tool | What it does |
+|------|-------------|
+| `get_similar_solutions` | **Find proven solutions** from past sessions matching your current error or task context |
+| `get_knowledge_context` | **Inject relevant context** — returns the knowledge graph neighborhood for your current work |
+| `get_last_session_context` | Pick up where a different tool left off |
+| `get_routing_recommendation` | Which tool + model to use for this task |
+| `get_efficiency_snapshot` | Cache hit rate, first-attempt %, error recovery |
+| `get_active_recommendations` | Open optimization nudges |
+| `get_project_stats` | Token/session/model breakdown for a project |
+| `get_model_comparison` | claude-sonnet vs gpt-4o vs gemini on your actual sessions |
+| `push_handoff_note` | Save a note before switching tools |
+| `get_optimal_prompt_structure` | Prompt patterns from your highest-quality sessions |
+| `get_topic_summary` | Executive summary of work on a topic within a project |
+
+---
+
+## Import online sessions
+
+Not everything lives in local files. Import sessions from web-based AI tools:
+
+**Bookmarklet** — One-click capture from ChatGPT, Claude.ai, or Gemini. Visit `http://localhost:3030/api/bookmarklet` for setup instructions.
+
+**Paste/Upload** — Open the Import modal in the dashboard, paste a transcript or upload a JSON/CSV file.
+
+**Webhook** — Push session data from CI/CD or automation:
+```bash
+curl -X POST http://localhost:3030/api/webhook/session \
+  -H "Content-Type: application/json" \
+  -d '{"tool":"chatgpt","title":"Debug API","turns":[{"role":"user","content":"..."}]}'
+```
+
+**API** — `POST /api/sessions/import` accepts the [import schema](http://localhost:3030/api/sessions/import/schema).
 
 ---
 
@@ -69,19 +104,16 @@ ai-dashboard
 git clone https://github.com/Riko5652/ai-productivity-dashboard
 cd ai-productivity-dashboard
 npm install
-npm start              # .env is auto-created from .env.example on first run
+npm start
 
 # Docker
-git clone https://github.com/Riko5652/ai-productivity-dashboard
-cd ai-productivity-dashboard
 docker compose up
 
-# GitHub Codespaces (zero setup)
+# GitHub Codespaces — one-click dev environment
 # Click "Code" → "Codespaces" → "Create codespace on main"
-# Everything auto-installs and seeds mock data
 ```
 
-Open **http://localhost:3030**. The first thing you'll see in the terminal is a discovery report showing which tools were found and which weren't — with exact paths and hints for anything missing.
+Open **http://localhost:3030**. The terminal shows a discovery report: which tools were found, which weren't, and exact paths for anything missing.
 
 **Zero config required.** All tool data paths are auto-detected. See [SETUP.md](SETUP.md) for overrides.
 
@@ -97,9 +129,27 @@ All data is read-only. Nothing is ever written to your AI tools' files.
 | **Cursor** | Reads local SQLite DB (chat history, composer sessions, code authorship stats) |
 | **Aider** | Reads `.aider.chat.history.md` files in your project directories |
 | **Windsurf** | Reads Codeium's local SQLite DB (chat sessions, token counts) |
-| **GitHub Copilot** | Reads VS Code extension telemetry (suggestion acceptance by model) |
+| **GitHub Copilot** | Reads VS Code extension telemetry + Copilot Chat conversation history |
 | **Continue.dev** | Reads `~/.continue/sessions/*.json` |
-| **Gemini/Antigravity** | Reads `~/.gemini/antigravity/` session logs (conversations, artifacts, code tracker) |
+| **Gemini/Antigravity** | Reads `~/.gemini/antigravity/` session logs |
+
+---
+
+## Semantic Memory Engine
+
+The dashboard doesn't just track sessions — it learns from them.
+
+**Vector Embeddings** — Every high-quality session (quality > 50) is vectorized: the solution approach, error logs, codebase context, and tool+model combo. Stored in SQLite, searched via cosine similarity.
+
+**Knowledge Graph** — An in-memory graph connects sessions through shared files, projects, error patterns, tool chains, and task types. When you ask "what solved this before?", the system traverses the graph to find related solutions across all tools.
+
+**How it helps mid-session:**
+1. You hit an error in Cursor
+2. The MCP tool `get_similar_solutions` fires
+3. The system finds that Claude Code resolved a similar error last week
+4. It injects the proven solution, context, and approach into your current prompt
+
+Embeddings use Ollama (nomic-embed-text) when available, falling back to a built-in text hashing approach that works with zero external dependencies.
 
 ---
 
@@ -107,118 +157,55 @@ All data is read-only. Nothing is ever written to your AI tools' files.
 
 ### 4-pillar layout
 
-**Command Center** — your home base. KPI cards, daily activity charts, quick actions, and the command palette (Cmd+K).
+**Command Center** — KPI cards, daily activity, savings report, quick actions, command palette (Cmd+K).
 
-**Workspaces** — project-centric view. Per-project rollup of tokens, lines added, dominant tool/model, and drill-down into per-tool+model performance.
+**Workspaces** — Per-project rollup: tokens, lines added, dominant tool/model, drill-down.
 
-**Performance** — all the deep analytics: token breakdowns, tool comparisons, model benchmarks, cost tracking, code gen metrics.
+**Performance** — Token breakdowns, tool comparisons, model benchmarks, cost tracking.
 
-**Profile** — gamified personal stats: level, XP, streak, achievements, activity heatmap, flow state trend, personal records.
-
-### Dashboard tabs
-
-**Overview** — KPIs at a glance: sessions, turns, output tokens, cache hit rate, AI code authorship, today's activity. Daily charts by tool.
-
-**Sessions** — Searchable/sortable table of every session. Expand any row to see per-turn details.
-
-**Token Deep Dive** — Where your tokens actually go. Breakdown by input/cache/output with per-session mix chart.
-
-**Compare Tools** — Side-by-side: which tool you use most, where each one performs differently, distribution across time.
-
-**Cursor Deep Dive** — Cursor-specific analytics: composer session breakdown, code authorship stats, model usage within Cursor.
-
-**Code Authorship** — What percentage of your committed code was AI-generated. Scored per commit, trended over time.
-
-**Code Gen** — First-attempt success rate, error rate trend, thinking depth, lines added. Model quality comparison table.
-
-**Analytics** — Model usage distribution, turns per day, efficiency trend (O x Q x S score).
-
-**Costs** — Estimated spend by tool and model. Cost per session. Trend charts.
-
-**Personal** — Gamified: level, XP, streak, achievements. Activity heatmap. Flow state trend. Personal records.
-
-**Optimization** — Open recommendations sorted by severity. One-click dismiss.
-
-**Insights** — How you work: prompt length distribution, tool call breakdown, cache/quality/error trends. Daily automation pick from your own patterns. Deep Analyze (LLM-powered, optional).
-
-**Projects** — Per-project rollup: total tokens, lines added, dominant tool and model, tool breakdown. Click any project to drill into per-tool+model performance and AI suggestions.
-
-**Models** — Cross-tool model comparison: avg turns, cache hit %, latency, error rate. Win-rate matrix by task type. Interactive routing recommendation: describe a task, get a data-driven suggestion.
-
----
-
-## PWA support
-
-The dashboard is installable as a Progressive Web App. It works offline with cached API data (5-minute TTL) and falls back gracefully when the server is unavailable.
-
-- **Standalone mode** — runs in its own window, no browser chrome
-- **Offline caching** — network-first strategy with automatic fallback to cached data
-- **Shortcuts** — Command Center and Sessions available as app shortcuts
-
-Install it from your browser's address bar or the install prompt.
-
----
-
-## MCP Universal Brain
-
-The dashboard runs an MCP stdio server exposing 9 tools that any AI agent can call.
-
-Register it with Claude Code by adding to `.mcp.json` in your project:
-
-```json
-{
-  "mcpServers": {
-    "ai-brain": {
-      "command": "npx",
-      "args": ["ai-productivity-dashboard", "--mcp"]
-    }
-  }
-}
-```
-
-**Available tools:**
-
-| Tool | What it does |
-|------|-------------|
-| `get_last_session_context` | Pick up where a different tool left off — surfaces last session context so you don't re-explain the problem |
-| `get_routing_recommendation` | "Which tool + model should I use for this?" based on your history |
-| `get_efficiency_snapshot` | Current week's cache hit rate, first-attempt %, turns, tokens |
-| `get_active_recommendations` | Open optimization nudges from the dashboard |
-| `get_project_stats` | Token/session/model breakdown for a specific project |
-| `get_model_comparison` | claude-sonnet vs gpt-4o vs gemini — on your actual sessions |
-| `push_handoff_note` | Save a note before switching tools; next tool picks it up |
-| `get_optimal_prompt_structure` | Prompt patterns from your highest-quality sessions by task type |
-| `get_topic_summary` | "What db-work was done in pm-dashboard last week?" |
+**Profile** — Gamified: level, XP, streak, achievements, activity heatmap, flow state.
 
 ---
 
 ## Privacy
 
-- **All data stays on your machine.** Nothing is sent anywhere unless you configure an LLM provider for the optional Deep Analyze feature.
-- **Server binds to 127.0.0.1 by default** — not reachable from your network. Set `BIND=0.0.0.0` only if you need LAN access (or use Docker, which sets it automatically).
-- **Read-only access** to all AI tool databases. Windsurf and Copilot DBs are opened with `{ readonly: true }`.
-- **Prompt injection protection** — all session text is sanitized before being passed to any LLM.
-- **No telemetry.** No analytics. No opt-in tracking. The source is short and auditable.
+- **All data stays on your machine.** Nothing is sent anywhere unless you configure an LLM provider for optional Deep Analyze.
+- **Server binds to 127.0.0.1 by default.**
+- **Read-only access** to all AI tool databases.
+- **Prompt injection protection** — all session text is sanitized.
+- **No telemetry. No analytics. No tracking.**
 
-See [PRIVACY.md](PRIVACY.md) for the full privacy policy and [ACCEPTABLE-USE.md](ACCEPTABLE-USE.md) for usage guidelines.
+See [PRIVACY.md](PRIVACY.md) for the full policy.
+
+---
+
+## Monetization model
+
+**Free forever (local-first, open source):**
+- All adapters, analytics, MCP server, coaching, routing
+- Semantic memory (vector search, knowledge graph, solution injection)
+- Session import (paste, upload, bookmarklet, webhook)
+- Savings report, prompt coaching, all single-user features
+
+**Paid (future — cloud/team tier):**
+- Cloud sync between machines (encrypted, anonymized)
+- Team aggregation and cross-regional benchmarking
+- Enterprise SSO/RBAC, audit logs
+- PM tool integrations (Jira, Linear, GitHub Issues)
+- Velocity correlation dashboards
 
 ---
 
 ## LLM provider (optional)
 
-The core dashboard — all charts, tables, recommendations, MCP tools — works without any LLM. The LLM is only used for:
-- Deep Analyze button (Insights tab)
-- Daily Automation Pick
-- Project AI suggestions (Projects tab drill-down)
-
-Supported providers, in priority order:
+The core dashboard works without any LLM. Optional providers are used for: Deep Analyze, Daily Pick, Topic Summaries, and higher-quality embeddings.
 
 ```env
 # Free, local — recommended
 OLLAMA_HOST=http://localhost:11434
 OLLAMA_MODEL=gemma2:2b
 
-# Cloud
+# Cloud (any one)
 ANTHROPIC_API_KEY=sk-ant-...
 OPENAI_API_KEY=sk-...
 AZURE_OPENAI_API_KEY=...
@@ -226,73 +213,18 @@ AZURE_OPENAI_API_KEY=...
 
 ---
 
-## Enabling AI Deep Analysis
-
-The **Insights** tab includes on-demand LLM analysis of your usage patterns. Configure one provider:
-
-| Provider | Env vars needed | Cost | Speed |
-|----------|----------------|------|-------|
-| **Ollama (local, recommended)** | `OLLAMA_HOST=http://localhost:11434` | Free | Fast if running |
-| **OpenAI / compatible** | `OPENAI_API_KEY=sk-...` | ~$0.001/analyze | Fast |
-| **Anthropic** | `ANTHROPIC_API_KEY=sk-ant-...` | ~$0.001/analyze | Fast |
-| **None** | — | Free | Structural analysis only (profile + trends still work) |
-
-Results are cached for 24 hours — the second click is instant. Without any provider, all other Insights features (behavioral profile, trends, prompt signal correlations) work fully with zero external calls.
-
-```bash
-# Local Ollama (best for privacy — nothing leaves your machine)
-OLLAMA_HOST=http://localhost:11434 npm start
-
-# OpenAI
-OPENAI_API_KEY=sk-... npm start
-
-# Anthropic
-ANTHROPIC_API_KEY=sk-ant-... npm start
-
-# Override model selection
-OLLAMA_MODEL=llama3.2:3b npm start
-OPENAI_MODEL=gpt-4o npm start
-ANTHROPIC_MODEL=claude-haiku-4-5-20251001 npm start
-
-# Force cache refresh for Deep Analyze
-# Append ?refresh=1 to the deep-analyze URL in your browser
-```
-
----
-
 ## Tech
 
-- **Node.js 18+ ESM** — no build step, no transpilation
-- **Express 4** — minimal API server with SSE live push
-- **better-sqlite3** — fast local SQLite, no server process needed
-- **Chart.js** (CDN) — all charts rendered in the browser, no bundler
+- **Node.js 18+ ESM** — no build step
+- **Express 4** — API server with SSE
+- **SQLite (sql.js)** — local database + vector storage
+- **In-memory knowledge graph** — session relationship traversal
+- **Chart.js** (CDN) — browser-rendered charts
 - **@modelcontextprotocol/sdk** — MCP stdio server
-- **chokidar** — file watching for live session updates
-- **Service Worker** — offline-capable PWA with network-first caching
+- **chokidar** — file watching for live updates
+- **Service Worker** — offline-capable PWA
 
-No React. No Webpack. No TypeScript compilation. Loads in under a second on any hardware made after 2015.
-
-### Standalone binaries (SEA)
-
-Build single-file executables with no Node.js dependency (requires Node 21.7+ to build):
-
-```bash
-node scripts/build-sea.mjs
-# Outputs: ai-dashboard-linux-x64, ai-dashboard-macos-arm64, ai-dashboard-win.exe
-```
-
----
-
-## Setup & configuration
-
-See **[SETUP.md](SETUP.md)** for:
-- Full installation guide (Windows, macOS, Linux)
-- How to tell the dashboard where your tools' data lives
-- Path override reference (all env vars)
-- MCP registration for Claude Code and Cursor
-- Docker setup
-- GitHub Codespaces setup
-- Troubleshooting
+No React. No Webpack. No TypeScript compilation.
 
 ---
 
@@ -301,31 +233,25 @@ See **[SETUP.md](SETUP.md)** for:
 ```
 src/
   adapters/        # One file per AI tool (claude-code, cursor, aider, ...)
-    registry.js    # Auto-registration — new tools are single-file additions
-  engine/          # Analytics engines
+  engine/          # Analytics + intelligence engines
     cross-tool-router.js   # Task classification + win-rate routing
-    project-insights.js    # Per-project rollup
-    agentic-scorer.js      # 0-100 autonomy score per session
+    savings-report.js      # Cost/time savings calculations
+    agentic-scorer.js      # Autonomy scoring
     session-coach.js       # Real-time SSE nudges
-    prompt-coach.js        # Prompt patterns from high-quality sessions
-    topic-segmenter.js     # Detect sessions unrelated to their project
-    cross-tool.js          # Tool switch detection + handoff quality
+    prompt-coach.js        # Prompt patterns from best sessions
+    topic-segmenter.js     # Topic detection + project relevance
   lib/
-    sanitize.js    # Prompt injection protection
-  mcp-handoff.js   # MCP Universal Brain server (9 tools)
+    vector-store.js  # SQLite-based vector embeddings
+    knowledge-graph.js # In-memory session relationship graph
+    sanitize.js      # Prompt injection protection
+  mcp-handoff.js   # MCP Universal Brain server (11 tools)
   server.js        # Express app + all API routes
   db.js            # SQLite schema + migration
-  config.js        # Auto-detected paths + startup discovery report
-public/            # Static frontend (HTML + vanilla JS, no build step)
-  sw.js            # Service worker (offline caching)
-  manifest.json    # PWA manifest
-  css/style.css    # Dark-first design system (DM Mono + DM Sans)
-scripts/
-  build-sea.mjs    # Single Executable Application builder
+  config.js        # Auto-detected paths + discovery report
+public/            # Static frontend (HTML + vanilla JS)
 bin/
-  ai-dashboard.js  # CLI entrypoint (version check, auto-open browser)
-docs/
-  design/          # Design specifications
+  ai-dashboard.js  # CLI entrypoint
+  setup-mcp.js     # MCP auto-setup for Claude Code / Cursor / Windsurf
 ```
 
 ---
@@ -337,24 +263,21 @@ docs/
 3. Import it in `src/server.js`
 4. Add a seed row in `src/db.js`
 
-That's it. The adapter registry handles everything else.
-
 ---
 
 ## Roadmap
 
-These are things that would make it meaningfully better — contributions welcome:
-
-- [ ] GitHub/GitLab PR linking (tie sessions to PRs, show AI % per PR)
-- [ ] Devin / OpenHands adapter (REST API polling)
-- [ ] PostgreSQL backend + team mode (opt-in, shared leaderboard)
-- [ ] Crowd-sourced benchmarks (opt-in, no session content, anonymized)
-- [x] ~~`pkg` binary builds for Windows/macOS/Linux (no Node required)~~ — replaced by Node SEA builds
+- [ ] Enterprise: secure team sync with anonymized aggregation
+- [ ] PM integration: Jira/Linear/GitHub Issues velocity correlation
+- [ ] Cross-regional benchmarking (EMEA vs APAC tool effectiveness)
+- [ ] Devin / OpenHands adapter
+- [x] Semantic memory engine (vector embeddings + knowledge graph)
+- [x] Session import (bookmarklet, paste, webhook)
+- [x] MCP zero-config setup
+- [x] Savings report
 
 ---
 
 ## License
 
 AGPL-3.0-or-later — see [LICENSE](LICENSE). Built and maintained by [Dor Lipetz](https://github.com/Riko5652).
-
-If this is useful to you, a star on GitHub goes a long way.

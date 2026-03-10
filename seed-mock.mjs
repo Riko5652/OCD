@@ -1,10 +1,11 @@
 // Seed a realistic mock database for screenshots/demos
 // Run: node seed-mock.mjs  →  writes data/mock.db
-import Database from 'better-sqlite3';
+import { initSqlite, openDatabase } from './src/lib/sqlite-compat.js';
 import { mkdirSync } from 'fs';
 
 mkdirSync('./data', { recursive: true });
-const db = new Database('./data/mock.db');
+await initSqlite();
+const db = openDatabase('./data/mock.db');
 db.pragma('journal_mode = WAL');
 
 db.exec(`

@@ -1,4 +1,4 @@
-import Database from 'better-sqlite3';
+import { openDatabase } from '../lib/sqlite-compat.js';
 import path from 'path';
 import os from 'os';
 import { register } from './registry.js';
@@ -20,7 +20,7 @@ export const adapter = {
   getSessions: async () => {
     const dbPath = process.env.WINDSURF_DB || getDbPath();
     let wsDb;
-    try { wsDb = new Database(dbPath, { readonly: true }); }
+    try { wsDb = openDatabase(dbPath, { fileMustExist: true, readonly: true }); }
     catch (_) { return []; }
 
     try {

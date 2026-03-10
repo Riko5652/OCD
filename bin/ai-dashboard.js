@@ -20,9 +20,18 @@ const PORT = portFlagIdx !== -1 && args[portFlagIdx + 1]
   ? parseInt(args[portFlagIdx + 1], 10)
   : parseInt(process.env.PORT || '3030', 10);
 
+// --setup-mcp: run MCP auto-setup instead of starting server
+if (args.includes('--setup-mcp')) {
+  const setupArgs = [];
+  if (args.includes('--project')) setupArgs.push('--project');
+  if (args.includes('--remove')) setupArgs.push('--remove');
+  import('./setup-mcp.js');
+  // setup-mcp.js handles its own process.exit
+}
+
 if (args.includes('--help') || args.includes('-h')) {
   console.log(`
-\x1b[1mai-dashboard\x1b[0m — AI Productivity Dashboard v3
+\x1b[1mai-dashboard\x1b[0m — AI Productivity Dashboard v4
 
 \x1b[1mUsage:\x1b[0m
   ai-dashboard [options]
@@ -30,6 +39,7 @@ if (args.includes('--help') || args.includes('-h')) {
 \x1b[1mOptions:\x1b[0m
   --port <n>     Port to listen on (default: 3030, or PORT env var)
   --no-open      Don't open the browser automatically
+  --setup-mcp    Auto-register MCP server in Claude Code / Cursor / Windsurf
   --help         Show this help
 
 \x1b[1mEnvironment:\x1b[0m

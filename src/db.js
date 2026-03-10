@@ -1,5 +1,5 @@
 // Unified SQLite store — persistent analytics across all tools
-import Database from 'better-sqlite3';
+import { initSqlite, openDatabase } from './lib/sqlite-compat.js';
 import { mkdirSync } from 'fs';
 import { dirname } from 'path';
 import { config } from './config.js';
@@ -10,12 +10,22 @@ mkdirSync(dirname(DB_PATH), { recursive: true });
 
 let db;
 
+/**
+ * Async init — must be called once at startup before getDb().
+ * Loads the sql.js WASM binary then opens/migrates the database.
+ */
+export async function initDb() {
+  if (db) return;
+  await initSqlite();
+  db = openDatabase(DB_PATH, { fileMustExist: false });
+  db.pragma('journal_mode = WAL');
+  db.pragma('foreign_keys = ON');
+  migrate(db);
+}
+
 export function getDb() {
   if (!db) {
-    db = new Database(DB_PATH, { fileMustExist: false });
-    db.pragma('journal_mode = WAL');
-    db.pragma('foreign_keys = ON');
-    migrate(db);
+    throw new Error('Database not initialised — call await initDb() first');
   }
   return db;
 }
@@ -232,6 +242,18 @@ function migrate(db) {
     CREATE INDEX IF NOT EXISTS idx_tc_project ON topic_clusters(project_name, topic);
   `);
 
+  // Session embeddings for semantic memory
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS session_embeddings (
+      session_id TEXT PRIMARY KEY REFERENCES sessions(id),
+      embedding TEXT NOT NULL,
+      metadata TEXT,
+      provider TEXT,
+      dimensions INTEGER,
+      created_at INTEGER NOT NULL
+    );
+  `);
+
   // Add columns to sessions table if not present
   try { db.exec(`ALTER TABLE sessions ADD COLUMN topic TEXT`); } catch (_) {}
   try { db.exec(`ALTER TABLE sessions ADD COLUMN project_relevance_score REAL`); } catch (_) {}
@@ -254,6 +276,7 @@ function migrate(db) {
   upsert.run('windsurf', 'Windsurf');
   upsert.run('copilot', 'GitHub Copilot');
   db.prepare(`INSERT OR IGNORE INTO tools (id, display_name) VALUES ('continue', 'Continue.dev')`).run();
+  db.prepare(`INSERT OR IGNORE INTO tools (id, display_name) VALUES ('manual-import', 'Imported Sessions')`).run();
 }
 
 // ---- Query helpers ----
