@@ -1817,7 +1817,7 @@ function _cmdkSearch() {
   const navFiltered = navItems.filter(n => !q || n.label.toLowerCase().includes(q) || n.sub.toLowerCase().includes(q));
 
   if (!navFiltered.length && !sessionItems.length) {
-    results.innerHTML = '<div class="cmdk-empty">No results for &ldquo;' + q + '&rdquo;</div>';
+    results.innerHTML = '<div class="cmdk-empty">No results for \u201c' + esc(q) + '\u201d</div>';
     return;
   }
 

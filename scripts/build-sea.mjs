@@ -12,8 +12,8 @@
  *   dist/ai-dashboard-win.exe
  */
 
-import { execSync } from 'child_process';
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { execFileSync } from 'child_process';
+import { existsSync, mkdirSync, writeFileSync, copyFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -40,9 +40,11 @@ const seaConfigPath = join(ROOT, 'dist', 'sea-config.json');
 writeFileSync(seaConfigPath, JSON.stringify(seaConfig, null, 2));
 
 try {
-  // Generate the SEA blob
+  // Generate the SEA blob — use execFileSync (no shell) to avoid injection
   console.log('\n1. Generating SEA blob...');
-  execSync(`node --experimental-sea-config ${seaConfigPath}`, { stdio: 'inherit', cwd: ROOT });
+  execFileSync(process.execPath, ['--experimental-sea-config', seaConfigPath], {
+    stdio: 'inherit', cwd: ROOT
+  });
 
   // Platform detection
   const platform = process.platform;
@@ -52,26 +54,30 @@ try {
     : `ai-dashboard-linux-${arch}`;
   const outPath = join(distDir, outName);
 
-  // Copy Node binary
+  // Copy Node binary using Node.js API (cross-platform, no shell)
   console.log(`\n2. Creating executable for ${platform}/${arch}...`);
-  const nodeBin = process.execPath;
-  execSync(`cp ${nodeBin} ${outPath}`, { stdio: 'inherit' });
+  copyFileSync(process.execPath, outPath);
 
   // Remove existing signature (macOS)
   if (platform === 'darwin') {
-    try { execSync(`codesign --remove-signature ${outPath}`, { stdio: 'pipe' }); } catch {}
+    try {
+      execFileSync('codesign', ['--remove-signature', outPath], { stdio: 'pipe' });
+    } catch { /* codesign may not be available */ }
   }
 
-  // Inject the SEA blob
+  // Inject the SEA blob — use execFileSync with args array (no shell)
   console.log('\n3. Injecting application blob...');
   const blobPath = join(ROOT, 'dist', 'sea-prep.blob');
-  execSync(`npx postject ${outPath} NODE_SEA_BLOB ${blobPath} --sentinel-fuse NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2`, {
-    stdio: 'inherit', cwd: ROOT
-  });
+  execFileSync('npx', [
+    'postject', outPath, 'NODE_SEA_BLOB', blobPath,
+    '--sentinel-fuse', 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2'
+  ], { stdio: 'inherit', cwd: ROOT });
 
   // Re-sign (macOS)
   if (platform === 'darwin') {
-    try { execSync(`codesign --sign - ${outPath}`, { stdio: 'pipe' }); } catch {}
+    try {
+      execFileSync('codesign', ['--sign', '-', outPath], { stdio: 'pipe' });
+    } catch { /* codesign may not be available */ }
   }
 
   console.log(`\n✅ Built: dist/${outName}`);

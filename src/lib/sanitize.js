@@ -17,7 +17,13 @@ const INJECTION_PATTERNS = [
  */
 export function sanitizeForPrompt(text, maxLen = 300) {
   if (!text || typeof text !== 'string') return '';
-  let clean = text.replace(/<[^>]+>/g, '');
+  // Strip HTML tags iteratively until stable (prevents incomplete multi-char sanitization)
+  let clean = text;
+  let prev;
+  do {
+    prev = clean;
+    clean = clean.replace(/<[^>]*>/g, '');
+  } while (clean !== prev);
   for (const p of INJECTION_PATTERNS) clean = clean.replace(p, '[filtered]');
   return clean.slice(0, maxLen);
 }

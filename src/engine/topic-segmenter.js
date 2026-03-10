@@ -61,7 +61,9 @@ export function scoreProjectRelevance(session, projectName) {
     (raw.filesEdited || []).join(' '),
   ].join(' ').toLowerCase();
 
-  const projectKey = projectName.toLowerCase().replace(/[-_]/g, '[\\-_]?');
+  // Escape special regex characters to prevent regex injection, then allow flexible separators
+  const escaped = projectName.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const projectKey = escaped.replace(/[-_]/g, '[\\-_]?');
   const projectPattern = new RegExp(projectKey, 'i');
 
   // Direct mention
