@@ -48,7 +48,7 @@ session-monitor.sh
 .firecrawl/
 
 # Old/orphaned files
-screenshots/
+/screenshots/
 docs/design/
 
 # IDE

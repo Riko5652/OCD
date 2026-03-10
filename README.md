@@ -21,13 +21,9 @@
 <details>
 <summary><strong>More screenshots</strong> (click to expand)</summary>
 
-| Workspaces | Performance |
-|:---:|:---:|
-| <img src="docs/screenshots/workspaces.png" alt="Workspaces — per-project breakdown" width="450"> | <img src="docs/screenshots/performance.png" alt="Performance — charts, trends, cost analysis" width="450"> |
-
-| Profile & Gamification | Costs & Model Breakdown |
-|:---:|:---:|
-| <img src="docs/screenshots/profile.png" alt="Profile — level, achievements, personal records" width="450"> | <img src="docs/screenshots/costs.png" alt="Costs — per-model cost breakdown, tool comparison" width="450"> |
+<p align="center">
+  <img src="docs/screenshots/performance.png" alt="Insights & Optimization — prompt analysis, coaching, trends" width="100%">
+</p>
 
 </details>
 
@@ -361,14 +357,15 @@ bin/
 
 ## Roadmap
 
-- [ ] Enterprise: secure team sync with anonymized aggregation
-- [ ] PM integration: Jira/Linear/GitHub Issues velocity correlation
-- [ ] Cross-regional benchmarking (EMEA vs APAC tool effectiveness)
-- [ ] Devin / OpenHands adapter
 - [x] Semantic memory engine (vector embeddings + knowledge graph)
 - [x] Session import (bookmarklet, paste, webhook)
-- [x] MCP zero-config setup
+- [x] MCP zero-config setup (`--setup-mcp`)
 - [x] Savings report
+- [x] Real-time coaching via SSE
+- [x] Prompt optimization analysis
+- [ ] Enterprise: secure team sync with anonymized aggregation
+- [ ] PM integration: Jira/Linear/GitHub Issues velocity correlation
+- [ ] Cross-regional benchmarking
 
 ---
 
