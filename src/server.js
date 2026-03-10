@@ -868,7 +868,7 @@ function importSession(data) {
     if (t.content.length > 10000) t.content = t.content.slice(0, 10000);
   }
 
-  const id = `import-${data.tool || 'custom'}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+  const id = `import-${data.tool || 'custom'}-${Date.now()}-${crypto.randomUUID().slice(0, 8)}`;
   const turns = data.turns;
   const userTurns = turns.filter(t => t.role === 'user');
   const assistantTurns = turns.filter(t => t.role === 'assistant');
