@@ -1,25 +1,57 @@
 node_modules/
 data/
+dist/
 cursor-imports/
+*.db
 *.db-shm
 *.db-wal
+
+# Environment & secrets
 .env
+.env.local
+.env.*.local
+scripts/.gdrive-token.json
+
+# OS files
 .DS_Store
 Thumbs.db
+Desktop.ini
+*.swp
+*.swo
+*~
 
-# Internal planning & session files — not for distribution
+# Internal planning & session files
 docs/plans/
 docs/internal/
 ai_learnings.json
 ai_best_practices.md
+
+# Logs & data files
 *.csv
 *.log
+*.tmp
 
-# Credentials & tokens
-scripts/.gdrive-token.json
+# Claude Code local data
+.claude/
+
+# Local MCP config (user-specific paths)
+.mcp.json
+
+# Personal/utility scripts
+scripts/download-drive-folder.py
+session-monitor.sh
 
 # Git worktrees
 .worktrees/
 
 # Firecrawl cache
 .firecrawl/
+
+# Old/orphaned files
+screenshots/
+docs/design/
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace

@@ -1,8 +1,0 @@
-{
-  "mcpServers": {
-    "ai-brain": {
-      "command": "npx",
-      "args": ["ai-productivity-dashboard", "--mcp"]
-    }
-  }
-}
