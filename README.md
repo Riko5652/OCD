@@ -234,6 +234,79 @@ AZURE_OPENAI_API_KEY=...
 
 ---
 
+## Architecture
+
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Browser (localhost:3030)              │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌───────────┐  │
+│  │ Command  │ │Workspaces│ │  Perf &  │ │  Profile   │  │
+│  │ Center   │ │& Projects│ │  Costs   │ │& Gamify    │  │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘  │
+│       └─────────────┴────────────┴─────────────┘        │
+│                    Chart.js · SSE · ⌘K                   │
+└───────────────────────┬─────────────────────────────────┘
+                        │ REST + SSE
+┌───────────────────────▼─────────────────────────────────┐
+│                  Express API Server                      │
+│                                                          │
+│  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
+│  │  7 Adapters │  │   Analytics  │  │  Intelligence  │  │
+│  │ Claude Code │  │  Overview    │  │  Engines       │  │
+│  │ Cursor      │  │  Tool Compare│  │  ┌───────────┐ │  │
+│  │ Aider       │  │  Cost Calc   │  │  │ Semantic  │ │  │
+│  │ Windsurf    │  │  Code Gen    │  │  │ Memory    │ │  │
+│  │ Copilot     │  │  Insights    │  │  │ (Vectors) │ │  │
+│  │ Continue    │  │  Trends      │  │  ├───────────┤ │  │
+│  │ Gemini      │  └──────────────┘  │  │ Knowledge │ │  │
+│  └──────┬──────┘                    │  │ Graph     │ │  │
+│         │ read-only                 │  ├───────────┤ │  │
+│         ▼                           │  │ Router    │ │  │
+│  ┌─────────────┐                    │  │ (win-rate)│ │  │
+│  │ Local files │                    │  ├───────────┤ │  │
+│  │ ~/.claude/  │                    │  │ Session   │ │  │
+│  │ Cursor DB   │                    │  │ Coach     │ │  │
+│  │ .aider/     │                    │  │ (SSE)     │ │  │
+│  │ etc.        │                    │  └───────────┘ │  │
+│  └─────────────┘                    └────────────────┘  │
+│                                                          │
+│  ┌──────────────────────────────────────────────────┐   │
+│  │              SQLite (sql.js, in-process)          │   │
+│  │  sessions · turns · stats · vectors · daily_stats │   │
+│  └──────────────────────────────────────────────────┘   │
+└───────────────────────┬─────────────────────────────────┘
+                        │ stdio
+┌───────────────────────▼─────────────────────────────────┐
+│                   MCP Server (11 tools)                  │
+│                                                          │
+│  get_similar_solutions    →  vector search + graph walk  │
+│  get_knowledge_context    →  graph neighborhood          │
+│  get_routing_recommendation → tool+model win-rate lookup │
+│  get_optimal_prompt_structure → prompt pattern extraction │
+│  push_handoff_note        →  cross-tool context bridge   │
+│  ... 6 more                                              │
+│                                                          │
+│  Called by: Claude Code · Cursor · Windsurf · any MCP    │
+└─────────────────────────────────────────────────────────┘
+
+Data flow:
+  1. Adapters read local session files (read-only, no writes)
+  2. Sessions scored, classified, and stored in SQLite
+  3. High-quality sessions vectorized (Ollama or built-in hasher)
+  4. Knowledge graph links sessions by files, errors, tools, projects
+  5. MCP tools query vectors + graph to inject context mid-session
+  6. Dashboard renders analytics via REST; coach pushes SSE nudges
+```
+
+**Key design decisions:**
+- **Zero external dependencies for core** — no Redis, no Postgres, no cloud. SQLite via sql.js runs in-process.
+- **Read-only adapters** — the dashboard never writes to your AI tools' files. It only reads.
+- **Embeddings are optional** — works without Ollama via a built-in text hashing fallback. Quality is lower but functional.
+- **MCP over stdio** — no HTTP server for MCP. Uses the standard Model Context Protocol stdio transport, so any MCP-compatible client can connect.
+- **No build step** — vanilla JS, ESM modules, no TypeScript, no Webpack. `node src/server.js` and it runs.
+
+---
+
 ## Tech
 
 - **Node.js 18+ ESM** — no build step
