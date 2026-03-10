@@ -45,7 +45,8 @@
     "docker:up": "docker compose up",
     "docker:down": "docker compose down",
     "audit": "npm audit --production",
-    "doctor": "node bin/doctor.mjs"
+    "doctor": "node bin/doctor.mjs",
+    "feedback": "node bin/feedback.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
