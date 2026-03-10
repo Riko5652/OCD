@@ -1,8 +1,8 @@
 {
   "name": "ai-productivity-dashboard",
-  "version": "3.0.0",
+  "version": "4.0.0",
   "type": "module",
-  "description": "Universal Brain for AI-assisted coding — tracks Claude Code, Cursor, Aider, Windsurf, Copilot & Gemini, benchmarks tools+models, routes tasks to your best combo, and exposes a live MCP server for any AI agent",
+  "description": "AI memory engine — learns from your coding sessions, recommends tools, injects proven solutions via MCP. Tracks Claude Code, Cursor, Aider, Windsurf, Copilot & Gemini. No API keys required.",
   "author": {
     "name": "Dor Lipetz",
     "url": "https://github.com/Riko5652"
@@ -17,12 +17,15 @@
     "node": ">=18.0.0"
   },
   "bin": {
+    "ai-productivity-dashboard": "./bin/ai-dashboard.js",
     "ai-dashboard": "./bin/ai-dashboard.js",
-    "ai-dashboard-mcp": "./src/mcp-handoff.js"
+    "ai-dashboard-mcp": "./src/mcp-handoff.js",
+    "ai-dashboard-setup-mcp": "./bin/setup-mcp.js"
   },
   "files": [
     "bin/",
-    "scripts/",
+    "scripts/build-sea.mjs",
+    "scripts/ensure-env.js",
     "src/",
     "public/",
     "Dockerfile",
@@ -45,9 +48,9 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",
-    "better-sqlite3": "^11.7.0",
     "chokidar": "^4.0.0",
-    "express": "^4.21.0"
+    "express": "^4.21.0",
+    "sql.js": "^1.14.1"
   },
   "keywords": [
     "ai",
@@ -73,6 +76,10 @@
     "pwa",
     "sea",
     "codespaces",
-    "offline"
+    "offline",
+    "semantic-memory",
+    "knowledge-graph",
+    "vector-search",
+    "session-import"
   ]
 }

@@ -1,7 +1,7 @@
 // Cursor adapter — reads ai-code-tracking.db + state.vscdb + team-usage-events CSV
 // Supports importing state.vscdb from other machines (drop into cursor-imports/)
 // Team usage events CSV provides cloud-level per-request data across all machines
-import Database from 'better-sqlite3';
+import { openDatabase } from '../lib/sqlite-compat.js';
 import { existsSync, statSync, readdirSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { TOOL_IDS } from './types.js';
@@ -22,7 +22,7 @@ function getTrackingDb() {
   if (trackingDb) return trackingDb;
   if (!existsSync(AI_TRACKING_DB)) return null;
   try {
-    trackingDb = new Database(AI_TRACKING_DB, { readonly: true, fileMustExist: true });
+    trackingDb = openDatabase(AI_TRACKING_DB, { readonly: true, fileMustExist: true });
     return trackingDb;
   } catch (e) {
     console.error('[cursor] Failed to open tracking DB:', e.message);
@@ -34,7 +34,7 @@ function getStateDb() {
   if (stateDb) return stateDb;
   if (!existsSync(STATE_DB)) return null;
   try {
-    stateDb = new Database(STATE_DB, { readonly: true, fileMustExist: true });
+    stateDb = openDatabase(STATE_DB, { readonly: true, fileMustExist: true });
     return stateDb;
   } catch (e) {
     console.error('[cursor] Failed to open state DB:', e.message);
@@ -67,7 +67,7 @@ function getImportedDbs() {
   for (const dbPath of findDbFiles(IMPORT_DIR)) {
     const file = dbPath.split(/[\\/]/).pop();
     try {
-      const db = new Database(dbPath, { readonly: true, fileMustExist: true });
+      const db = openDatabase(dbPath, { readonly: true, fileMustExist: true });
       // Verify it has the expected table
       const tables = db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all();
       if (tables.some(t => t.name === 'cursorDiskKV')) {

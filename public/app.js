@@ -44,6 +44,7 @@ function toolChip(id) {
   return `<span class="chip ${cls}">${id}</span>`;
 }
 function parseJSON(s) { try { return JSON.parse(s); } catch { return []; } }
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
 // ---- Issue Banner ----
 let bannerDismissed = false;
@@ -81,6 +82,26 @@ function uLive() {
   $('dot').classList.toggle('on', S.sse);
   $('dtxt').textContent = S.sse ? 'Live' : 'Disconnected';
 }
+// ---- Update check ----
+async function checkForUpdate() {
+  try {
+    const data = await fJ('/api/version-check');
+    if (!data || !data.updateAvailable || !data.latest) return;
+    if (sessionStorage.getItem('dismiss-update-' + data.latest)) return;
+    const banner = document.createElement('div');
+    banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:10001;background:linear-gradient(90deg,#6366f1,#8b5cf6);color:#fff;padding:8px 16px;font-size:.82rem;display:flex;align-items:center;justify-content:center;gap:12px';
+    const msg = document.createElement('span');
+    msg.textContent = `v${data.latest} is available (you have v${data.current}). Run: npm update -g ai-productivity-dashboard`;
+    const close = document.createElement('button');
+    close.textContent = '\u00d7';
+    close.style.cssText = 'background:none;border:none;color:#fff;font-size:1.2rem;cursor:pointer;margin-left:8px';
+    close.onclick = () => { sessionStorage.setItem('dismiss-update-' + data.latest, '1'); banner.remove(); };
+    banner.appendChild(msg);
+    banner.appendChild(close);
+    document.body.prepend(banner);
+  } catch (_) { /* silently ignore */ }
+}
+
 function showCoachNudges(nudges) {
   let container = document.getElementById('coach-nudges');
   if (!container) {
@@ -95,8 +116,18 @@ function showCoachNudges(nudges) {
     const color = nudge.severity === 'warning' ? 'var(--status-warning,#f59e0b)' : 'var(--primary,#6366f1)';
     const toast = document.createElement('div');
     toast.style.cssText = `background:var(--surface-light,#f8f8f8);border:1px solid var(--border-light,#e0e0e0);border-left:4px solid ${color};border-radius:var(--radius-card,8px);padding:.75rem 1rem;box-shadow:var(--shadow-float,0 4px 12px rgba(0,0,0,.1));font-size:.85rem;color:var(--text-main,#111)`;
-    toast.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem"><span>${nudge.message}</span><button style="background:none;border:none;cursor:pointer;color:var(--text-secondary,#666);font-size:1.1rem;line-height:1;flex-shrink:0" data-key="${key}">×</button></div>`;
-    toast.querySelector('button').onclick = function () {
+    const wrapper = document.createElement('div');
+    wrapper.style.cssText = 'display:flex;justify-content:space-between;align-items:flex-start;gap:.5rem';
+    const span = document.createElement('span');
+    span.textContent = nudge.message;
+    const btn = document.createElement('button');
+    btn.style.cssText = 'background:none;border:none;cursor:pointer;color:var(--text-secondary,#666);font-size:1.1rem;line-height:1;flex-shrink:0';
+    btn.dataset.key = key;
+    btn.textContent = '\u00d7';
+    wrapper.appendChild(span);
+    wrapper.appendChild(btn);
+    toast.appendChild(wrapper);
+    btn.onclick = function () {
       sessionStorage.setItem(this.dataset.key, '1');
       toast.remove();
     };
@@ -1659,6 +1690,7 @@ if ('serviceWorker' in navigator) {
 document.addEventListener('DOMContentLoaded', () => {
   initTabs();
   initSSE();
+  checkForUpdate();
   refreshAll();
   setInterval(refreshAll, 30000);
 
@@ -1909,18 +1941,243 @@ function initSubTabs(sectionId, renderers) {
   });
 }
 
+// ---- Savings Report Card ----
+function renderSavingsCard(data) {
+  if (!data || !data.relative || data.relative.total_sessions === 0) {
+    return `<div class="card" style="margin:0">
+      <h2 style="font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-s);margin-bottom:12px">Savings Report</h2>
+      <div style="color:var(--text-s);font-size:.84rem">Not enough data yet. Complete more sessions to see savings.</div>
+    </div>`;
+  }
+  const r = data.relative;
+  const d = data.dollars;
+  const t = data.time;
+  const fmtD = v => v != null ? '$' + (v >= 100 ? Math.round(v) : v.toFixed(2)) : '--';
+  return `<div class="card" style="margin:0">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">
+      <h2 style="font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-s);margin:0">Savings Report</h2>
+      <label style="font-size:.72rem;color:var(--text-s);display:flex;align-items:center;gap:4px;cursor:pointer">
+        <input type="checkbox" id="savings-dollar-toggle" style="accent-color:var(--primary)"> Show $
+      </label>
+    </div>
+    <div id="savings-relative">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="padding:8px 12px;border-radius:8px;background:rgba(34,197,94,0.06)">
+          <div style="font-size:1.1rem;font-weight:800;color:#16a34a">${r.cache_savings_pct}%</div>
+          <div style="font-size:.72rem;color:var(--text-s)">Cache savings</div>
+        </div>
+        <div style="padding:8px 12px;border-radius:8px;background:rgba(59,130,246,0.06)">
+          <div style="font-size:1.1rem;font-weight:800;color:#2563eb">${r.error_recovery_rate}%</div>
+          <div style="font-size:.72rem;color:var(--text-s)">Error recovery</div>
+        </div>
+        <div style="padding:8px 12px;border-radius:8px;background:rgba(139,92,246,0.06)">
+          <div style="font-size:1.1rem;font-weight:800;color:#7c3aed">${r.routing_adherence_pct}%</div>
+          <div style="font-size:.72rem;color:var(--text-s)">Routing adherence</div>
+        </div>
+        <div style="padding:8px 12px;border-radius:8px;background:rgba(245,158,11,0.06)">
+          <div style="font-size:1.1rem;font-weight:800;color:#d97706">${t.estimated_hours_saved}h</div>
+          <div style="font-size:.72rem;color:var(--text-s)">Hours saved</div>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:.74rem;color:var(--text-s)">${r.sessions_optimized} of ${r.total_sessions} sessions optimized (quality &gt; 70)</div>
+    </div>
+    <div id="savings-dollars" style="display:none">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+        <div style="padding:8px 12px;border-radius:8px;background:rgba(34,197,94,0.06)">
+          <div style="font-size:1.1rem;font-weight:800;color:#16a34a">${fmtD(d.cache_savings_dollars)}</div>
+          <div style="font-size:.72rem;color:var(--text-s)">Cache savings</div>
+        </div>
+        <div style="padding:8px 12px;border-radius:8px;background:rgba(59,130,246,0.06)">
+          <div style="font-size:1.1rem;font-weight:800;color:#2563eb">${fmtD(d.efficient_session_savings)}</div>
+          <div style="font-size:.72rem;color:var(--text-s)">Efficiency savings</div>
+        </div>
+        <div style="padding:8px 12px;border-radius:8px;background:rgba(245,158,11,0.06);grid-column:1/-1">
+          <div style="font-size:1.1rem;font-weight:800;color:#d97706">${fmtD(d.total_estimated_cost)}</div>
+          <div style="font-size:.72rem;color:var(--text-s)">Total estimated spend</div>
+        </div>
+      </div>
+      <div style="margin-top:8px;font-size:.68rem;color:var(--text-s);font-style:italic">${esc(d.disclaimer)}</div>
+    </div>
+  </div>`;
+}
+
+// ---- Import Session Modal ----
+function showImportModal() {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div id="import-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px">
+      <div style="background:var(--bg-card,#fff);border-radius:12px;padding:28px 32px;max-width:560px;width:100%;max-height:85vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+          <h2 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-h)">Import Session</h2>
+          <button id="import-close" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--text-s);line-height:1">&times;</button>
+        </div>
+
+        <div style="margin-bottom:16px">
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <button class="import-tab-btn active" data-itab="paste" style="flex:1;padding:8px;border:1px solid var(--border,#e5e7eb);border-radius:8px;background:var(--primary);color:#fff;cursor:pointer;font-size:.82rem;font-weight:600">Paste JSON</button>
+            <button class="import-tab-btn" data-itab="upload" style="flex:1;padding:8px;border:1px solid var(--border,#e5e7eb);border-radius:8px;background:none;color:var(--text-m);cursor:pointer;font-size:.82rem">Upload File</button>
+          </div>
+        </div>
+
+        <div id="import-paste-panel">
+          <textarea id="import-json" placeholder='{"tool":"chatgpt","title":"My Session","turns":[{"role":"user","content":"Hello"},{"role":"assistant","content":"Hi!"}]}' style="width:100%;min-height:180px;padding:12px;border:1px solid var(--border,#e5e7eb);border-radius:8px;font-family:var(--font-mono,'DM Mono',monospace);font-size:.78rem;resize:vertical;background:var(--bg-alt,#f8f8f8);color:var(--text-m)"></textarea>
+        </div>
+
+        <div id="import-upload-panel" style="display:none">
+          <div style="border:2px dashed var(--border,#e5e7eb);border-radius:8px;padding:32px;text-align:center;cursor:pointer" id="import-drop-zone">
+            <div style="font-size:2rem;margin-bottom:8px">📁</div>
+            <div style="font-size:.84rem;color:var(--text-s)">Drop a JSON file here or <label for="import-file" style="color:var(--primary);cursor:pointer;text-decoration:underline">browse</label></div>
+            <input type="file" id="import-file" accept=".json" style="display:none">
+          </div>
+        </div>
+
+        <div id="import-status" style="margin-top:12px;font-size:.82rem;display:none;padding:10px 14px;border-radius:8px"></div>
+
+        <div style="margin-top:16px;display:flex;justify-content:flex-end;gap:8px">
+          <button id="import-cancel" style="padding:8px 18px;border:1px solid var(--border,#e5e7eb);border-radius:var(--radius-pill);background:none;color:var(--text-m);cursor:pointer;font-size:.82rem">Cancel</button>
+          <button id="import-submit" style="padding:8px 18px;border:none;border-radius:var(--radius-pill);background:var(--primary);color:#fff;cursor:pointer;font-size:.82rem;font-weight:600">Import</button>
+        </div>
+
+        <details style="margin-top:16px">
+          <summary style="font-size:.76rem;color:var(--text-s);cursor:pointer">Schema reference</summary>
+          <pre style="font-size:.7rem;background:var(--bg-alt,#f8f8f8);padding:10px;border-radius:6px;overflow-x:auto;margin-top:8px;color:var(--text-m)">{
+  "tool": "chatgpt|claude-web|gemini-web|custom",
+  "title": "Session Title (optional)",
+  "started_at": "2025-01-01T12:00:00Z (optional)",
+  "model": "gpt-4o (optional)",
+  "turns": [
+    { "role": "user", "content": "..." },
+    { "role": "assistant", "content": "..." }
+  ]
+}</pre>
+        </details>
+      </div>
+    </div>`;
+
+  // Wire up events
+  root.querySelector('#import-close').onclick = () => { root.innerHTML = ''; };
+  root.querySelector('#import-cancel').onclick = () => { root.innerHTML = ''; };
+  root.querySelector('#import-modal-overlay').onclick = (e) => { if (e.target.id === 'import-modal-overlay') root.innerHTML = ''; };
+
+  // Tab switching
+  root.querySelectorAll('.import-tab-btn').forEach(btn => {
+    btn.onclick = () => {
+      root.querySelectorAll('.import-tab-btn').forEach(b => { b.style.background = 'none'; b.style.color = 'var(--text-m)'; });
+      btn.style.background = 'var(--primary)'; btn.style.color = '#fff';
+      const tab = btn.dataset.itab;
+      root.querySelector('#import-paste-panel').style.display = tab === 'paste' ? '' : 'none';
+      root.querySelector('#import-upload-panel').style.display = tab === 'upload' ? '' : 'none';
+    };
+  });
+
+  // File upload
+  const fileInput = root.querySelector('#import-file');
+  const dropZone = root.querySelector('#import-drop-zone');
+  dropZone.onclick = () => fileInput.click();
+  dropZone.ondragover = (e) => { e.preventDefault(); dropZone.style.borderColor = 'var(--primary)'; };
+  dropZone.ondragleave = () => { dropZone.style.borderColor = 'var(--border,#e5e7eb)'; };
+  dropZone.ondrop = (e) => {
+    e.preventDefault(); dropZone.style.borderColor = 'var(--border,#e5e7eb)';
+    if (e.dataTransfer.files.length) loadFile(e.dataTransfer.files[0]);
+  };
+  fileInput.onchange = () => { if (fileInput.files.length) loadFile(fileInput.files[0]); };
+
+  function loadFile(file) {
+    const reader = new FileReader();
+    reader.onload = () => { root.querySelector('#import-json').value = reader.result; showStatus('File loaded: ' + file.name, false); };
+    reader.readAsText(file);
+    // Switch to paste tab to show content
+    root.querySelectorAll('.import-tab-btn').forEach(b => { b.style.background = 'none'; b.style.color = 'var(--text-m)'; });
+    root.querySelector('[data-itab="paste"]').style.background = 'var(--primary)';
+    root.querySelector('[data-itab="paste"]').style.color = '#fff';
+    root.querySelector('#import-paste-panel').style.display = '';
+    root.querySelector('#import-upload-panel').style.display = 'none';
+  }
+
+  function showStatus(msg, isError) {
+    const st = root.querySelector('#import-status');
+    st.style.display = '';
+    st.style.background = isError ? 'rgba(239,68,68,0.08)' : 'rgba(34,197,94,0.08)';
+    st.style.color = isError ? '#dc2626' : '#16a34a';
+    st.textContent = msg;
+  }
+
+  // Submit
+  root.querySelector('#import-submit').onclick = async () => {
+    const raw = root.querySelector('#import-json').value.trim();
+    if (!raw) { showStatus('Please paste or upload session JSON.', true); return; }
+    let data;
+    try { data = JSON.parse(raw); } catch { showStatus('Invalid JSON. Check your input.', true); return; }
+    if (!data.turns || !data.turns.length) { showStatus('JSON must include a "turns" array.', true); return; }
+
+    try {
+      const resp = await fetch('/api/sessions/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      });
+      const result = await resp.json();
+      if (result.ok) {
+        showStatus(`Imported ${result.turns} turns as session ${result.session_id.slice(0, 8)}...`, false);
+        setTimeout(() => { root.innerHTML = ''; refreshAll(); }, 1500);
+      } else {
+        showStatus('Import failed: ' + (result.error || 'Unknown error'), true);
+      }
+    } catch (e) {
+      showStatus('Network error: ' + e.message, true);
+    }
+  };
+}
+
+// ---- Bookmarklet Modal ----
+function showBookmarkletModal() {
+  const root = document.getElementById('modal-root');
+  root.innerHTML = `
+    <div id="bm-modal-overlay" style="position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px">
+      <div style="background:var(--bg-card,#fff);border-radius:12px;padding:28px 32px;max-width:480px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,0.3)">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:18px">
+          <h2 style="margin:0;font-size:1.1rem;font-weight:700;color:var(--text-h)">Browser Bookmarklet</h2>
+          <button id="bm-close" style="background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--text-s);line-height:1">&times;</button>
+        </div>
+        <p style="font-size:.84rem;color:var(--text-m);line-height:1.6;margin-bottom:14px">
+          Drag this button to your bookmarks bar. Click it on any ChatGPT, Claude.ai, or Gemini page to capture the conversation.
+        </p>
+        <div style="text-align:center;padding:20px;background:var(--bg-alt,#f8f8f8);border-radius:8px;margin-bottom:14px">
+          <a id="bm-link" href="#" style="display:inline-block;padding:10px 24px;background:var(--primary);color:#fff;border-radius:var(--radius-pill);font-weight:700;font-size:.9rem;text-decoration:none;cursor:grab">Capture AI Session</a>
+        </div>
+        <ol style="font-size:.78rem;color:var(--text-s);line-height:1.8;padding-left:20px;margin:0">
+          <li>Drag the button above to your bookmarks bar</li>
+          <li>Open a ChatGPT, Claude.ai, or Gemini conversation</li>
+          <li>Click the bookmarklet to capture the session</li>
+          <li>Sessions appear in your dashboard automatically</li>
+        </ol>
+      </div>
+    </div>`;
+
+  root.querySelector('#bm-close').onclick = () => { root.innerHTML = ''; };
+  root.querySelector('#bm-modal-overlay').onclick = (e) => { if (e.target.id === 'bm-modal-overlay') root.innerHTML = ''; };
+
+  // Fetch bookmarklet code
+  fJ('/api/bookmarklet').then(data => {
+    if (data && data.code) {
+      root.querySelector('#bm-link').href = data.code;
+    }
+  });
+}
+
 // ---- Command Center ----
 async function renderCommandCenter() {
   const el = document.getElementById('p-command-inner');
   if (!el) return;
 
-  const [ovRes, recsRes, profileRes, costsRes, codeGenRes, agenticRes] = await Promise.all([
+  const [ovRes, recsRes, profileRes, costsRes, codeGenRes, agenticRes, savingsRes] = await Promise.all([
     S.overview ? S.overview : fJ('/api/overview'),
     S.recs ? S.recs : fJ('/api/recommendations'),
     S.insProfile ? S.insProfile : fJ('/api/insights/profile'),
     S.costs ? S.costs : fJ('/api/costs'),
     S.codeGen ? S.codeGen : fJ('/api/code-generation'),
     fJ('/api/agentic/scores'),
+    fJ('/api/savings-report'),
   ]);
   S.overview = ovRes; S.recs = recsRes; S.insProfile = profileRes;
   S.costs = costsRes; S.codeGen = codeGenRes;
@@ -1995,7 +2252,26 @@ async function renderCommandCenter() {
     return;
   }
 
+  // Gamification data
+  const xp = profile.xp || {};
+  const streak = profile.streak || {};
+
   el.innerHTML = `
+    <!-- Gamification banner -->
+    ${xp.level != null ? `
+    <div style="display:flex;align-items:center;gap:14px;padding:10px 16px;margin-bottom:14px;border-radius:10px;background:linear-gradient(90deg,rgba(99,102,241,0.06),rgba(245,158,11,0.04));border:1px solid rgba(99,102,241,0.1);font-size:.78rem;color:var(--text-s)">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:1rem;font-weight:800;color:var(--primary);font-family:var(--font-mono,'DM Mono',monospace)">Lv.${xp.level}</span>
+        <span style="opacity:.7">${xp.rank || 'Apprentice'}</span>
+      </div>
+      <div style="flex:1;max-width:120px;height:4px;background:rgba(99,102,241,0.12);border-radius:4px;overflow:hidden">
+        <div style="height:100%;background:var(--primary);border-radius:4px;width:${Math.min(100, Math.round((xp.progress || 0) * 100))}%"></div>
+      </div>
+      <span style="font-size:.72rem">${fmt(xp.total || 0)} XP</span>
+      ${streak.current > 0 ? `<span style="margin-left:auto;font-size:.72rem">\uD83D\uDD25 ${streak.current}d streak</span>` : ''}
+      ${streak.longest > 1 ? `<span style="font-size:.72rem;opacity:.6">\uD83C\uDFC6 ${streak.longest}d best</span>` : ''}
+    </div>` : ''}
+
     <!-- Hero stats row -->
     <div class="bento">
       <div class="bento-card accent-sessions">
@@ -2169,6 +2445,21 @@ async function renderCommandCenter() {
     <div style="margin-top:14px" class="g2">
       <div class="card"><h2>Daily Activity</h2><canvas id="cc-daily-chart"></canvas></div>
       <div class="card"><h2>Token Flow</h2><canvas id="cc-token-chart"></canvas></div>
+    </div>
+
+    <!-- Savings Report + Import Session -->
+    <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      ${renderSavingsCard(savingsRes)}
+      <div class="card" style="margin:0">
+        <h2 style="font-size:.82rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--text-s);margin-bottom:12px">Import Sessions</h2>
+        <p style="font-size:.82rem;color:var(--text-m);line-height:1.6;margin-bottom:14px">
+          Bring in sessions from ChatGPT, Claude.ai, Gemini, or any AI tool. Paste JSON, upload a file, or use the browser bookmarklet.
+        </p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button id="cc-import-btn" style="background:var(--primary);color:#fff;border:none;padding:8px 18px;border-radius:var(--radius-pill);cursor:pointer;font-size:.82rem;font-weight:600">Import Session</button>
+          <button id="cc-bookmarklet-btn" style="background:none;border:1px solid var(--border,#e5e7eb);color:var(--text-m);padding:8px 18px;border-radius:var(--radius-pill);cursor:pointer;font-size:.82rem">Get Bookmarklet</button>
+        </div>
+      </div>
     </div>`;
 
   // Render charts with all-time data
@@ -2231,6 +2522,25 @@ async function renderCommandCenter() {
       },
     });
   }
+
+  // Wire up savings toggle
+  const savingsToggle = document.getElementById('savings-dollar-toggle');
+  if (savingsToggle) {
+    savingsToggle.onchange = () => {
+      const rel = document.getElementById('savings-relative');
+      const dol = document.getElementById('savings-dollars');
+      if (rel && dol) {
+        rel.style.display = savingsToggle.checked ? 'none' : '';
+        dol.style.display = savingsToggle.checked ? '' : 'none';
+      }
+    };
+  }
+
+  // Wire up import + bookmarklet buttons
+  const importBtn = document.getElementById('cc-import-btn');
+  if (importBtn) importBtn.onclick = showImportModal;
+  const bmBtn = document.getElementById('cc-bookmarklet-btn');
+  if (bmBtn) bmBtn.onclick = showBookmarkletModal;
 }
 
 // ---- Combined Insights & Optimization ----
