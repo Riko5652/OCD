@@ -12,6 +12,7 @@ jobs:
   build-sea:
     name: Build SEA — ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -48,14 +49,16 @@ jobs:
   release:
     name: Create GitHub Release
     needs: build-sea
+    if: always()
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
-      - name: Download all artifacts
+      - name: Download artifacts (if any)
         uses: actions/download-artifact@v4
         with:
           path: dist/
+        continue-on-error: true
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -65,20 +68,25 @@ jobs:
           body: |
             ## AI Productivity Dashboard ${{ github.ref_name }}
 
-            ### Installation
+            ### Install via npm (recommended)
 
-            Download the binary for your platform and run it directly — no Node.js required.
+            ```bash
+            npm install -g ai-productivity-dashboard
+            ai-dashboard
+            ```
+
+            Or run without installing:
+
+            ```bash
+            npx ai-productivity-dashboard
+            ```
+
+            ### Standalone binaries (experimental)
+
+            If available, download the binary for your platform below — no Node.js required.
 
             | Platform | File |
             |---------|------|
             | Linux (x64) | `ai-dashboard-linux-x64` |
             | macOS (Apple Silicon) | `ai-dashboard-macos-arm64` |
             | Windows | `ai-dashboard-win.exe` |
-
-            ```bash
-            # Linux/macOS
-            chmod +x ai-dashboard-linux-x64
-            ./ai-dashboard-linux-x64
-
-            # Then open: http://localhost:3030
-            ```

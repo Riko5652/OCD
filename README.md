@@ -12,6 +12,27 @@
 
 ---
 
+## Screenshots
+
+<p align="center">
+  <img src="docs/screenshots/command-center.png" alt="Command Center — KPIs, activity charts, savings report" width="100%">
+</p>
+
+<details>
+<summary><strong>More screenshots</strong> (click to expand)</summary>
+
+| Workspaces | Performance |
+|:---:|:---:|
+| <img src="docs/screenshots/workspaces.png" alt="Workspaces — per-project breakdown" width="450"> | <img src="docs/screenshots/performance.png" alt="Performance — charts, trends, cost analysis" width="450"> |
+
+| Profile & Gamification | Costs & Model Breakdown |
+|:---:|:---:|
+| <img src="docs/screenshots/profile.png" alt="Profile — level, achievements, personal records" width="450"> | <img src="docs/screenshots/costs.png" alt="Costs — per-model cost breakdown, tool comparison" width="450"> |
+
+</details>
+
+---
+
 ## What it actively does for you
 
 This is not a passive analytics dashboard. It's a system that makes you faster:
