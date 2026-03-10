@@ -44,7 +44,8 @@
     "docker:build": "docker build -t ai-dashboard .",
     "docker:up": "docker compose up",
     "docker:down": "docker compose down",
-    "audit": "npm audit --production"
+    "audit": "npm audit --production",
+    "doctor": "node bin/doctor.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.27.1",

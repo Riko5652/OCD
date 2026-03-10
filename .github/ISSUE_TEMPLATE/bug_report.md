@@ -1,45 +1,31 @@
 ---
-name: Bug Report
-about: Something isn't working as expected
-title: "[Bug] "
+name: Bug report
+about: Create a report to help us improve the dashboard
+title: "[BUG] "
 labels: bug
-assignees: Riko5652
+assignees: ''
 ---
 
-## Describe the Bug
+**Describe the bug**
 A clear and concise description of what the bug is.
 
-## Steps to Reproduce
-1. Go to '...'
-2. Click on '...'
+**To Reproduce**
+Steps to reproduce the behavior:
+1. Ran command '...'
+2. Clicked on '....'
 3. See error
 
-## Expected Behavior
+**Expected behavior**
 What you expected to happen.
 
-## Actual Behavior
-What actually happened. Include any error messages from the terminal or browser console.
+**Environment:**
+- OS: [e.g. macOS Sequoia, Windows 11, Ubuntu 24.04]
+- Node Version: [e.g. v22.0.0]
+- Install method: [npm / git clone / Docker / npx]
+- Dashboard version: [e.g. 4.0.0]
 
-## Environment
-- **OS**: [e.g. Windows 11, macOS 14, Ubuntu 22.04]
-- **Node.js version**: [run `node --version`]
-- **Dashboard version**: [check `package.json` version field]
-- **AI tools installed**: [e.g. Claude Code, Cursor, Gemini/Antigravity]
+**Doctor output**
+Run `npm run doctor` and paste the output here.
 
-## AI Tool Data Paths (if relevant)
-- Claude Code data found at: `~/.claude/projects/` → yes / no / custom path
-- Cursor data found: yes / no
-- Gemini/Antigravity data found: yes / no
-
-## Terminal Output
-```
-Paste any error output from `npm start` here
-```
-
-## Browser Console Errors
-```
-Paste any browser console errors here (F12 → Console tab)
-```
-
-## Additional Context
-Add any other context, screenshots, or information about the problem here.
+**Relevant Error Logs**
+Include any output from the terminal or browser console.
