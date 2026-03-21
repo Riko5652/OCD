@@ -5,9 +5,20 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-green)](LICENSE)
 [![Tools](https://img.shields.io/badge/tools-7-blue)](#what-gets-tracked)
-[![MCP](https://img.shields.io/badge/MCP-11%20tools-purple)](#mcp-setup-30-seconds-no-api-key)
+[![MCP](https://img.shields.io/badge/MCP-15%20tools-purple)](#mcp-setup-30-seconds-no-api-key)
 [![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
 [![npm](https://img.shields.io/npm/v/ocd)](https://www.npmjs.com/package/ocd)
+
+---
+
+## 🆕 Latest Additions (v5.1)
+
+> **New in this release** — four proactive intelligence features that act before you type a prompt:
+
+- **Proactive IDE Interception** — Background watcher monitors your terminal for stack traces, finds matching solutions via vector search, and fires OS-level notifications + SSE pushes to your IDE instantly — no prompt needed.
+- **Anti-Hallucination Negative Prompt Injector** — Builds an Anti-Pattern Graph from your failing sessions and injects explicit `DO NOT use X` constraints into new prompts via the `get_negative_constraints` MCP tool.
+- **Token Arbitrage & Cost Routing** — Classifies every prompt by task type and complexity, routes to local Ollama (free) when your historical success rate is ≥ 92%, and logs estimated savings per request.
+- **P2P Secure Team Memory** — Syncs embeddings across teammates on the same LAN or Tailscale using UDP discovery + HMAC-SHA256 authentication. No cloud, no source code shared — embeddings only.
 
 ---
 
@@ -44,11 +55,19 @@ This is not a passive analytics dashboard. It's a system that makes you faster:
 
 **Savings Report** — Concrete metrics on what the system saves you: cache hit savings ($), turns saved vs baseline, time estimates. Toggle between relative metrics and dollar estimates.
 
+**Proactive IDE Interception** *(new)* — Watches your terminal log files in the background. When a stack trace appears, the system queries your vector store and pushes a matched solution to your IDE via OS notification and SSE — before you even open a new prompt.
+
+**Anti-Hallucination Guard** *(new)* — Mines your failing sessions to build an Anti-Pattern Graph. The `get_negative_constraints` MCP tool injects `DO NOT use X` clauses at the start of any session, eliminating locally-known failure patterns.
+
+**Token Arbitrage** *(new)* — Every prompt is classified by task type and routed to the cheapest viable model. When your local Ollama has a ≥ 92% win rate on a task type, it proxies there for free. Full audit log with per-request savings estimates.
+
+**P2P Team Memory** *(new)* — Shares embeddings (never source code) with teammates over UDP + HMAC-SHA256. Works on LAN or Tailscale. Query peer solutions with `get_team_memory` — a shared brain with zero cloud dependency.
+
 ---
 
 ## MCP Setup (30 seconds, no API key)
 
-The dashboard exposes an MCP server with 11 tools that any AI agent can call mid-session. Zero API keys needed.
+The dashboard exposes an MCP server with **15 tools** that any AI agent can call mid-session. Zero API keys needed.
 
 ```bash
 # Auto-setup for all detected MCP clients
@@ -86,6 +105,10 @@ This writes the correct config to Claude Code, Cursor, and Windsurf automaticall
 | `push_handoff_note` | Save a note before switching tools |
 | `get_optimal_prompt_structure` | Prompt patterns from your highest-quality sessions |
 | `get_topic_summary` | Executive summary of work on a topic within a project |
+| **`get_negative_constraints`** | **NEW — inject "DO NOT use X" clauses derived from your local failure history** |
+| **`get_arbitrage_recommendation`** | **NEW — local vs cloud routing recommendation with estimated savings** |
+| **`get_team_memory`** | **NEW — search peer-synced embeddings for solutions from your teammates** |
+| **`submit_ide_trace`** | **NEW — manually submit a stack trace for instant proactive analysis** |
 
 ---
 
@@ -332,6 +355,10 @@ apps/
       prompt-coach.ts        # Prompt patterns from best sessions
       topic-segmenter.ts     # Topic detection + project relevance
       watcher.ts             # File system watchers for live updates
+      ide-interceptor.ts     # NEW — terminal watcher + proactive IDE notifications
+      anti-pattern-graph.ts  # NEW — failure mining + negative constraint injection
+      token-arbiter.ts       # NEW — cost routing proxy + Ollama arbitrage log
+      p2p-sync.ts            # NEW — UDP peer discovery + HMAC-authenticated embedding sync
     lib/
       vector-store.ts  # SQLite-based vector embeddings
       knowledge-graph.ts # In-memory session relationship graph
@@ -369,6 +396,10 @@ bin/
 - [x] Real-time coaching via SSE
 - [x] Prompt optimization analysis
 - [x] v5 TypeScript refactor (Fastify + React + pnpm monorepo)
+- [x] **Proactive IDE interception** (terminal watcher + OS notifications + SSE push)
+- [x] **Anti-hallucination negative prompt injector** (Anti-Pattern Graph + MCP tool)
+- [x] **Token arbitrage & cost routing** (Ollama proxy + per-request savings log)
+- [x] **P2P secure team memory** (UDP discovery + HMAC-SHA256 embedding sync)
 - [ ] Enterprise: secure team sync with anonymized aggregation
 - [ ] PM integration: Jira/Linear/GitHub Issues velocity correlation
 - [ ] Cross-regional benchmarking
