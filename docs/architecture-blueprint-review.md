@@ -114,6 +114,56 @@ Instead of a rewrite, these incremental improvements would have the most impact:
 
 ---
 
+## ADR: Session Intervention (Compact / Stop / Clear Context)
+
+**Status:** Rejected
+**Date:** 2026-03-21
+
+### Question
+
+Should OCD actively intervene in AI coding sessions — stopping chats, triggering context compaction, or clearing context — either autonomously or via pre-approval?
+
+### Decision: No. OCD remains read-only. The agent acts on its own.
+
+### Rationale
+
+**1. The agent already has better real-time information than OCD.**
+
+| Signal | OCD (via logs) | The Agent (live) |
+|--------|---------------|------------------|
+| Context window % used | Not available | Exact value |
+| Token count this turn | After the fact | Real-time |
+| Quality degrading | Heuristic guess | Can introspect |
+| When to compact | Too late (log lag) | Right time |
+
+OCD reads JSONL session files *after* turns complete. By the time OCD detects a problem, the agent has either already handled it or it's too late.
+
+**2. Direct intervention breaks the read-only architecture.**
+
+OCD's compliance story depends on never writing to tool files or killing processes. The moment it does, you lose the "read-only architectural guarantee" and introduce a class of bugs where OCD corrupts active sessions.
+
+**3. Auto-stopping sessions is hostile UX.**
+
+If OCD kills a session mid-refactor because it decided the user burned "too many tokens," users uninstall. The user — not OCD — decides when a session ends.
+
+**4. Context compaction is tool-specific.**
+
+Claude Code has `/compact`, Cursor has its own context management. OCD would need adapter-specific write paths for each tool, creating tight coupling that contradicts the adapter abstraction.
+
+### What OCD should do instead
+
+OCD's real advantage is **cross-session memory** — the agent has no history across sessions. The MCP tools should surface insights the agent *cannot know about itself*:
+
+- "Your last 5 sessions averaged 90 turns before quality dropped. This one is at 70. Start wrapping up."
+- "Sessions on this repo that start with a CLAUDE.md prime get 3x better cache rates."
+- "You've burned $14 today across 6 sessions. Your daily average is $8."
+
+The existing `get_active_recommendations` MCP tool is the right delivery mechanism. It should be enhanced with cross-session pattern data and return structured signals (`status: healthy | degrading | critical`, `suggested_action: continue | compact | new_session`) that agents can act on voluntarily.
+
+**OCD informs. The agent decides. The user is in control.**
+
+---
+
 ## Verdict
 
 The blueprint is a **generic architecture pitch** that does not reflect the actual state of this repository. It overstates problems, proposes an unnecessary technology migration, and ignores significant existing work. The project benefits from **incremental improvement**, not a ground-up rewrite.
