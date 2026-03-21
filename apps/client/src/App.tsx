@@ -9,7 +9,8 @@ import ImportModal from './components/ImportModal';
 import ToastContainer, { toast } from './components/Toast';
 import { useSSE, triggerRefresh } from './hooks/useApi';
 
-import { Zap, Activity, FolderGit2, UserCog, Brain, Upload, Menu, X, WifiOff, Download } from 'lucide-react';
+import { Zap, Activity, FolderGit2, UserCog, Brain, Upload, Menu, X, WifiOff, Download, Sun, Moon } from 'lucide-react';
+import { useTheme } from './hooks/useTheme';
 
 type Page = 'command' | 'performance' | 'workspaces' | 'profile' | 'insights';
 
@@ -30,6 +31,7 @@ export default function App() {
     const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
     const [offline, setOffline] = useState(!navigator.onLine);
     const [installPrompt, setInstallPrompt] = useState<any>(null);
+    const { theme, toggle: toggleTheme } = useTheme();
 
     // Online/offline detection
     useEffect(() => {
@@ -120,11 +122,16 @@ export default function App() {
 
             {/* Sidebar */}
             <aside className={`w-64 bg-[#050505] border-r border-[#1a1a1a] flex flex-col shrink-0 fixed h-full z-20 glass-panel !rounded-none !border-y-0 !border-l-0 transition-transform duration-300 ${mobileNavOpen ? 'translate-x-0' : '-translate-x-full md:translate-x-0'}`}>
-                <div className="p-6 border-b border-[#1a1a1a]">
-                    <h1 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-brand to-neonPink drop-shadow-glow-brand">
-                        OCD
-                    </h1>
-                    <p className="text-[10px] text-neonBlue font-mono mt-1 uppercase tracking-widest neon-text-blue">v5.0</p>
+                <div className="p-6 border-b border-[#1a1a1a] flex items-start justify-between">
+                    <div>
+                        <h1 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-brand to-neonPink drop-shadow-glow-brand">
+                            OCD
+                        </h1>
+                        <p className="text-[10px] text-neonBlue font-mono mt-1 uppercase tracking-widest neon-text-blue">v5.0</p>
+                    </div>
+                    <button onClick={toggleTheme} className="p-2 rounded-lg bg-[#111] border border-[#222] hover:border-brand/50 transition-colors" title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+                        {theme === 'dark' ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-neonBlue" />}
+                    </button>
                 </div>
                 <nav className="flex-1 p-3 space-y-2 mt-2 overflow-y-auto">
                     {NAV_ITEMS.map(item => (

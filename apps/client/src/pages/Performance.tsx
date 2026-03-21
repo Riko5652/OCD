@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from 'recharts';
-import { ArrowRightLeft, BrainCircuit, DollarSign, Bot, BarChart2, Target, Terminal, Wallet, GitCommit, FileCode, Users } from 'lucide-react';
+import { ArrowRightLeft, BrainCircuit, DollarSign, Bot, BarChart2, Target, Terminal, Wallet, GitCommit, FileCode, Users, Trophy, Navigation } from 'lucide-react';
 
 const TOOL_COLORS: Record<string, string> = {
     'claude-code': '#ff5500', 'cursor': '#00f3ff', 'antigravity': '#39ff14',
@@ -15,11 +15,17 @@ export default function Performance() {
     const { data: codeGen } = useApi<any>('/api/code-generation');
     const { data: agentic } = useApi<any>('/api/agentic/scores');
     const { data: commits } = useApi<any[]>('/api/commits');
-    const [view, setView] = useState<'tools' | 'models' | 'costs' | 'agentic' | 'authorship' | 'codegen'>('tools');
+    const { data: modelPerf } = useApi<any[]>('/api/models/performance');
+    const { data: winRates } = useApi<any[]>('/api/models/win-rates');
+    const { data: routing } = useApi<any>('/api/models/routing');
+    const [view, setView] = useState<'tools' | 'models' | 'costs' | 'agentic' | 'authorship' | 'codegen' | 'modelperf' | 'winrates' | 'routing'>('tools');
 
     const tabs = [
         { id: 'tools' as const, label: 'Tool Comparison', icon: <ArrowRightLeft className="w-4 h-4" /> },
         { id: 'models' as const, label: 'Model Usage', icon: <BrainCircuit className="w-4 h-4" /> },
+        { id: 'modelperf' as const, label: 'Model Performance', icon: <BarChart2 className="w-4 h-4" /> },
+        { id: 'winrates' as const, label: 'Win Rates', icon: <Trophy className="w-4 h-4" /> },
+        { id: 'routing' as const, label: 'Routing', icon: <Navigation className="w-4 h-4" /> },
         { id: 'costs' as const, label: 'Cost Tracking', icon: <DollarSign className="w-4 h-4" /> },
         { id: 'codegen' as const, label: 'Code Generation', icon: <FileCode className="w-4 h-4" /> },
         { id: 'authorship' as const, label: 'Code Authorship', icon: <GitCommit className="w-4 h-4" /> },
@@ -34,7 +40,7 @@ export default function Performance() {
             </div>
 
             {/* Sub-tabs */}
-            <div className="flex gap-2 glass-panel p-2 w-fit">
+            <div className="flex gap-2 glass-panel p-2 w-fit overflow-x-auto max-w-full">
                 {tabs.map(t => (
                     <button key={t.id} onClick={() => setView(t.id)}
                         className={`px-4 py-2 flex items-center gap-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${view === t.id ? 'bg-brand/20 text-brand border border-brand/50 shadow-neon-brand' : 'text-zinc-500 hover:text-white border border-transparent hover:bg-[#111]'}`}>
@@ -295,6 +301,163 @@ export default function Performance() {
                             <p className="text-center text-zinc-600 font-mono text-sm uppercase tracking-widest py-10">No agentic scores computed yet. Run a data refresh first.</p>
                         )}
                     </div>
+                </div>
+            )}
+
+            {/* Model Performance Table */}
+            {view === 'modelperf' && (
+                <div className="glass-panel p-6 border-[#222]">
+                    <h3 className="text-xs font-black text-zinc-400 mb-6 uppercase tracking-widest flex items-center gap-2">
+                        <BarChart2 className="w-4 h-4 text-neonBlue" /> Model Performance Benchmark
+                    </h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b border-[#333]">
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">Model</th>
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">Tools</th>
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 text-right">Sessions</th>
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 text-right">Avg Turns</th>
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 text-right">Cache Hit</th>
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 text-right">Latency</th>
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 text-right">Error Rate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(modelPerf || []).map((m: any, i: number) => (
+                                    <tr key={i} className="border-b border-[#222] hover:bg-[#111] transition-colors group">
+                                        <td className="py-3 px-4 text-sm font-bold text-white max-w-[200px] truncate">{m.model}</td>
+                                        <td className="py-3 px-4">
+                                            <div className="flex flex-wrap gap-1">
+                                                {(m.tools || []).map((t: string) => (
+                                                    <span key={t} className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-widest border border-[#333]"
+                                                        style={{ color: TOOL_COLORS[t] || '#aaa', borderColor: `${TOOL_COLORS[t] || '#aaa'}30` }}>{t}</span>
+                                                ))}
+                                            </div>
+                                        </td>
+                                        <td className="py-3 px-4 text-right text-sm font-black text-white">{m.sessions}</td>
+                                        <td className="py-3 px-4 text-right text-sm text-zinc-300">{(m.avg_turns || 0).toFixed(1)}</td>
+                                        <td className="py-3 px-4 text-right">
+                                            <span className={`text-sm font-bold ${(m.cache_hit || 0) > 60 ? 'text-neonGreen' : (m.cache_hit || 0) > 30 ? 'text-brand' : 'text-zinc-500'}`}>
+                                                {(m.cache_hit || 0).toFixed(1)}%
+                                            </span>
+                                        </td>
+                                        <td className="py-3 px-4 text-right text-sm text-zinc-400">{(m.avg_latency || 0).toFixed(1)}s</td>
+                                        <td className="py-3 px-4 text-right">
+                                            <span className={`text-sm font-bold ${(m.error_rate || 0) < 5 ? 'text-neonGreen' : (m.error_rate || 0) < 15 ? 'text-yellow-400' : 'text-red-400'}`}>
+                                                {(m.error_rate || 0).toFixed(1)}%
+                                            </span>
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {(!modelPerf || modelPerf.length === 0) && (
+                            <p className="text-center text-zinc-600 font-mono text-sm uppercase tracking-widest py-10">No model performance data available yet.</p>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Model Win Rates */}
+            {view === 'winrates' && (
+                <div className="glass-panel p-6 border-neonPink/20">
+                    <h3 className="text-xs font-black text-neonPink mb-6 uppercase tracking-widest flex items-center gap-2">
+                        <Trophy className="w-4 h-4" /> Model Win Rates by Task
+                    </h3>
+                    <div className="overflow-x-auto">
+                        <table className="w-full text-left border-collapse">
+                            <thead>
+                                <tr className="border-b border-[#333]">
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">Tool</th>
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">Model</th>
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500">Task Type</th>
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 text-right">Win Rate</th>
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 text-right">Avg Turns</th>
+                                    <th className="py-3 px-4 text-[10px] font-black uppercase tracking-widest text-zinc-500 text-right">Sessions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {(winRates || []).map((w: any, i: number) => (
+                                    <tr key={i} className="border-b border-[#222] hover:bg-[#111] transition-colors">
+                                        <td className="py-3 px-4">
+                                            <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border border-[#333]"
+                                                style={{ color: TOOL_COLORS[w.tool_id] || '#aaa' }}>{w.tool_id}</span>
+                                        </td>
+                                        <td className="py-3 px-4 text-sm font-mono text-white truncate max-w-[160px]">{w.model}</td>
+                                        <td className="py-3 px-4 text-sm text-zinc-400">{w.task_type || 'general'}</td>
+                                        <td className="py-3 px-4 text-right">
+                                            <div className="flex items-center justify-end gap-2">
+                                                <div className="w-20 h-2 bg-[#111] rounded-full overflow-hidden">
+                                                    <div className="h-full rounded-full transition-all"
+                                                        style={{ width: `${w.win_rate || 0}%`, background: (w.win_rate || 0) > 70 ? '#39ff14' : (w.win_rate || 0) > 40 ? '#ff5500' : '#ff0055' }} />
+                                                </div>
+                                                <span className="text-sm font-black text-white w-10">{(w.win_rate || 0).toFixed(0)}%</span>
+                                            </div>
+                                        </td>
+                                        <td className="py-3 px-4 text-right text-sm text-zinc-400">{(w.avg_turns || 0).toFixed(1)}</td>
+                                        <td className="py-3 px-4 text-right text-sm font-bold text-zinc-300">{w.sessions || 0}</td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {(!winRates || winRates.length === 0) && (
+                            <p className="text-center text-zinc-600 font-mono text-sm uppercase tracking-widest py-10">No win rate data available. Requires multiple models in use.</p>
+                        )}
+                    </div>
+                </div>
+            )}
+
+            {/* Routing Recommendation */}
+            {view === 'routing' && (
+                <div className="space-y-6">
+                    <div className="glass-panel p-6 border-brand/20 bg-gradient-to-br from-[#0a0a0a] to-[#050505]">
+                        <h3 className="text-xs font-black text-brand mb-4 uppercase tracking-widest flex items-center gap-2">
+                            <Navigation className="w-4 h-4" /> Intelligent Model Routing
+                        </h3>
+                        <p className="text-sm text-zinc-400 mb-6">Based on your historical data, these are the best model choices per task type and tool.</p>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {(routing?.recommendations || []).map((r: any, i: number) => (
+                                <div key={i} className="bg-[#050505] rounded-xl p-5 border border-[#222] hover:border-brand/40 transition-colors group">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">{r.task_type || 'General'}</span>
+                                        <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border border-[#333]"
+                                            style={{ color: TOOL_COLORS[r.tool_id] || '#aaa' }}>{r.tool_id}</span>
+                                    </div>
+                                    <p className="text-lg font-black text-white mb-2 group-hover:text-brand transition-colors truncate">{r.recommended_model}</p>
+                                    <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                                        <span>Win rate: <span className="text-neonGreen font-bold">{(r.win_rate || 0).toFixed(0)}%</span></span>
+                                        <span>Quality: <span className="text-neonBlue font-bold">{(r.avg_quality || 0).toFixed(0)}</span></span>
+                                    </div>
+                                    {r.reason && <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed">{r.reason}</p>}
+                                </div>
+                            ))}
+                        </div>
+                        {(!routing?.recommendations || routing.recommendations.length === 0) && (
+                            <div className="text-center py-10">
+                                <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">Not enough data for routing recommendations.</p>
+                                <p className="text-zinc-700 text-xs mt-2">Use multiple tools and models to enable intelligent routing.</p>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Quick routing summary */}
+                    {routing?.summary && (
+                        <div className="grid grid-cols-3 gap-4">
+                            <div className="glass-panel p-5 text-center border-neonGreen/20">
+                                <p className="text-3xl font-black text-neonGreen">{routing.summary.models_tracked}</p>
+                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Models Tracked</p>
+                            </div>
+                            <div className="glass-panel p-5 text-center border-brand/20">
+                                <p className="text-3xl font-black text-brand">{routing.summary.tools_tracked}</p>
+                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Tools Tracked</p>
+                            </div>
+                            <div className="glass-panel p-5 text-center border-neonBlue/20">
+                                <p className="text-3xl font-black text-neonBlue">{routing.summary.total_sessions}</p>
+                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Sessions Analyzed</p>
+                            </div>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
