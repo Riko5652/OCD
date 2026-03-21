@@ -201,5 +201,71 @@ function generateQuickWins(db: any): Array<{ tip: string; impact: string; priori
         });
     }
 
-    return wins.sort((a, b) => a.priority - b.priority).slice(0, 3);
+    // 6. Single-tool user: model-level optimization tips
+    const toolDistribution = db.prepare(`
+        SELECT tool_id, COUNT(*) as sessions FROM sessions
+        WHERE started_at > ? GROUP BY tool_id ORDER BY sessions DESC
+    `).all(Date.now() - 30 * 86400000) as any[];
+
+    if (toolDistribution.length === 1) {
+        const tool = toolDistribution[0].tool_id;
+        const modelPerf = db.prepare(`
+            SELECT primary_model,
+                AVG(CAST(total_input_tokens + total_output_tokens AS REAL) / NULLIF(quality_score, 0)) as cost_per_quality,
+                AVG(quality_score) as avg_quality, COUNT(*) as sessions
+            FROM sessions WHERE tool_id = ? AND quality_score > 0 AND started_at > ?
+            GROUP BY primary_model HAVING sessions >= 2 ORDER BY cost_per_quality ASC
+        `).all(tool, Date.now() - 30 * 86400000) as any[];
+
+        if (modelPerf.length >= 2) {
+            const cheapest = modelPerf[0];
+            const priciest = modelPerf[modelPerf.length - 1];
+            if (cheapest.primary_model !== priciest.primary_model) {
+                const qualityDiff = Math.abs((priciest.avg_quality || 0) - (cheapest.avg_quality || 0));
+                if (qualityDiff < 10) {
+                    wins.push({
+                        tip: `Switch to ${cheapest.primary_model} for routine tasks — similar quality to ${priciest.primary_model} at ${Math.round(((priciest.cost_per_quality || 0) - (cheapest.cost_per_quality || 0)) / (priciest.cost_per_quality || 1) * 100)}% less cost.`,
+                        impact: `Quality: ${Math.round(cheapest.avg_quality)} vs ${Math.round(priciest.avg_quality)} (negligible difference). Cost efficiency: ${Math.round(cheapest.cost_per_quality)} vs ${Math.round(priciest.cost_per_quality)} tokens/quality.`,
+                        priority: 6,
+                    });
+                }
+            }
+        }
+
+        // Single-tool specific tips
+        if (tool === 'claude-code') {
+            const noThinkingMode = db.prepare(`
+                SELECT COUNT(*) as n FROM sessions
+                WHERE tool_id = 'claude-code' AND started_at > ?
+                AND raw_data LIKE '%thinking_to_output_ratio%' AND raw_data LIKE '%null%'
+            `).get(Date.now() - 7 * 86400000) as any;
+            if (noThinkingMode && noThinkingMode.n > 3) {
+                wins.push({
+                    tip: 'Enable extended thinking for complex debugging — sessions with thinking mode have higher first-attempt success rates.',
+                    impact: 'Thinking tokens cost the same but reduce back-and-forth iterations.',
+                    priority: 7,
+                });
+            }
+        } else if (tool === 'cursor') {
+            wins.push({
+                tip: 'Use Composer for multi-file edits, and review Cursor\'s token usage in Settings > Usage to track model costs.',
+                impact: 'Composer batches changes, reducing per-file context overhead.',
+                priority: 7,
+            });
+        } else if (tool === 'copilot') {
+            const lowAcceptance = db.prepare(`
+                SELECT AVG(CAST(json_extract(raw_data, '$.suggestion_acceptance_pct') AS REAL)) as avg_accept
+                FROM sessions WHERE tool_id = 'copilot' AND raw_data LIKE '%suggestion_acceptance_pct%' AND started_at > ?
+            `).get(Date.now() - 7 * 86400000) as any;
+            if (lowAcceptance && lowAcceptance.avg_accept < 25) {
+                wins.push({
+                    tip: `Inline suggestion acceptance is ${Math.round(lowAcceptance.avg_accept)}%. Write clearer function signatures and comments — Copilot uses them as context for better completions.`,
+                    impact: 'Higher acceptance rate means fewer manual corrections and faster coding flow.',
+                    priority: 7,
+                });
+            }
+        }
+    }
+
+    return wins.sort((a, b) => a.priority - b.priority).slice(0, 5);
 }

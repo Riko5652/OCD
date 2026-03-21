@@ -127,31 +127,118 @@ server.tool(
 // ---- Tool 4: get_routing_recommendation ----
 server.tool(
     'get_routing_recommendation',
-    'Get which AI tool + model is statistically best for your current task type.',
+    'Get which AI tool + model is statistically best for your current task type. For single-tool users, provides model-level optimization and workflow tips instead of cross-tool routing.',
     { task_type: z.string().describe('e.g., "refactoring", "debugging", "scaffolding", "testing"') },
     async ({ task_type }) => {
         const db = getDb();
+
+        // Detect if user is a single-tool user (most common case)
+        const toolCounts = db.prepare(`
+            SELECT tool_id, COUNT(*) as sessions FROM sessions
+            WHERE started_at > ? GROUP BY tool_id ORDER BY sessions DESC
+        `).all(Date.now() - 30 * 86400000) as any[];
+
+        const isSingleTool = toolCounts.length === 1;
+        const primaryTool = toolCounts[0]?.tool_id;
+
         const rows = db.prepare(`
             SELECT s.tool_id, s.primary_model, COUNT(*) as sessions,
                 AVG(s.quality_score) as avg_quality, AVG(s.agentic_score) as avg_agentic,
-                AVG(s.total_turns) as avg_turns
+                AVG(s.total_turns) as avg_turns,
+                AVG(s.cache_hit_pct) as avg_cache,
+                AVG(s.error_count) as avg_errors,
+                AVG(CAST(s.total_input_tokens + s.total_output_tokens AS REAL) / NULLIF(s.quality_score, 0)) AS tokens_per_quality
             FROM sessions s
             JOIN task_classifications tc ON tc.session_id = s.id
             WHERE tc.task_type = ?
-            GROUP BY s.tool_id, s.primary_model ORDER BY avg_quality DESC LIMIT 5
+            GROUP BY s.tool_id, s.primary_model ORDER BY avg_quality DESC LIMIT 10
         `).all(task_type) as any[];
 
         if (!rows.length) {
             return { content: [{ type: 'text' as const, text: `No historical data for task type "${task_type}". Using default: claude-code with claude-sonnet-4-6.` }] };
         }
 
-        const best = rows[0];
-        let response = `Routing Recommendation for "${task_type}":\n\n`;
-        response += `🏆 Best: ${best.tool_id} / ${best.primary_model}\n`;
-        response += `   Quality: ${(best.avg_quality || 0).toFixed(1)} | Agentic: ${(best.avg_agentic || 0).toFixed(0)} | Avg Turns: ${(best.avg_turns || 0).toFixed(0)}\n\n`;
-        response += 'Alternatives:\n';
-        for (const r of rows.slice(1)) {
-            response += `  • ${r.tool_id}/${r.primary_model}: Q=${(r.avg_quality || 0).toFixed(0)}, ${r.sessions} sessions\n`;
+        let response: string;
+
+        if (isSingleTool && primaryTool) {
+            // Single-tool user: optimize model selection and workflow within their tool
+            const toolRows = rows.filter((r: any) => r.tool_id === primaryTool);
+            const best = toolRows[0] || rows[0];
+
+            response = `Model Optimization for "${task_type}" (${primaryTool}):\n\n`;
+            response += `Best Model: ${best.primary_model}\n`;
+            response += `  Quality: ${(best.avg_quality || 0).toFixed(1)} | Avg Turns: ${(best.avg_turns || 0).toFixed(0)} | Cache: ${(best.avg_cache || 0).toFixed(0)}%\n`;
+            response += `  Efficiency: ${Math.round(best.tokens_per_quality || 0)} tokens/quality point\n\n`;
+
+            if (toolRows.length > 1) {
+                response += 'Model Comparison (within your tool):\n';
+                for (const r of toolRows) {
+                    const label = r.primary_model === best.primary_model ? '  >> ' : '     ';
+                    response += `${label}${r.primary_model}: Q=${(r.avg_quality || 0).toFixed(0)}, ${r.sessions} sessions, ${(r.avg_turns || 0).toFixed(0)} turns, ${Math.round(r.tokens_per_quality || 0)} tok/Q\n`;
+                }
+                response += '\n';
+            }
+
+            // Workflow patterns for single-tool users
+            const patterns = db.prepare(`
+                SELECT
+                    CASE WHEN quality_score >= 70 THEN 'high' ELSE 'low' END AS tier,
+                    AVG(total_turns) AS avg_turns, AVG(cache_hit_pct) AS avg_cache,
+                    AVG(error_count) AS avg_errors, COUNT(*) AS sessions
+                FROM sessions
+                WHERE tool_id = ? AND quality_score IS NOT NULL AND started_at > ?
+                GROUP BY tier
+            `).all(primaryTool, Date.now() - 30 * 86400000) as any[];
+
+            const high = patterns.find((p: any) => p.tier === 'high');
+            const low = patterns.find((p: any) => p.tier === 'low');
+            if (high && low) {
+                response += 'Your Workflow Patterns:\n';
+                response += `  High-quality sessions: ${Math.round(high.avg_turns)} turns, ${Math.round(high.avg_cache || 0)}% cache, ${(high.avg_errors || 0).toFixed(1)} errors (n=${high.sessions})\n`;
+                response += `  Low-quality sessions:  ${Math.round(low.avg_turns)} turns, ${Math.round(low.avg_cache || 0)}% cache, ${(low.avg_errors || 0).toFixed(1)} errors (n=${low.sessions})\n\n`;
+            }
+
+            // Tool-specific tips
+            response += 'Optimization Tips:\n';
+            if (primaryTool === 'claude-code') {
+                response += '  1. Use subagents for multi-file tasks to parallelize work\n';
+                response += '  2. Stabilize CLAUDE.md to improve cache hit rates\n';
+                response += '  3. Front-load context in first message for better first-attempt success\n';
+            } else if (primaryTool === 'cursor') {
+                response += '  1. Use Composer for multi-file edits, Tab for inline completions\n';
+                response += '  2. Pin important files in context panel for relevance\n';
+                response += '  3. Use @-mentions for specific file context\n';
+            } else if (primaryTool === 'copilot') {
+                response += '  1. Use @workspace for project-wide queries\n';
+                response += '  2. Slash commands (/fix, /test, /doc) are faster than describing tasks\n';
+                response += '  3. Open relevant files before chatting for better context\n';
+            } else if (primaryTool === 'windsurf') {
+                response += '  1. Use Cascade mode for complex multi-step tasks\n';
+                response += '  2. Reference files with @ mentions for precise context\n';
+                response += '  3. Keep sessions focused — break large tasks into sub-sessions\n';
+            } else if (primaryTool === 'aider') {
+                response += '  1. Use architect mode for planning, code mode for implementation\n';
+                response += '  2. Add files explicitly with /add before editing\n';
+                response += '  3. Keep chat focused on one feature per session\n';
+            } else if (primaryTool === 'continue') {
+                response += '  1. Use /edit for inline modifications with clear context\n';
+                response += '  2. Configure model-per-task in config.json to save tokens\n';
+                response += '  3. Provide context items with @ mentions for better accuracy\n';
+            } else if (primaryTool === 'antigravity') {
+                response += '  1. Use artifacts for iterative code development\n';
+                response += '  2. Keep conversations focused on one artifact type\n';
+                response += '  3. Review version history to reduce iteration depth\n';
+            }
+        } else {
+            // Multi-tool user: original cross-tool routing
+            const best = rows[0];
+            response = `Routing Recommendation for "${task_type}":\n\n`;
+            response += `Best: ${best.tool_id} / ${best.primary_model}\n`;
+            response += `  Quality: ${(best.avg_quality || 0).toFixed(1)} | Agentic: ${(best.avg_agentic || 0).toFixed(0)} | Avg Turns: ${(best.avg_turns || 0).toFixed(0)}\n\n`;
+            response += 'Alternatives:\n';
+            for (const r of rows.slice(1)) {
+                response += `  • ${r.tool_id}/${r.primary_model}: Q=${(r.avg_quality || 0).toFixed(0)}, ${r.sessions} sessions\n`;
+            }
         }
         return { content: [{ type: 'text' as const, text: response }] };
     }
