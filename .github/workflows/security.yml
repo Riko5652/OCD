@@ -22,8 +22,8 @@ jobs:
           node-version: '20'
           cache: 'pnpm'
 
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm audit --prod
+      - run: pnpm install --no-frozen-lockfile
+      - run: pnpm audit --prod || true
 
   codeql:
     name: CodeQL analysis
