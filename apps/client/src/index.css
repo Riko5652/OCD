@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-background text-white antialiased selection:bg-brand selection:text-white;
+  }
+}
+
+@layer utilities {
+  .glass-panel {
+    @apply bg-surface/80 backdrop-blur-md border border-white/10 rounded-xl shadow-lg;
+  }
+  .neon-text-brand {
+    text-shadow: 0 0 8px rgba(255, 85, 0, 0.4);
+  }
+  .neon-text-green {
+    text-shadow: 0 0 8px rgba(57, 255, 20, 0.4);
+  }
+  .neon-text-blue {
+    text-shadow: 0 0 8px rgba(0, 243, 255, 0.4);
+  }
+}
+
+/* Custom scrollbar for sleek look */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  @apply bg-background;
+}
+::-webkit-scrollbar-thumb {
+  @apply bg-[#222] rounded-full;
+}
+::-webkit-scrollbar-thumb:hover {
+  @apply bg-brand shadow-neon-brand;
+}

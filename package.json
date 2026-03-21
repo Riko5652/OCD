@@ -1,87 +1,20 @@
 {
-  "name": "ai-productivity-dashboard",
+  "name": "ocd",
   "version": "4.0.0",
-  "type": "module",
-  "description": "AI memory engine — learns from your coding sessions, recommends tools, injects proven solutions via MCP. Tracks Claude Code, Cursor, Aider, Windsurf, Copilot & Gemini. No API keys required.",
+  "private": true,
+  "description": "OCD (Omni Coder Dashboard) — An AI memory engine that learns from your coding sessions, recommends tools, and injects proven solutions via MCP.",
   "author": {
     "name": "Dor Lipetz",
     "url": "https://github.com/Riko5652"
   },
   "license": "AGPL-3.0-or-later",
-  "homepage": "https://github.com/Riko5652/ai-productivity-dashboard",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/Riko5652/ai-productivity-dashboard.git"
-  },
   "engines": {
     "node": ">=18.0.0"
   },
-  "bin": {
-    "ai-productivity-dashboard": "./bin/ai-dashboard.js",
-    "ai-dashboard": "./bin/ai-dashboard.js",
-    "ai-dashboard-mcp": "./src/mcp-handoff.js",
-    "ai-dashboard-setup-mcp": "./bin/setup-mcp.js"
-  },
-  "files": [
-    "bin/",
-    "scripts/build-sea.mjs",
-    "scripts/ensure-env.js",
-    "src/",
-    "public/",
-    "Dockerfile",
-    "docker-compose.yml",
-    "seed-mock.mjs",
-    ".env.example",
-    "README.md",
-    "LICENSE"
-  ],
   "scripts": {
-    "prestart": "node scripts/ensure-env.js",
-    "predev": "node scripts/ensure-env.js",
-    "start": "node --env-file=.env src/server.js",
-    "dev": "node --env-file=.env --watch src/server.js",
-    "mcp": "node src/mcp-handoff.js",
-    "docker:build": "docker build -t ai-dashboard .",
-    "docker:up": "docker compose up",
-    "docker:down": "docker compose down",
-    "audit": "npm audit --production",
-    "doctor": "node bin/doctor.mjs",
-    "feedback": "node bin/feedback.mjs"
-  },
-  "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.27.1",
-    "chokidar": "^4.0.0",
-    "express": "^4.21.0",
-    "sql.js": "^1.14.1"
-  },
-  "keywords": [
-    "ai",
-    "productivity",
-    "dashboard",
-    "claude-code",
-    "cursor",
-    "aider",
-    "windsurf",
-    "copilot",
-    "gemini",
-    "analytics",
-    "developer-tools",
-    "prompt-optimization",
-    "llm",
-    "mcp",
-    "model-context-protocol",
-    "sqlite",
-    "local-first",
-    "docker",
-    "vibe-coding",
-    "agentic-coding",
-    "pwa",
-    "sea",
-    "codespaces",
-    "offline",
-    "semantic-memory",
-    "knowledge-graph",
-    "vector-search",
-    "session-import"
-  ]
+    "dev": "pnpm --filter ./apps/* run dev",
+    "build": "pnpm --filter ./apps/* run build",
+    "start": "pnpm --filter ./apps/server run start",
+    "mcp": "pnpm --filter ./apps/server run mcp"
+  }
 }

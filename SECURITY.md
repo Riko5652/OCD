@@ -2,45 +2,30 @@
 
 ## Supported Versions
 
-| Version | Supported |
-|---------|-----------|
-| 3.x     | ✅ Active |
-| 2.x     | ⚠️ Security fixes only |
-| 1.x     | ❌ No longer supported |
+Currently, only the latest version of OCD is supported with security updates.
 
-## Privacy & Threat Model
-
-AI Productivity Dashboard is **local-only software** — it reads files from your local machine and serves a dashboard over `localhost:3030`. It never connects to external servers, sends telemetry, or stores data in the cloud.
-
-**Data accessed by this tool:**
-- `~/.claude/projects/*/` — Claude Code session logs
-- Cursor local SQLite databases (OS-specific paths)
-- `~/.gemini/antigravity/` — Gemini/Antigravity logs
-
-All data remains on your machine.
+| Version | Supported          |
+| ------- | ------------------ |
+| v4.0.0+  | :white_check_mark: |
+| < v4.0.0 | :x:                |
 
 ## Reporting a Vulnerability
 
-If you discover a security vulnerability, **please do not open a public GitHub issue**.
+We take the security of OCD seriously. If you believe you have found a security vulnerability in this repository, please report it to us as described below.
 
-Instead, report it privately:
+**Please do not report security vulnerabilities through public GitHub issues.**
 
-1. **GitHub Private Vulnerability Reporting**: Use the [Security tab](https://github.com/Riko5652/ai-productivity-dashboard/security/advisories/new) on this repository to submit a private advisory.
-2. **Email**: Contact the maintainer directly via GitHub profile (@Riko5652).
+Instead, please report them via email to the author or by opening a private GitHub Security Advisory in this repository.
 
-### What to Include
-- Description of the vulnerability
-- Steps to reproduce
-- Potential impact
-- Suggested fix (if you have one)
+Please include the following information in your report:
+- Type of issue (e.g., buffer overflow, SQL injection, cross-site scripting, etc.)
+- Full paths of source file(s) related to the manifestation of the issue
+- The location of the affected source code
+- Any special configuration required to reproduce the issue
+- Step-by-step instructions to reproduce the issue
+- Proof-of-concept or exploit code (if possible)
+- Impact of the issue, including how an attacker might exploit the issue
 
-### Response Timeline
-- Acknowledgement within **48 hours**
-- Assessment and fix plan within **7 days**
-- Fix published within **30 days** for confirmed vulnerabilities
+We prefer all communications to be in English.
 
-## Security Considerations for Self-Hosting
-
-- The dashboard server binds to `localhost` by default — do not expose port 3030 publicly
-- `.env` files may contain paths or tokens — never commit them (already in `.gitignore`)
-- The SQLite database contains your session metadata — treat it like any personal data file
+We will try to acknowledge your report within 48 hours, and will provide a more detailed response within 5 days indicating the next steps in handling your report.

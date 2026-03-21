@@ -1,4 +1,4 @@
-# AI Productivity Dashboard v4.0
+# OCD - Omni Coder Dashboard v4.0
 
 > An AI memory engine that learns from your coding sessions, recommends the right tool for every task, and injects proven solutions into your workflow — all local, no API keys required.
 
@@ -8,7 +8,7 @@
 [![MCP](https://img.shields.io/badge/MCP-11%20tools-purple)](#mcp-universal-brain)
 [![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
 [![PWA](https://img.shields.io/badge/PWA-offline%20ready-blueviolet)](#pwa-support)
-[![npm](https://img.shields.io/npm/v/ai-productivity-dashboard)](https://www.npmjs.com/package/ai-productivity-dashboard)
+[![npm](https://img.shields.io/npm/v/ocd)](https://www.npmjs.com/package/ocd)
 
 ---
 
@@ -51,10 +51,10 @@ The dashboard exposes an MCP server with 11 tools that any AI agent can call mid
 
 ```bash
 # Auto-setup for all detected MCP clients
-npx ai-productivity-dashboard --setup-mcp
+npx ocd --setup-mcp
 
 # Or add to a specific project
-npx ai-productivity-dashboard --setup-mcp --project
+npx ocd --setup-mcp --project
 ```
 
 This writes the correct config to Claude Code, Cursor, and Windsurf automatically. Or manually add to your `.mcp.json`:
@@ -64,7 +64,7 @@ This writes the correct config to Claude Code, Cursor, and Windsurf automaticall
   "mcpServers": {
     "ai-brain": {
       "command": "npx",
-      "args": ["ai-productivity-dashboard", "--mcp"]
+      "args": ["ocd", "--mcp"]
     }
   }
 }
@@ -111,15 +111,15 @@ curl -X POST http://localhost:3030/api/webhook/session \
 
 ```bash
 # No install — just run (zero config)
-npx ai-productivity-dashboard
+npx ocd
 
 # Or install globally
-npm install -g ai-productivity-dashboard
-ai-dashboard
+npm install -g ocd
+ocd
 
 # Clone and run
-git clone https://github.com/Riko5652/ai-productivity-dashboard
-cd ai-productivity-dashboard
+git clone https://github.com/Riko5652/OCD
+cd OCD
 npm install
 npm start
 

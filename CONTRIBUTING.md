@@ -1,66 +1,53 @@
-# Contributing to AI Productivity Dashboard
+# Contributing to OCD
 
-> **Note:** This is a personal plugin maintained by [@Riko5652](https://github.com/Riko5652).
-> It is shared as a **downloadable, self-hosted tool** — not an open-contribution project.
-> The `main` branch is protected and only the maintainer can merge changes.
+First off, thank you for considering contributing to OCD! This project thrives on community contributions.
 
----
+## Code of Conduct
 
-## Using the Dashboard (for everyone)
+By participating in this project, you agree to abide by our Code of Conduct. We expect all contributors to maintain a welcoming and inclusive environment.
 
-### Prerequisites
-- Node.js >= 18.0.0
-- npm
-- At least one of: Claude Code, Cursor, or Gemini/Antigravity installed locally
+## Getting Started
 
-### Install & Run
+1. **Fork the repository** on GitHub.
+2. **Clone your fork** locally:
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/OCD.git
+   cd OCD
+   ```
+3. **Install dependencies**:
+   ```bash
+   npm install
+   # or
+   pnpm install
+   ```
+4. **Create a new branch** for your feature or bugfix:
+   ```bash
+   git checkout -b feature/your-feature-name
+   ```
 
-```bash
-git clone https://github.com/Riko5652/ai-productivity-dashboard.git
-cd ai-productivity-dashboard
-npm install
-npm start
-# Dashboard available at http://localhost:3030
-```
+## Development Workflow
 
-To explore with mock data before connecting your real tools:
-```bash
-node seed-mock.mjs
-npm start
-```
+- The project uses a monorepo structure.
+- `apps/client` is the Vite-based React frontend.
+- `apps/server` is the Express/Fastify API server and SQLite analytics engine.
+- You can run both concurrently via:
+  ```bash
+  npm run dev
+  ```
 
-The dashboard auto-detects your installed AI tools on startup. No configuration needed.
+## Pull Request Process
 
----
+1. Ensure your code satisfies the linting and formatting standards (`npm run lint`).
+2. Update any relevant documentation (e.g., `README.md`) if you added new features or changed behaviors.
+3. Open a Pull Request from your branch to our `main` branch.
+4. Describe your changes clearly in the PR description, linking to any relevant issues.
 
-## Bug Reports & Feature Requests
+## Reporting Bugs
 
-Found a bug or have an idea? Open an issue using the provided templates:
+When filing an issue, please ensure you include:
+- Your operating system and Node.js version.
+- The version of OCD you are running.
+- A clear, step-by-step reproduction of the bug.
+- Any relevant logs or errors shown in the terminal.
 
-- [Report a bug](.github/ISSUE_TEMPLATE/bug_report.md)
-- [Request a feature](.github/ISSUE_TEMPLATE/feature_request.md)
-
-Issues are reviewed by the maintainer. There is no guarantee of a response timeline.
-
----
-
-## Pull Requests
-
-PRs are not actively solicited, but well-scoped fixes may be considered.
-
-If you do open a PR:
-- Keep it focused — one fix or one feature
-- Test with `npm start` and verify the dashboard loads at `http://localhost:3030`
-- Do not add external dependencies or cloud connections
-- All PRs require approval from @Riko5652 (CODEOWNERS) before merging
-
-**PRs that will not be merged:** telemetry, cloud sync, new dependencies without strong justification, scope creep.
-
----
-
-## Privacy Commitment
-
-This tool is local-only by design. Any contribution must preserve:
-- Zero external API calls
-- Zero telemetry or data transmission
-- All data stays on the user's machine
+We appreciate your effort in making OCD better!
