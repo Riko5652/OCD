@@ -35,6 +35,13 @@ import { buildGraph } from './lib/knowledge-graph.js';
 import { embedSession } from './lib/vector-store.js';
 import { getBookmarkletCode } from './lib/bookmarklet.js';
 import type { IAiAdapter, UnifiedSession } from './adapters/types.js';
+import { startIdeInterceptor, submitTrace } from './engine/ide-interceptor.js';
+import { startAntiPatternAnalysis, stopAntiPatternAnalysis, getNegativeConstraints } from './engine/anti-pattern-graph.js';
+import { makeArbitrageDecision, logArbitrageDecision, proxyCompletion, getArbitrageSummary } from './engine/token-arbiter.js';
+import {
+    startP2pSync, stopP2pSync, getKnownPeers, getShareableEmbeddings,
+    mergePeerEmbeddings, syncWithAllPeers, validatePeerRequest, getNodeId_,
+} from './engine/p2p-sync.js';
 
 const fastify = Fastify({ logger: true });
 
@@ -130,8 +137,8 @@ fastify.get('/api/live', (request, reply) => {
     request.raw.on('close', () => sseClients.delete(reply.raw));
 });
 
-function broadcast(event = 'refresh') {
-    const data = JSON.stringify({ event, ts: Date.now() });
+function broadcast(event = 'refresh', extra?: Record<string, unknown>) {
+    const data = JSON.stringify({ event, ts: Date.now(), ...extra });
     for (const client of sseClients) {
         try { client.write(`event: ${event}\ndata: ${data}\n\n`); } catch { sseClients.delete(client); }
     }
@@ -951,6 +958,104 @@ fastify.addHook('onRequest', (request, reply, done) => {
     done();
 });
 
+// ---- Feature: Proactive IDE Interception ----
+
+fastify.post('/api/ide/submit-trace', async (request, reply) => {
+    const rateLimitErr = checkLlmRateLimit(`ide:${request.ip}`, 5000);
+    if (rateLimitErr) { reply.status(429); return { error: rateLimitErr }; }
+    const { trace } = request.body as any;
+    if (!trace || typeof trace !== 'string') { reply.status(400); return { error: 'trace (string) is required' }; }
+    const result = await submitTrace(trace.slice(0, 8192));
+    return result;
+});
+
+fastify.get('/api/ide/interceptions', async (request) => {
+    const limit = clampInt((request.query as any).limit, 1, 200, 50);
+    const db = getDb();
+    return db.prepare(`
+        SELECT i.*, s.title, s.tldr FROM ide_interceptions i
+        LEFT JOIN sessions s ON s.id = i.matched_session_id
+        ORDER BY i.detected_at DESC LIMIT ?
+    `).all(limit);
+});
+
+// ---- Feature: Anti-Hallucination Negative Constraints ----
+
+fastify.get('/api/anti-patterns', async (request) => {
+    const { task, limit } = request.query as any;
+    if (task) {
+        return { constraints: getNegativeConstraints(sanitizeString(task), clampInt(limit, 1, 20, 5)) };
+    }
+    const db = getDb();
+    return db.prepare(`
+        SELECT * FROM anti_patterns ORDER BY failure_count DESC LIMIT 100
+    `).all();
+});
+
+// ---- Feature: Token Arbitrage & Cost Routing ----
+
+fastify.post('/api/arbitrage/recommend', async (request, reply) => {
+    const { prompt, requested_model } = request.body as any;
+    if (!prompt || typeof prompt !== 'string') { reply.status(400); return { error: 'prompt (string) is required' }; }
+    const decision = makeArbitrageDecision(prompt.slice(0, 8192), sanitizeString(requested_model, 80) || 'claude-sonnet-4-6');
+    logArbitrageDecision(decision);
+    return decision;
+});
+
+fastify.post('/api/arbitrage/proxy', async (request, reply) => {
+    const rateLimitErr = checkLlmRateLimit(`arb:${request.ip}`, 2000);
+    if (rateLimitErr) { reply.status(429); return { error: rateLimitErr }; }
+    const body = request.body as any;
+    if (!body?.messages || !Array.isArray(body.messages)) { reply.status(400); return { error: 'messages array is required' }; }
+    try {
+        const result = await proxyCompletion(body);
+        return result;
+    } catch (e: any) {
+        reply.status(502);
+        return { error: `Proxy error: ${e.message}` };
+    }
+});
+
+fastify.get('/api/arbitrage/summary', async () => getArbitrageSummary());
+
+// ---- Feature: P2P Secure Team Memory ----
+
+fastify.get('/api/p2p/peers', async () => ({
+    node_id: getNodeId_(),
+    peers: getKnownPeers(),
+}));
+
+// Peer calls this to get our shareable embeddings
+fastify.post('/api/p2p/embeddings', async (request, reply) => {
+    const rawBody = JSON.stringify(request.body);
+    const sig = (request.headers as any)['x-ocd-sig'] || '';
+    if (!validatePeerRequest(rawBody, sig)) {
+        reply.status(401);
+        return { error: 'Invalid peer signature — ensure P2P_SECRET matches across all nodes.' };
+    }
+    const items = getShareableEmbeddings();
+    return { node_id: getNodeId_(), items };
+});
+
+// Trigger sync pull from all known peers
+fastify.post('/api/p2p/sync', async () => {
+    const nodeId = getNodeId_();
+    if (!nodeId) return { error: 'P2P not enabled — set P2P_SECRET to activate.' };
+    const results = await syncWithAllPeers(nodeId);
+    return { synced: results, peers_contacted: results.length };
+});
+
+// Peer hello endpoint — lets peers announce themselves via direct HTTP (fallback when UDP is blocked)
+fastify.post('/api/p2p/hello', async (request) => {
+    const { peer_id, host, port } = request.body as any;
+    if (peer_id && host && port) {
+        fastify.log.info(`[p2p] Hello from peer ${peer_id} at ${host}:${port}`);
+        // Trigger a sync from this new peer immediately
+        syncWithAllPeers(getNodeId_()).catch(() => { /* non-critical */ });
+    }
+    return { node_id: getNodeId_(), ok: true };
+});
+
 // ---- Static file serving (built client) ----
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1016,6 +1121,15 @@ const start = async () => {
             },
         );
 
+        // Feature: Proactive IDE Interception
+        startIdeInterceptor((event, payload) => broadcast(event, payload));
+
+        // Feature: Anti-Hallucination Analysis (runs immediately + every 10 min)
+        setTimeout(() => startAntiPatternAnalysis(), 15000);
+
+        // Feature: P2P Secure Team Memory
+        startP2pSync();
+
         // Generate daily pick on startup
         setTimeout(() => generateDailyPick().catch(e => fastify.log.error(`[daily-pick] startup error: ${e.message}`)), 5000);
 
@@ -1054,6 +1168,8 @@ const start = async () => {
 process.on('SIGINT', () => {
     console.log('\nShutting down...');
     stopWatchers();
+    stopAntiPatternAnalysis();
+    stopP2pSync();
     process.exit(0);
 });
 

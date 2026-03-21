@@ -5,6 +5,10 @@ import { initDb, getDb } from './db/index.js';
 import { VectorService } from './lib/vector-store.js';
 import { computeOverview, computeCostAnalysis, computePersonalInsights } from './engine/analytics.js';
 import { getAgenticLeaderboard } from './engine/agentic-scorer.js';
+import { getNegativeConstraints } from './engine/anti-pattern-graph.js';
+import { makeArbitrageDecision, getArbitrageSummary } from './engine/token-arbiter.js';
+import { getShareableEmbeddings, getKnownPeers } from './engine/p2p-sync.js';
+import { submitTrace } from './engine/ide-interceptor.js';
 
 initDb();
 
@@ -303,6 +307,119 @@ server.tool(
         for (const r of rows) {
             response += `  ${r.topic}: ${r.sessions} sessions, ${((r.tokens || 0) / 1000).toFixed(0)}K tokens, Q=${(r.avg_quality || 0).toFixed(0)}\n`;
         }
+        return { content: [{ type: 'text' as const, text: response }] };
+    }
+);
+
+// ---- Tool 12: get_negative_constraints (Anti-Hallucination) ----
+server.tool(
+    'get_negative_constraints',
+    'Get explicit "DO NOT" constraints derived from historically failing sessions to prevent AI hallucination loops. Inject these into your system prompt before starting a task.',
+    {
+        task: z.string().describe('Describe the task you are about to perform (e.g., "migrate PostgreSQL schema with Prisma")'),
+        limit: z.number().optional().describe('Max constraints to return (default: 5)'),
+    },
+    async ({ task, limit = 5 }) => {
+        const constraints = getNegativeConstraints(task, limit);
+        if (!constraints.length) {
+            return { content: [{ type: 'text' as const, text: `No known anti-patterns for this task type. Proceed normally.` }] };
+        }
+        let response = `Anti-Hallucination Constraints for: "${task}"\n\n`;
+        response += `Inject these into your system prompt to avoid known failure patterns:\n\n`;
+        for (const c of constraints) {
+            response += `• ${c.constraint_text}\n`;
+            response += `  (Failed ${c.failure_count}x locally | Task: ${c.task_type}`;
+            if (c.success_session_id) response += ` | See success in session: ${c.success_session_id}`;
+            response += `)\n\n`;
+        }
+        return { content: [{ type: 'text' as const, text: response }] };
+    }
+);
+
+// ---- Tool 13: get_arbitrage_recommendation ----
+server.tool(
+    'get_arbitrage_recommendation',
+    'Get a cost-routing recommendation: should this task use a free local model (Ollama) or a premium cloud model? Returns mathematically proven savings estimate.',
+    {
+        prompt: z.string().describe('The prompt or task description you are about to send to an AI model'),
+        requested_model: z.string().optional().describe('The model you intended to use (default: claude-sonnet-4-6)'),
+    },
+    async ({ prompt, requested_model = 'claude-sonnet-4-6' }) => {
+        const decision = makeArbitrageDecision(prompt, requested_model);
+        const summary = getArbitrageSummary();
+
+        let response = `Token Arbitrage Decision:\n\n`;
+        response += `  Task Type: ${decision.taskType} | Complexity: ${decision.complexity}\n`;
+        response += `  Original Model: ${decision.originalModel}\n`;
+        response += `  Recommended Model: ${decision.routedModel} (${decision.routeToLocal ? 'LOCAL — FREE' : 'CLOUD'})\n`;
+        response += `  Est. Savings: $${decision.estimatedSavingsUsd.toFixed(4)} per request\n`;
+        response += `  Historical Local Success Rate: ${(decision.localSuccessRate * 100).toFixed(0)}% (${decision.sampleSize} samples)\n\n`;
+        response += `  Reason: ${decision.reason}\n\n`;
+
+        if (summary.overall.total > 0) {
+            const pct = (summary.overall.localRatio * 100).toFixed(0);
+            response += `Lifetime Stats: ${summary.overall.total} routed requests, ${pct}% resolved locally.\n`;
+        }
+
+        return { content: [{ type: 'text' as const, text: response }] };
+    }
+);
+
+// ---- Tool 14: get_team_memory ----
+server.tool(
+    'get_team_memory',
+    'Retrieve solutions that teammates on the same local network discovered in their OCD instances. Requires P2P_SECRET env var to be set on all nodes.',
+    {
+        query: z.string().describe('The problem or error to look up in team memory'),
+        limit: z.number().optional().describe('Max results (default: 3)'),
+    },
+    async ({ query, limit = 3 }) => {
+        const peers = getKnownPeers();
+        if (!peers.length) {
+            return { content: [{ type: 'text' as const, text: 'No peers discovered on the local network. Ensure P2P_SECRET is set and teammates are running OCD on the same network.' }] };
+        }
+
+        // Search local DB for p2p-sourced embeddings
+        const vectorService = new VectorService();
+        const results = await vectorService.searchSimilarSessions(query, limit * 2);
+        const db = getDb();
+
+        const p2pResults = results.filter(r => r.session_id.startsWith('p2p::'));
+        if (!p2pResults.length) {
+            return { content: [{ type: 'text' as const, text: `${peers.length} peer(s) known but no team solutions synced yet. Run POST /api/p2p/sync to pull team memory.` }] };
+        }
+
+        let response = `Team Memory Results (from ${peers.length} peer(s)):\n\n`;
+        for (const res of p2pResults.slice(0, limit)) {
+            const [, peerId, remoteId] = res.session_id.split('::');
+            const row = db.prepare('SELECT title, tldr FROM sessions WHERE id = ?').get(res.session_id) as any;
+            if (row) {
+                response += `--- ${row.title || 'Team solution'} (${(res.similarity * 100).toFixed(0)}% match) ---\n`;
+                response += `Peer: ${peerId} | Remote Session: ${remoteId}\n`;
+                response += `Summary: ${row.tldr || 'No summary'}\n\n`;
+            }
+        }
+        return { content: [{ type: 'text' as const, text: response }] };
+    }
+);
+
+// ---- Tool 15: submit_ide_trace ----
+server.tool(
+    'submit_ide_trace',
+    'Manually submit a stack trace or error output for instant proactive analysis. OCD will search its memory and return the best matching past solution.',
+    {
+        trace: z.string().describe('The full stack trace, error output, or LSP diagnostic to analyze'),
+    },
+    async ({ trace }) => {
+        const result = await submitTrace(trace);
+        if (!result.matched) {
+            return { content: [{ type: 'text' as const, text: 'No matching past solution found for this error. OCD will learn from this session if it is resolved successfully.' }] };
+        }
+        let response = `Proactive Match Found (${((result.similarity || 0) * 100).toFixed(0)}% similarity):\n\n`;
+        response += `Session: ${result.session_id}\n`;
+        response += `Title: ${result.title || 'Unknown'}\n`;
+        response += `Summary: ${result.tldr || 'No summary available'}\n\n`;
+        response += `Use get_similar_solutions with the error text for full context.`;
         return { content: [{ type: 'text' as const, text: response }] };
     }
 );
