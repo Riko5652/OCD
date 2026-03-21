@@ -51,10 +51,12 @@ function getNodeId(): string {
 // ─── HMAC authentication ──────────────────────────────────────────────────────
 
 function signPayload(payload: string): string {
-    return createHmac('sha256', P2P_SECRET || 'ocd-default-secret').update(payload).digest('hex');
+    if (!P2P_SECRET) throw new Error('P2P_SECRET is not configured. Cannot sign payload.');
+    return createHmac('sha256', P2P_SECRET).update(payload).digest('hex');
 }
 
 function verifySignature(payload: string, sig: string): boolean {
+    if (!P2P_SECRET) return false;
     const expected = signPayload(payload);
     // Constant-time comparison
     if (expected.length !== sig.length) return false;

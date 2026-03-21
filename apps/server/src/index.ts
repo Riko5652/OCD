@@ -963,7 +963,7 @@ fastify.addHook('onRequest', (request, reply, done) => {
 fastify.post('/api/ide/submit-trace', async (request, reply) => {
     const rateLimitErr = checkLlmRateLimit(`ide:${request.ip}`, 5000);
     if (rateLimitErr) { reply.status(429); return { error: rateLimitErr }; }
-    const { trace } = request.body as any;
+    const { trace } = request.body as { trace: string };
     if (!trace || typeof trace !== 'string') { reply.status(400); return { error: 'trace (string) is required' }; }
     const result = await submitTrace(trace.slice(0, 8192));
     return result;

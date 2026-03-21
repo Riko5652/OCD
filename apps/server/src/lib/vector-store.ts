@@ -202,8 +202,8 @@ export class VectorService {
 
     async searchSimilarSessions(queryText: string, limit = 5, matchThreshold = 0.5) {
         const db = getDb();
-        const queryVector = hashEmbed(queryText);
-        const rows = db.prepare('SELECT session_id, embedding FROM session_embeddings').all() as any[];
+        const queryVector = await embedText(queryText);
+        const rows = db.prepare('SELECT session_id, embedding FROM session_embeddings ORDER BY created_at DESC LIMIT 1000').all() as any[];
         const results: Array<{ session_id: string; similarity: number }> = [];
         for (const row of rows) {
             try {
