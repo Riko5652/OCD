@@ -1,4 +1,4 @@
-# OCD - Omni Coder Dashboard v4.0
+# OCD - Omni Coder Dashboard v5.0
 
 > An AI memory engine that learns from your coding sessions, recommends the right tool for every task, and injects proven solutions into your workflow — all local, no API keys required.
 
@@ -7,7 +7,6 @@
 [![Tools](https://img.shields.io/badge/tools-7-blue)](#what-gets-tracked)
 [![MCP](https://img.shields.io/badge/MCP-11%20tools-purple)](#mcp-universal-brain)
 [![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
-[![PWA](https://img.shields.io/badge/PWA-offline%20ready-blueviolet)](#pwa-support)
 [![npm](https://img.shields.io/npm/v/ocd)](https://www.npmjs.com/package/ocd)
 
 ---
@@ -119,11 +118,12 @@ npx ocd
 npm install -g ocd
 ocd
 
-# Clone and run
+# Clone and run (development)
 git clone https://github.com/Riko5652/OCD
 cd OCD
-npm install
-npm start
+pnpm install
+pnpm run build
+pnpm run start
 
 # Docker
 docker compose up
@@ -242,11 +242,11 @@ AZURE_OPENAI_API_KEY=...
 │  │ Center   │ │& Projects│ │  Costs   │ │& Gamify    │  │
 │  └────┬─────┘ └────┬─────┘ └────┬─────┘ └─────┬─────┘  │
 │       └─────────────┴────────────┴─────────────┘        │
-│                    Chart.js · SSE · ⌘K                   │
+│                   Recharts · SSE · Tailwind               │
 └───────────────────────┬─────────────────────────────────┘
                         │ REST + SSE
 ┌───────────────────────▼─────────────────────────────────┐
-│                  Express API Server                      │
+│                  Fastify API Server                       │
 │                                                          │
 │  ┌─────────────┐  ┌──────────────┐  ┌────────────────┐  │
 │  │  7 Adapters │  │   Analytics  │  │  Intelligence  │  │
@@ -269,7 +269,7 @@ AZURE_OPENAI_API_KEY=...
 │  └─────────────┘                    └────────────────┘  │
 │                                                          │
 │  ┌──────────────────────────────────────────────────┐   │
-│  │              SQLite (sql.js, in-process)          │   │
+│  │           SQLite (better-sqlite3, in-process)     │   │
 │  │  sessions · turns · stats · vectors · daily_stats │   │
 │  └──────────────────────────────────────────────────┘   │
 └───────────────────────┬─────────────────────────────────┘
@@ -375,4 +375,6 @@ bin/
 
 ## License
 
-AGPL-3.0-or-later — see [LICENSE](LICENSE). Built and maintained by [Dor Lipetz](https://github.com/Riko5652).
+AGPL-3.0-or-later — see [LICENSE](LICENSE). For commercial licensing, see [LICENSE-COMMERCIAL.md](LICENSE-COMMERCIAL.md).
+
+Built and maintained by [Dor Lipetz](https://github.com/Riko5652).
