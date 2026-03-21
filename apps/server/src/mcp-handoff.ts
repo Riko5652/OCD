@@ -11,6 +11,7 @@ import { getShareableEmbeddings, getKnownPeers } from './engine/p2p-sync.js';
 import { submitTrace } from './engine/ide-interceptor.js';
 import { computeEffectSizes, getAttributionReport } from './engine/prompt-coach.js';
 import { computeTokenBudget } from './engine/token-budget.js';
+import { getSessionHealthCheck } from './engine/session-coach.js';
 
 initDb();
 
@@ -511,6 +512,51 @@ server.tool(
                 response += 'Efficiency by Tool (tokens per quality point — lower is better):\n';
                 for (const t of budget.efficiency_by_tool) {
                     response += `  • ${t.tool}: ${t.tokens_per_quality_point} tokens/quality (Q=${t.avg_quality}, cache=${t.avg_cache}%, ${t.sessions} sessions)\n`;
+                }
+            }
+
+            return { content: [{ type: 'text' as const, text: response }] };
+        } catch (e: any) {
+            return { content: [{ type: 'text' as const, text: 'Error: ' + e.message }], isError: true };
+        }
+    }
+);
+
+// ---- Tool 18: get_session_health_check ----
+server.tool(
+    'get_session_health_check',
+    'Check your current session health using cross-session patterns. Returns a status (healthy/degrading/critical), a suggested action (continue/compact/new_session), and context-aware nudges based on your historical usage patterns. Call this periodically to stay ahead of quality degradation.',
+    {},
+    async () => {
+        try {
+            const health = getSessionHealthCheck();
+
+            let response = `Session Health: ${health.status.toUpperCase()}\n`;
+            response += `Suggested Action: ${health.suggested_action}\n\n`;
+
+            response += `Current Session:\n`;
+            response += `  Turns: ${health.current.turns} | Tokens: ${health.current.tokens_k}K\n`;
+            response += `  Cache Hit: ${health.current.cache_hit_pct}% | Error Rate: ${health.current.error_rate_pct}%\n`;
+            response += `  Duration: ${health.current.duration_min} min\n\n`;
+
+            response += `Cross-Session Baselines:\n`;
+            const cs = health.cross_session;
+            if (cs.avg_turns_before_quality_drop) {
+                response += `  Quality drops after ~${cs.avg_turns_before_quality_drop} turns (your pattern)\n`;
+            }
+            if (cs.avg_cache_hit_pct) {
+                response += `  Your avg cache hit: ${cs.avg_cache_hit_pct}% | Avg quality: ${cs.avg_quality_score}\n`;
+            }
+            response += `  Today: ${cs.sessions_today} sessions, ${cs.tokens_today_k}K tokens`;
+            if (cs.daily_avg_tokens_k) {
+                response += ` (daily avg: ${cs.daily_avg_tokens_k}K)`;
+            }
+            response += '\n';
+
+            if (health.nudges.length) {
+                response += `\nNudges:\n`;
+                for (const nudge of health.nudges) {
+                    response += `  ⚠ ${nudge}\n`;
                 }
             }
 
