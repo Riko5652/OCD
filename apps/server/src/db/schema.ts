@@ -222,6 +222,69 @@ export function migrate(db: Database) {
       dimensions INTEGER,
       created_at INTEGER NOT NULL
     );
+
+    -- Feature: Anti-Hallucination Negative Prompt Injector
+    -- Tracks repeated failure patterns so future agents can avoid them
+    CREATE TABLE IF NOT EXISTS anti_patterns (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      pattern_key TEXT NOT NULL,
+      task_type TEXT,
+      language TEXT,
+      failure_description TEXT NOT NULL,
+      failed_library TEXT,
+      failed_approach TEXT,
+      failure_count INTEGER DEFAULT 1,
+      success_alternative TEXT,
+      success_session_id TEXT REFERENCES sessions(id),
+      first_seen_at INTEGER NOT NULL,
+      last_seen_at INTEGER NOT NULL,
+      UNIQUE(pattern_key)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ap_task ON anti_patterns(task_type, language);
+    CREATE INDEX IF NOT EXISTS idx_ap_key ON anti_patterns(pattern_key);
+
+    -- Feature: P2P Secure Team Memory
+    -- Tracks discovered peers on the local network
+    CREATE TABLE IF NOT EXISTS p2p_peers (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      peer_id TEXT NOT NULL UNIQUE,
+      host TEXT NOT NULL,
+      port INTEGER NOT NULL,
+      last_seen_at INTEGER NOT NULL,
+      shared_sessions INTEGER DEFAULT 0,
+      accepted_sessions INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_p2p_peer ON p2p_peers(peer_id);
+
+    -- Feature: IDE Interception event log
+    -- Logs stack traces detected and the solutions served
+    CREATE TABLE IF NOT EXISTS ide_interceptions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      detected_at INTEGER NOT NULL,
+      raw_trace TEXT NOT NULL,
+      error_signature TEXT,
+      matched_session_id TEXT REFERENCES sessions(id),
+      similarity REAL,
+      notification_sent INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_ide_sig ON ide_interceptions(error_signature);
+
+    -- Feature: Token Arbitrage log
+    -- Tracks routing decisions made by the local proxy
+    CREATE TABLE IF NOT EXISTS arbitrage_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      logged_at INTEGER NOT NULL,
+      task_type TEXT,
+      complexity TEXT,
+      original_model TEXT,
+      routed_model TEXT,
+      routed_to_local INTEGER DEFAULT 0,
+      historical_success_rate REAL,
+      estimated_cost_original REAL,
+      estimated_cost_routed REAL,
+      actual_outcome TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_arb_task ON arbitrage_log(task_type, routed_to_local);
   `);
 
     // Seed tools
