@@ -73,7 +73,42 @@ if (AUTH_TOKEN) {
     });
 }
 
-// ---- LLM rate limiter ----
+// ---- General API rate limiter ----
+// Limits each IP to a max number of requests per time window.
+const apiRateBuckets = new Map<string, { count: number; resetAt: number }>();
+const API_RATE_WINDOW_MS = 60_000;
+const API_RATE_MAX = 120; // 120 requests per minute per IP
+
+fastify.addHook('onRequest', (request, reply, done) => {
+    if (!request.url.startsWith('/api/')) return done();
+    // Exempt health check from rate limiting
+    if (request.url === '/api/health') return done();
+
+    const ip = request.ip || 'local';
+    const now = Date.now();
+    let bucket = apiRateBuckets.get(ip);
+    if (!bucket || now >= bucket.resetAt) {
+        bucket = { count: 0, resetAt: now + API_RATE_WINDOW_MS };
+        apiRateBuckets.set(ip, bucket);
+    }
+    bucket.count++;
+    if (bucket.count > API_RATE_MAX) {
+        const retryIn = Math.ceil((bucket.resetAt - now) / 1000);
+        reply.status(429).send({ error: `Rate limited — ${API_RATE_MAX} requests/min exceeded. Retry in ${retryIn}s.` });
+        return;
+    }
+    done();
+});
+
+// Periodically clean up stale rate limit buckets
+setInterval(() => {
+    const now = Date.now();
+    for (const [ip, bucket] of apiRateBuckets) {
+        if (now >= bucket.resetAt) apiRateBuckets.delete(ip);
+    }
+}, 60_000);
+
+// ---- LLM rate limiter (stricter, for expensive endpoints) ----
 const llmCallTimestamps = new Map<string, number>();
 function checkLlmRateLimit(ip: string, windowMs = 60_000): string | null {
     const now = Date.now();
