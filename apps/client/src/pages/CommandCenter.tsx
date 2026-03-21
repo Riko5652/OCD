@@ -53,6 +53,7 @@ export default function CommandCenter() {
     const { data: overview } = useApi<any>('/api/overview');
     const { data: savings } = useApi<any>('/api/savings-report');
     const { data: health } = useApi<any>('/api/health');
+    const { data: tokenBudget } = useApi<any>('/api/token-budget');
 
     const [insights, setInsights] = useState<string>('');
     const [loadingInsights, setLoadingInsights] = useState(false);
@@ -118,6 +119,65 @@ export default function CommandCenter() {
                 <KpiCard label="Cache Hit Rate" value={`${(g.avg_cache_hit || 0).toFixed(1)}%`} icon={<Zap className="text-neonGreen w-6 h-6" />} color="emerald" sub={`${fmtTokens(g.total_cache)} cached tokens`} />
                 <KpiCard label="Avg Quality" value={(g.avg_quality || 0).toFixed(0)} icon={<Trophy className="text-neonPink w-6 h-6" />} color="pink" sub={`${fmtTokens(g.total_lines_added)} lines generated`} />
             </div>
+
+            {/* Token Budget & Quick Wins — always visible (universal value) */}
+            {tokenBudget && (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    {/* Token Burn Rate */}
+                    <div className="glass-panel p-6 border-neonPink/20">
+                        <h3 className="text-xs font-black text-neonPink mb-4 uppercase tracking-widest">Token Burn Rate</h3>
+                        <div className="grid grid-cols-3 gap-4 mb-4">
+                            <div className="bg-[#050505] p-3 rounded-xl border border-[#222] text-center">
+                                <p className="text-2xl font-black text-white">{fmtTokens(tokenBudget.today.input_tokens + tokenBudget.today.output_tokens)}</p>
+                                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Today</p>
+                            </div>
+                            <div className="bg-[#050505] p-3 rounded-xl border border-[#222] text-center">
+                                <p className="text-2xl font-black text-zinc-300">{fmtTokens(tokenBudget.daily_avg.input_tokens + tokenBudget.daily_avg.output_tokens)}</p>
+                                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Daily Avg</p>
+                            </div>
+                            <div className="bg-[#050505] p-3 rounded-xl border border-neonPink/20 text-center">
+                                <p className="text-2xl font-black text-neonPink">${tokenBudget.weekly_forecast.cost}</p>
+                                <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Week Forecast</p>
+                            </div>
+                        </div>
+                        {tokenBudget.efficiency_by_tool?.length > 0 && (
+                            <div className="space-y-2">
+                                <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Tokens per Quality Point (lower = more efficient)</p>
+                                {tokenBudget.efficiency_by_tool.map((t: any) => (
+                                    <div key={t.tool} className="flex items-center gap-2 text-xs">
+                                        <span className="text-zinc-400 w-24 truncate font-bold">{t.tool}</span>
+                                        <div className="flex-1 h-4 bg-[#111] rounded overflow-hidden border border-[#222]">
+                                            <div className="h-full bg-gradient-to-r from-neonGreen/40 to-neonGreen rounded transition-all"
+                                                style={{ width: `${Math.min(100, Math.max(5, 100 - (t.tokens_per_quality_point / 200)))}%` }}>
+                                            </div>
+                                        </div>
+                                        <span className="text-zinc-500 w-14 text-right font-mono text-[10px]">{t.tokens_per_quality_point}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Quick Wins */}
+                    <div className="glass-panel p-6 border-neonGreen/20">
+                        <h3 className="text-xs font-black text-neonGreen mb-4 uppercase tracking-widest">Quick Wins — Save Tokens Now</h3>
+                        {tokenBudget.quick_wins?.length > 0 ? (
+                            <div className="space-y-4">
+                                {tokenBudget.quick_wins.map((w: any, i: number) => (
+                                    <div key={i} className="p-4 bg-[#050505] rounded-xl border border-[#222]">
+                                        <p className="text-sm font-bold text-white">{w.tip}</p>
+                                        <p className="text-[10px] text-neonGreen mt-2">{w.impact}</p>
+                                    </div>
+                                ))}
+                            </div>
+                        ) : (
+                            <div className="text-center py-6">
+                                <p className="text-sm text-zinc-500">No quick wins detected — your token usage looks efficient!</p>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            )}
 
             {focusMode && (
                 <div className="glass-panel p-4 border-brand/20 bg-brand/5 text-center">

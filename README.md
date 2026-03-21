@@ -5,7 +5,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-green)](LICENSE)
 [![Tools](https://img.shields.io/badge/tools-7-blue)](#what-gets-tracked)
-[![MCP](https://img.shields.io/badge/MCP-16%20tools-purple)](#mcp-setup-30-seconds-no-api-key)
+[![MCP](https://img.shields.io/badge/MCP-17%20tools-purple)](#mcp-setup-30-seconds-no-api-key)
 [![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
 [![npm](https://img.shields.io/npm/v/ocd)](https://www.npmjs.com/package/ocd)
 
@@ -43,7 +43,9 @@
 
 ## What it actively does for you
 
-This is not a passive analytics dashboard. It's a system that makes you faster:
+This is not a passive analytics dashboard. It's a system that makes you faster — and helps you do more within your usage caps:
+
+**Token Budget Tracker** — Real-time burn rate monitoring: today's usage, 7-day average, weekly cost forecast, and efficiency-per-tool ranking (tokens per quality point). Works with any single tool from day one.
 
 **Semantic Memory** — When Claude Code solves a complex migration in 15 turns, the system vectorizes the solution, the context, and the error logs. Two weeks later, when you hit a similar error in Cursor, the MCP server bypasses the LLM's knowledge cutoff and injects the exact, locally-proven solution into your prompt context. It's a self-building brain across all your AI tools.
 
@@ -87,7 +89,7 @@ See [PRIVACY.md](PRIVACY.md) for the full data handling policy.
 
 ## MCP Setup (30 seconds, no API key)
 
-The dashboard exposes an MCP server with **16 tools** that any AI agent can call mid-session. Zero API keys needed.
+The dashboard exposes an MCP server with **17 tools** that any AI agent can call mid-session. Zero API keys needed.
 
 ```bash
 # Auto-setup for all detected MCP clients
@@ -125,6 +127,7 @@ This writes the correct config to Claude Code, Cursor, and Windsurf automaticall
 | `push_handoff_note` | Save a note before switching tools |
 | `get_optimal_prompt_structure` | **Evidence-based prompt science** — patterns with effect sizes and confidence levels from your best sessions |
 | **`get_attribution_report`** | **NEW — AI vs. human authorship breakdown per project/branch/timeframe** |
+| **`get_efficiency_tips`** | **NEW — personalized token-saving tips: burn rate, quick wins, waste detection** |
 | `get_topic_summary` | Executive summary of work on a topic within a project |
 | **`get_negative_constraints`** | **NEW — inject "DO NOT use X" clauses derived from your local failure history** |
 | **`get_arbitrage_recommendation`** | **NEW — local vs cloud routing recommendation with estimated savings** |

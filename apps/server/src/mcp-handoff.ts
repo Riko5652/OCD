@@ -10,6 +10,7 @@ import { makeArbitrageDecision, getArbitrageSummary } from './engine/token-arbit
 import { getShareableEmbeddings, getKnownPeers } from './engine/p2p-sync.js';
 import { submitTrace } from './engine/ide-interceptor.js';
 import { computeEffectSizes, getAttributionReport } from './engine/prompt-coach.js';
+import { computeTokenBudget } from './engine/token-budget.js';
 
 initDb();
 
@@ -484,6 +485,47 @@ server.tool(
         }
     }
 );
+
+// ---- Tool 17: get_efficiency_tips ----
+server.tool(
+    'get_efficiency_tips',
+    'Get personalized token-saving tips based on your usage patterns. Returns your daily burn rate, weekly forecast, top token consumers, and actionable quick wins to reduce waste.',
+    {},
+    async () => {
+        try {
+            const budget = computeTokenBudget();
+            let response = 'Token Efficiency Report:\n\n';
+
+            response += `Today: ${fmtTokenCount(budget.today.input_tokens + budget.today.output_tokens)} tokens, ${budget.today.sessions} sessions, ${budget.today.turns} turns\n`;
+            response += `7-Day Avg: ${fmtTokenCount(budget.daily_avg.input_tokens + budget.daily_avg.output_tokens)}/day, ~$${budget.daily_avg.cost}/day\n`;
+            response += `Weekly Forecast: ${fmtTokenCount(budget.weekly_forecast.tokens)} tokens, ~$${budget.weekly_forecast.cost}\n\n`;
+
+            if (budget.quick_wins.length) {
+                response += 'Quick Wins to Save Tokens:\n';
+                for (const w of budget.quick_wins) {
+                    response += `  ${w.priority}. ${w.tip}\n     Impact: ${w.impact}\n\n`;
+                }
+            }
+
+            if (budget.efficiency_by_tool.length) {
+                response += 'Efficiency by Tool (tokens per quality point — lower is better):\n';
+                for (const t of budget.efficiency_by_tool) {
+                    response += `  • ${t.tool}: ${t.tokens_per_quality_point} tokens/quality (Q=${t.avg_quality}, cache=${t.avg_cache}%, ${t.sessions} sessions)\n`;
+                }
+            }
+
+            return { content: [{ type: 'text' as const, text: response }] };
+        } catch (e: any) {
+            return { content: [{ type: 'text' as const, text: 'Error: ' + e.message }], isError: true };
+        }
+    }
+);
+
+function fmtTokenCount(n: number): string {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+    return String(n);
+}
 
 async function startMcp() {
     const transport = new StdioServerTransport();

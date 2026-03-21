@@ -7,6 +7,7 @@ import {
     computePersonalInsights, dbGetCommitScores,
 } from '../engine/analytics.js';
 import { computeSavingsReport } from '../engine/savings-report.js';
+import { computeTokenBudget } from '../engine/token-budget.js';
 import { computeProfile, computeTrends, computePromptMetrics } from '../engine/insights.js';
 import { getAgenticLeaderboard } from '../engine/agentic-scorer.js';
 import type { CacheStore } from './types.js';
@@ -22,6 +23,7 @@ export default async function analyticsRoutes(fastify: FastifyInstance, opts: { 
     fastify.get('/api/costs', async () => cache.get('costs', computeCostAnalysis));
     fastify.get('/api/personal-insights', async () => cache.get('personal', computePersonalInsights));
     fastify.get('/api/savings-report', async () => cache.get('savings', computeSavingsReport));
+    fastify.get('/api/token-budget', async () => cache.get('token-budget', computeTokenBudget));
 
     fastify.get('/api/commits', async (request) => {
         const limit = (request.query as any).limit || 100;

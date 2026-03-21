@@ -4,6 +4,7 @@ import Performance from './pages/Performance';
 import Workspaces from './pages/Workspaces';
 import Profile from './pages/Profile';
 import Insights from './pages/Insights';
+import Onboarding from './components/Onboarding';
 import CommandPalette from './components/CommandPalette';
 import ImportModal from './components/ImportModal';
 import ToastContainer, { toast } from './components/Toast';
@@ -35,6 +36,7 @@ export default function App() {
     const [offline, setOffline] = useState(!navigator.onLine);
     const [installPrompt, setInstallPrompt] = useState<any>(null);
     const [focusMode, setFocusMode] = useState(false);
+    const [showOnboarding, setShowOnboarding] = useState(() => !localStorage.getItem('ocd-onboarded'));
     const { theme, toggle: toggleTheme } = useTheme();
 
     // Online/offline detection
@@ -191,11 +193,17 @@ export default function App() {
 
             {/* Main Content */}
             <main className="flex-1 md:ml-64 p-4 md:p-8 overflow-y-auto min-h-screen">
-                {page === 'command' && <CommandCenter />}
-                {page === 'insights' && <Insights />}
-                {page === 'performance' && <Performance />}
-                {page === 'workspaces' && <Workspaces />}
-                {page === 'profile' && <Profile />}
+                {showOnboarding ? (
+                    <Onboarding onDismiss={() => { localStorage.setItem('ocd-onboarded', '1'); setShowOnboarding(false); }} />
+                ) : (
+                    <>
+                        {page === 'command' && <CommandCenter />}
+                        {page === 'insights' && <Insights />}
+                        {page === 'performance' && <Performance />}
+                        {page === 'workspaces' && <Workspaces />}
+                        {page === 'profile' && <Profile />}
+                    </>
+                )}
             </main>
 
             {/* Mobile bottom nav */}

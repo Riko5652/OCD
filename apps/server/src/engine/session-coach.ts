@@ -27,6 +27,24 @@ const COACH_RULES: CoachRule[] = [
         severity: 'warning',
     },
     {
+        id: 'high-token-burn',
+        check: s => {
+            const totalTokens = (s.total_input_tokens || 0) + (s.total_output_tokens || 0);
+            return totalTokens > 500_000 && (s.total_turns || 0) > 10;
+        },
+        message: s => {
+            const totalK = Math.round(((s.total_input_tokens || 0) + (s.total_output_tokens || 0)) / 1000);
+            return `Session has consumed ${totalK}K tokens in ${s.total_turns} turns. Consider breaking into sub-tasks to manage context window growth.`;
+        },
+        severity: 'warning',
+    },
+    {
+        id: 'poor-cache-active',
+        check: s => (s.cache_hit_pct || 0) < 20 && (s.total_turns || 0) > 10,
+        message: s => `Cache hit rate is only ${Math.round(s.cache_hit_pct || 0)}% after ${s.total_turns} turns. Stabilize your CLAUDE.md and use targeted tool calls to improve caching.`,
+        severity: 'warning',
+    },
+    {
         id: 'stale-session',
         check: s => {
             const lastActivityMs = s.ended_at || s.started_at || 0;
