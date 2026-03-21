@@ -5,7 +5,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-green)](LICENSE)
 [![Tools](https://img.shields.io/badge/tools-7-blue)](#what-gets-tracked)
-[![MCP](https://img.shields.io/badge/MCP-17%20tools-purple)](#mcp-setup-30-seconds-no-api-key)
+[![MCP](https://img.shields.io/badge/MCP-18%20tools-purple)](#mcp-setup-30-seconds-no-api-key)
 [![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
 [![npm](https://img.shields.io/npm/v/ocd)](https://www.npmjs.com/package/ocd)
 
@@ -19,6 +19,7 @@
 - **Anti-Hallucination Negative Prompt Injector** — Builds an Anti-Pattern Graph from your failing sessions and injects explicit `DO NOT use X` constraints into new prompts via the `get_negative_constraints` MCP tool.
 - **Token Arbitrage & Cost Routing** — Classifies every prompt by task type and complexity, routes to local Ollama (free) when your historical success rate is ≥ 92%, and logs estimated savings per request.
 - **P2P Secure Team Memory** — Syncs embeddings across teammates on the same LAN or Tailscale using UDP discovery + HMAC-SHA256 authentication. No cloud, no source code shared — embeddings only.
+- **Session Health Check** — New `get_session_health_check` MCP tool gives agents cross-session self-awareness: quality degradation thresholds, historical cache baselines, daily token budgets, and structured `continue/compact/new_session` action signals. OCD informs, the agent decides.
 
 ---
 
@@ -89,7 +90,7 @@ See [PRIVACY.md](PRIVACY.md) for the full data handling policy.
 
 ## MCP Setup (30 seconds, no API key)
 
-The dashboard exposes an MCP server with **17 tools** that any AI agent can call mid-session. Zero API keys needed.
+The dashboard exposes an MCP server with **18 tools** that any AI agent can call mid-session. Zero API keys needed.
 
 ```bash
 # Auto-setup for all detected MCP clients
@@ -133,6 +134,7 @@ This writes the correct config to Claude Code, Cursor, and Windsurf automaticall
 | **`get_arbitrage_recommendation`** | **NEW — local vs cloud routing recommendation with estimated savings** |
 | **`get_team_memory`** | **NEW — search peer-synced embeddings for solutions from your teammates** |
 | **`submit_ide_trace`** | **NEW — manually submit a stack trace for instant proactive analysis** |
+| **`get_session_health_check`** | **NEW — cross-session health signals: status, suggested action, quality baselines, nudges** |
 
 ---
 
@@ -327,7 +329,7 @@ ANTHROPIC_API_KEY=sk-ant-...    # Anthropic Claude
 └───────────────────────┬─────────────────────────────────┘
                         │ stdio
 ┌───────────────────────▼─────────────────────────────────┐
-│                   MCP Server (11 tools)                  │
+│                   MCP Server (18 tools)                  │
 │                                                          │
 │  get_similar_solutions    →  vector search + graph walk  │
 │  get_knowledge_context    →  graph neighborhood          │
@@ -394,7 +396,8 @@ apps/
     db/
       index.ts         # Database initialization
       schema.ts        # SQLite schema + migration
-    mcp-handoff.ts   # MCP Universal Brain server (11 tools)
+    mcp-handoff.ts   # MCP Universal Brain server (18 tools)
+    token-budget.ts        # NEW — daily burn rate, weekly forecast, per-tool efficiency
     index.ts         # Fastify app + all API routes
     config.ts        # Auto-detected paths + discovery report
   client/src/        # React + Vite dashboard UI
@@ -428,6 +431,8 @@ bin/
 - [x] **Anti-hallucination negative prompt injector** (Anti-Pattern Graph + MCP tool)
 - [x] **Token arbitrage & cost routing** (Ollama proxy + per-request savings log)
 - [x] **P2P secure team memory** (UDP discovery + HMAC-SHA256 embedding sync)
+- [x] **Session health check** (cross-session quality baselines + structured action signals)
+- [x] **Token efficiency tips** (burn rate, quick wins, waste detection)
 - [ ] Enterprise: secure team sync with anonymized aggregation
 - [ ] PM integration: Jira/Linear/GitHub Issues velocity correlation
 - [ ] Cross-regional benchmarking
