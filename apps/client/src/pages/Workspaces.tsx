@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApi } from '../hooks/useApi';
-import { Activity, Clock, Zap, Cpu, ChevronRight, ChevronDown, Brain, Search, Filter } from 'lucide-react';
+import { Activity, Clock, Zap, Cpu, ChevronRight, ChevronDown, Brain, Search, Filter, X, FolderOpen } from 'lucide-react';
 
 // Lightweight inline markdown renderer — supports ## headings, **bold**, `code`, bullet lists
 function MarkdownBlock({ text }: { text: string }) {
@@ -118,35 +118,57 @@ function SessionDetailsDrawer({ sessionId }: { sessionId: string }) {
                                     )}
                                 </div>
 
-                                {/* Metrics Bar */}
-                                <div className="flex flex-wrap items-center gap-3 md:gap-5 pt-2 border-t border-slate-800/50 text-[10px] uppercase tracking-wider font-bold">
-                                    {t.input_tokens > 0 && (
-                                        <div className="flex items-center gap-1.5 text-blue-400 group-hover:text-blue-300" title="Input Tokens">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]"></div>
-                                            IN: {t.input_tokens}
+                                {/* Token Visualization Bar + Metrics */}
+                                <div className="pt-2 border-t border-slate-800/50 space-y-2">
+                                    {/* Stacked token bar */}
+                                    {(() => {
+                                        const total = (t.input_tokens || 0) + (t.cache_read || 0) + (t.cache_creation_input_tokens || 0) + (t.output_tokens || 0);
+                                        if (!total) return null;
+                                        return (
+                                            <div className="flex h-3 rounded-full overflow-hidden bg-[#111] border border-slate-800/50" title={`Total: ${total.toLocaleString()} tokens`}>
+                                                {t.input_tokens > 0 && <div className="bg-blue-500" style={{ width: `${(t.input_tokens / total) * 100}%` }} title={`Input: ${t.input_tokens}`} />}
+                                                {t.cache_read > 0 && <div className="bg-emerald-500" style={{ width: `${(t.cache_read / total) * 100}%` }} title={`Cache read: ${t.cache_read}`} />}
+                                                {t.cache_creation_input_tokens > 0 && <div className="bg-yellow-600" style={{ width: `${(t.cache_creation_input_tokens / total) * 100}%` }} title={`Cache create: ${t.cache_creation_input_tokens}`} />}
+                                                {t.output_tokens > 0 && <div className="bg-amber-400" style={{ width: `${(t.output_tokens / total) * 100}%` }} title={`Output: ${t.output_tokens}`} />}
+                                            </div>
+                                        );
+                                    })()}
+                                    {/* Metrics row */}
+                                    <div className="flex flex-wrap items-center gap-3 md:gap-5 text-[10px] uppercase tracking-wider font-bold">
+                                        {t.input_tokens > 0 && (
+                                            <div className="flex items-center gap-1.5 text-blue-400">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]" />
+                                                IN: {t.input_tokens.toLocaleString()}
+                                            </div>
+                                        )}
+                                        {t.cache_read > 0 && (
+                                            <div className="flex items-center gap-1.5 text-emerald-400">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]" />
+                                                CR: {t.cache_read.toLocaleString()}
+                                            </div>
+                                        )}
+                                        {t.cache_creation_input_tokens > 0 && (
+                                            <div className="flex items-center gap-1.5 text-yellow-600">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-yellow-600" />
+                                                CC: {t.cache_creation_input_tokens.toLocaleString()}
+                                            </div>
+                                        )}
+                                        {t.output_tokens > 0 && (
+                                            <div className="flex items-center gap-1.5 text-amber-400">
+                                                <div className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]" />
+                                                OUT: {t.output_tokens.toLocaleString()}
+                                            </div>
+                                        )}
+                                        {t.latency_ms > 0 && (
+                                            <div className="flex items-center gap-1.5 text-slate-400">
+                                                <Clock className="w-3 h-3" />
+                                                {(t.latency_ms / 1000).toFixed(1)}s
+                                            </div>
+                                        )}
+                                        <div className="flex items-center gap-1.5 text-slate-500">
+                                            <Zap className="w-3 h-3 text-purple-500" />
+                                            {t.tok_per_sec || 0} TPS
                                         </div>
-                                    )}
-                                    {t.cache_read > 0 && (
-                                        <div className="flex items-center gap-1.5 text-emerald-400 group-hover:text-emerald-300" title="Cache Read">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.6)]"></div>
-                                            CR: {t.cache_read}
-                                        </div>
-                                    )}
-                                    {t.output_tokens > 0 && (
-                                        <div className="flex items-center gap-1.5 text-amber-400 group-hover:text-amber-300" title="Output Tokens">
-                                            <div className="w-1.5 h-1.5 rounded-full bg-amber-400 shadow-[0_0_8px_rgba(251,191,36,0.6)]"></div>
-                                            OUT: {t.output_tokens}
-                                        </div>
-                                    )}
-                                    {t.latency_ms > 0 && (
-                                        <div className="flex items-center gap-1.5 text-slate-400" title="Latency">
-                                            <Clock className="w-3 h-3" />
-                                            {(t.latency_ms / 1000).toFixed(1)}s
-                                        </div>
-                                    )}
-                                    <div className="flex items-center gap-1.5 text-slate-500">
-                                        <Zap className="w-3 h-3 text-purple-500" />
-                                        {t.tok_per_sec || 0} TPS
                                     </div>
                                 </div>
                             </div>
@@ -229,6 +251,80 @@ function SessionDetailsDrawer({ sessionId }: { sessionId: string }) {
     );
 }
 
+function ProjectDrilldown({ projectName, onClose }: { projectName: string; onClose: () => void }) {
+    const { data, loading } = useApi<any>(`/api/projects/${encodeURIComponent(projectName)}`);
+
+    if (loading) return (
+        <div className="glass-panel p-6 border-brand/30 animate-pulse">
+            <p className="text-sm text-zinc-500">Loading project details...</p>
+        </div>
+    );
+
+    const project = data?.project || data || {};
+    const recentSessions = data?.sessions || [];
+
+    return (
+        <div className="glass-panel p-6 border-brand/30 shadow-neon-brand bg-gradient-to-br from-[#0a0a0a] to-[#050505]">
+            <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-brand/10 flex items-center justify-center text-brand font-black text-lg">
+                        <FolderOpen className="w-5 h-5" />
+                    </div>
+                    <div>
+                        <h3 className="text-lg font-black text-white">{projectName}</h3>
+                        <p className="text-[10px] text-zinc-500 uppercase tracking-widest">{project.dominant_tool} / {project.dominant_model}</p>
+                    </div>
+                </div>
+                <button onClick={onClose} className="p-2 text-zinc-500 hover:text-white transition-colors">
+                    <X className="w-5 h-5" />
+                </button>
+            </div>
+
+            {/* KPI row */}
+            <div className="grid grid-cols-4 gap-4 mb-6">
+                <div className="bg-[#050505] p-4 rounded-xl border border-[#222] text-center">
+                    <p className="text-2xl font-black text-white">{project.session_count || 0}</p>
+                    <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Sessions</p>
+                </div>
+                <div className="bg-[#050505] p-4 rounded-xl border border-[#222] text-center">
+                    <p className="text-2xl font-black text-brand">{((project.total_tokens || 0) / 1000).toFixed(0)}K</p>
+                    <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Tokens</p>
+                </div>
+                <div className="bg-[#050505] p-4 rounded-xl border border-[#222] text-center">
+                    <p className="text-2xl font-black text-neonGreen">{((project.total_lines_added || 0) / 1000).toFixed(1)}K</p>
+                    <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Lines</p>
+                </div>
+                <div className="bg-[#050505] p-4 rounded-xl border border-[#222] text-center">
+                    <p className="text-2xl font-black text-neonBlue">{(project.avg_quality || 0).toFixed(0)}</p>
+                    <p className="text-[9px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Avg Quality</p>
+                </div>
+            </div>
+
+            {/* Recent sessions */}
+            {recentSessions.length > 0 && (
+                <div>
+                    <h4 className="text-[10px] font-black text-zinc-400 uppercase tracking-widest mb-3">Recent Sessions</h4>
+                    <div className="space-y-2">
+                        {recentSessions.slice(0, 8).map((s: any) => (
+                            <div key={s.id} className="flex items-center gap-3 p-3 bg-[#050505] rounded-lg border border-[#222] hover:border-brand/30 transition-colors">
+                                <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-brand/10 text-brand border border-brand/20">{s.tool_id}</span>
+                                <span className="text-sm text-zinc-300 flex-1 truncate">{s.title || 'Untitled'}</span>
+                                <span className="text-[10px] text-zinc-500 font-mono">{s.total_turns} turns</span>
+                                <span className="text-[10px] text-brand font-bold">{((s.total_output_tokens || 0) / 1000).toFixed(0)}K</span>
+                                <span className="text-[10px] text-zinc-600">{s.started_at ? new Date(s.started_at).toLocaleDateString() : ''}</span>
+                            </div>
+                        ))}
+                    </div>
+                </div>
+            )}
+
+            {recentSessions.length === 0 && !loading && (
+                <p className="text-zinc-600 text-sm text-center py-4">No session details available for this project.</p>
+            )}
+        </div>
+    );
+}
+
 export default function Workspaces() {
     const { data: projects } = useApi<any[]>('/api/projects');
     const { data: sessions } = useApi<any[]>('/api/sessions?limit=50');
@@ -237,7 +333,7 @@ export default function Workspaces() {
     const { data: cursorStats } = useApi<any>('/api/cursor/deep');
     const { data: antigravityStats } = useApi<any>('/api/antigravity-stats');
 
-    const [_selectedProject, setSelectedProject] = useState<string | null>(null);
+    const [selectedProject, setSelectedProject] = useState<string | null>(null);
     const [view, setView] = useState<'projects' | 'sessions' | 'commits' | 'topics' | 'telemetry'>('projects');
     const [expandedSession, setExpandedSession] = useState<string | null>(null);
     const [sessionSearch, setSessionSearch] = useState('');
@@ -305,6 +401,11 @@ export default function Workspaces() {
                         <p className="text-slate-500 col-span-full text-center py-12">No projects indexed yet. Run a data refresh.</p>
                     )}
                 </div>
+            )}
+
+            {/* Project Drill-down */}
+            {view === 'projects' && selectedProject && (
+                <ProjectDrilldown projectName={selectedProject} onClose={() => setSelectedProject(null)} />
             )}
 
             {/* Sessions List */}

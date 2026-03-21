@@ -23,6 +23,46 @@
   }
 }
 
+/* Light theme overrides */
+.light-theme {
+  --bg-background: #f5f5f5;
+  --bg-surface: #ffffff;
+}
+.light-theme body {
+  background-color: #f5f5f5;
+  color: #111;
+}
+.light-theme .glass-panel {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+.light-theme .bg-background { background-color: #f5f5f5; }
+.light-theme .bg-surface { background-color: #ffffff; }
+.light-theme .bg-\[#050505\],
+.light-theme .bg-\[#0a0a0a\],
+.light-theme .bg-\[#111\] { background-color: #f9f9f9; }
+.light-theme .text-white { color: #111; }
+.light-theme .text-slate-300,
+.light-theme .text-slate-400,
+.light-theme .text-zinc-300,
+.light-theme .text-zinc-400 { color: #555; }
+.light-theme .text-slate-500,
+.light-theme .text-slate-600,
+.light-theme .text-zinc-500,
+.light-theme .text-zinc-600 { color: #888; }
+.light-theme .border-\[#1a1a1a\],
+.light-theme .border-\[#222\],
+.light-theme .border-\[#333\] { border-color: #e0e0e0; }
+.light-theme .border-slate-700,
+.light-theme .border-slate-800 { border-color: #ddd; }
+.light-theme aside { background-color: #fff; }
+.light-theme .neon-text-brand,
+.light-theme .neon-text-green,
+.light-theme .neon-text-blue { text-shadow: none; }
+.light-theme ::-webkit-scrollbar-track { background-color: #f5f5f5; }
+.light-theme ::-webkit-scrollbar-thumb { background-color: #ccc; }
+
 /* Toast slide-in animation */
 @keyframes slideIn {
   from { opacity: 0; transform: translateX(100px); }
