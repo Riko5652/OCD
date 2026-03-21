@@ -1,4 +1,4 @@
-# OCD - Omni Coder Dashboard v5.0
+# OCD - Omni Coder Dashboard v5.2
 
 > An AI memory engine that learns from your coding sessions, recommends the right tool for every task, and injects proven solutions into your workflow — all local, no API keys required.
 
@@ -11,15 +11,25 @@
 
 ---
 
-## 🆕 Latest Additions (v5.1)
+## 🆕 Latest Additions (v5.2)
 
-> **New in this release** — four proactive intelligence features that act before you type a prompt:
+> **New in this release** — architecture hardening, test infrastructure, and production-readiness improvements:
+
+- **Session Health Check** — New `get_session_health_check` MCP tool gives agents cross-session self-awareness: quality degradation thresholds, historical cache baselines, daily token budgets, and structured `continue/compact/new_session` action signals. OCD informs, the agent decides.
+- **Token Efficiency Tips** — Personalized `get_efficiency_tips` MCP tool: real-time burn rate, waste detection, quick wins, and onboarding guidance that works from your very first session.
+- **Architecture Hardening** — Structured logging (pino), Swagger/OpenAPI docs, route modularization, and DB index tuning for production-grade deployments.
+- **Test Infrastructure** — Comprehensive test suite with Vitest covering adapters, analytics, MCP tools, and API routes.
+- **Prompt Science** — Evidence-based prompt engineering: mines your best sessions to discover patterns that improve quality, reduce turns, and optimize cache hits — with effect sizes and sample counts.
+
+<details>
+<summary><strong>v5.1 additions</strong> (click to expand)</summary>
 
 - **Proactive IDE Interception** — Background watcher monitors your terminal for stack traces, finds matching solutions via vector search, and fires OS-level notifications + SSE pushes to your IDE instantly — no prompt needed.
 - **Anti-Hallucination Negative Prompt Injector** — Builds an Anti-Pattern Graph from your failing sessions and injects explicit `DO NOT use X` constraints into new prompts via the `get_negative_constraints` MCP tool.
 - **Token Arbitrage & Cost Routing** — Classifies every prompt by task type and complexity, routes to local Ollama (free) when your historical success rate is ≥ 92%, and logs estimated savings per request.
 - **P2P Secure Team Memory** — Syncs embeddings across teammates on the same LAN or Tailscale using UDP discovery + HMAC-SHA256 authentication. No cloud, no source code shared — embeddings only.
-- **Session Health Check** — New `get_session_health_check` MCP tool gives agents cross-session self-awareness: quality degradation thresholds, historical cache baselines, daily token budgets, and structured `continue/compact/new_session` action signals. OCD informs, the agent decides.
+
+</details>
 
 ---
 
