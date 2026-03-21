@@ -23,6 +23,12 @@
   }
 }
 
+/* Toast slide-in animation */
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(100px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
 /* Custom scrollbar for sleek look */
 ::-webkit-scrollbar {
   width: 8px;

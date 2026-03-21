@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useApi } from '../hooks/useApi';
-import { Activity, Clock, Zap, Cpu, ChevronRight, ChevronDown, Brain } from 'lucide-react';
+import { Activity, Clock, Zap, Cpu, ChevronRight, ChevronDown, Brain, Search, Filter } from 'lucide-react';
 
 // Lightweight inline markdown renderer — supports ## headings, **bold**, `code`, bullet lists
 function MarkdownBlock({ text }: { text: string }) {
@@ -240,6 +240,20 @@ export default function Workspaces() {
     const [_selectedProject, setSelectedProject] = useState<string | null>(null);
     const [view, setView] = useState<'projects' | 'sessions' | 'commits' | 'topics' | 'telemetry'>('projects');
     const [expandedSession, setExpandedSession] = useState<string | null>(null);
+    const [sessionSearch, setSessionSearch] = useState('');
+    const [sessionToolFilter, setSessionToolFilter] = useState('');
+
+    const filteredSessions = useMemo(() => {
+        let s = sessions || [];
+        if (sessionToolFilter) s = s.filter((x: any) => x.tool_id === sessionToolFilter);
+        if (sessionSearch) {
+            const q = sessionSearch.toLowerCase();
+            s = s.filter((x: any) => (x.title || '').toLowerCase().includes(q) || (x.primary_model || '').toLowerCase().includes(q) || (x.id || '').toLowerCase().includes(q));
+        }
+        return s;
+    }, [sessions, sessionSearch, sessionToolFilter]);
+
+    const toolIds = useMemo(() => [...new Set((sessions || []).map((s: any) => s.tool_id))], [sessions]);
 
     const tabs = [
         { id: 'projects' as const, label: 'Projects', icon: '📁' },
@@ -296,6 +310,23 @@ export default function Workspaces() {
             {/* Sessions List */}
             {view === 'sessions' && (
                 <div className="bg-surface rounded-2xl border border-slate-800 shadow-lg overflow-hidden">
+                    {/* Search & Filter Bar */}
+                    <div className="flex items-center gap-3 p-4 border-b border-slate-800">
+                        <div className="flex items-center gap-2 flex-1 bg-[#111] rounded-lg px-3 py-2 border border-[#222] focus-within:border-brand/50 transition-colors">
+                            <Search className="w-4 h-4 text-zinc-500" />
+                            <input value={sessionSearch} onChange={e => setSessionSearch(e.target.value)}
+                                placeholder="Search sessions..." className="bg-transparent text-sm text-white placeholder:text-zinc-600 outline-none flex-1" />
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Filter className="w-4 h-4 text-zinc-500" />
+                            <select value={sessionToolFilter} onChange={e => setSessionToolFilter(e.target.value)}
+                                className="bg-[#111] text-xs text-zinc-300 border border-[#222] rounded-lg px-3 py-2 outline-none">
+                                <option value="">All tools</option>
+                                {toolIds.map((t: string) => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                        </div>
+                        <span className="text-[10px] text-zinc-500 font-mono">{filteredSessions.length} sessions</span>
+                    </div>
                     <div className="overflow-x-auto">
                         <table className="w-full text-left">
                             <thead>
@@ -310,7 +341,7 @@ export default function Workspaces() {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-slate-800/50">
-                                {(sessions || []).map((s: any) => (
+                                {filteredSessions.map((s: any) => (
                                     <React.Fragment key={s.id}>
                                         <tr
                                             onClick={() => setExpandedSession(expandedSession === s.id ? null : s.id)}

@@ -16,6 +16,7 @@ export default {
         "neon-brand": "0 0 8px rgba(255, 85, 0, 0.5)",
         "neon-green": "0 0 8px rgba(57, 255, 20, 0.5)",
         "neon-blue": "0 0 8px rgba(0, 243, 255, 0.5)",
+        "neon-pink": "0 0 8px rgba(255, 0, 255, 0.5)",
       },
       dropShadow: {
         "glow-brand": "0 0 6px rgba(255, 85, 0, 0.5)",

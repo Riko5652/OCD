@@ -30,6 +30,9 @@ export function useSSE(onMessage: (event: string, data: any) => void) {
         es.addEventListener('refresh', e => {
             try { onMessage('refresh', JSON.parse((e as MessageEvent).data)); } catch { /* skip */ }
         });
+        es.addEventListener('coach', e => {
+            try { onMessage('coach', JSON.parse((e as MessageEvent).data)); } catch { /* skip */ }
+        });
         return () => es.close();
     }, [onMessage]);
 }
