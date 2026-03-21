@@ -5,7 +5,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-green)](LICENSE)
 [![Tools](https://img.shields.io/badge/tools-7-blue)](#what-gets-tracked)
-[![MCP](https://img.shields.io/badge/MCP-11%20tools-purple)](#mcp-universal-brain)
+[![MCP](https://img.shields.io/badge/MCP-11%20tools-purple)](#mcp-setup-30-seconds-no-api-key)
 [![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
 [![npm](https://img.shields.io/npm/v/ocd)](https://www.npmjs.com/package/ocd)
 
@@ -13,7 +13,7 @@
 
 ## Screenshots
 
-> Screenshots below show the v5 React dashboard with Tailwind CSS. The UI includes four pillars: Command Center, Performance, Workspaces, and Profile.
+> The dashboard UI includes four pillars: Command Center, Performance, Workspaces, and Profile.
 
 <p align="center">
   <img src="docs/screenshots/command-center.png" alt="Command Center — KPIs, daily activity charts, savings report" width="100%">
@@ -95,7 +95,7 @@ Not everything lives in local files. Import sessions from web-based AI tools:
 
 **Bookmarklet** — One-click capture from ChatGPT, Claude.ai, or Gemini. Visit `http://localhost:3030/api/bookmarklet` for setup instructions.
 
-**Paste/Upload** — Open the Import modal in the dashboard, paste a transcript or upload a JSON/CSV file.
+**API Upload** — `POST /api/sessions/upload` accepts JSON arrays of session data for bulk import.
 
 **Webhook** — Push session data from CI/CD or automation:
 ```bash
@@ -176,7 +176,7 @@ Embeddings use Ollama (nomic-embed-text) when available, falling back to a built
 
 ### 4-pillar layout
 
-**Command Center** — KPI cards, daily activity, savings report, quick actions, command palette (Cmd+K).
+**Command Center** — KPI cards, daily activity, savings report, CI/CD optimization insights.
 
 **Workspaces** — Per-project rollup: tokens, lines added, dominant tool/model, drill-down.
 
@@ -224,10 +224,11 @@ The core dashboard works without any LLM. Optional providers are used for: Deep 
 OLLAMA_HOST=http://localhost:11434
 OLLAMA_MODEL=gemma2:2b
 
-# Cloud (any one)
-ANTHROPIC_API_KEY=sk-ant-...
-OPENAI_API_KEY=sk-...
-AZURE_OPENAI_API_KEY=...
+# Cloud (any one — tried in this order)
+GEMINI_API_KEY=...              # Google Gemini (cascades models automatically)
+AZURE_OPENAI_API_KEY=...        # Azure OpenAI
+OPENAI_API_KEY=sk-...           # OpenAI
+ANTHROPIC_API_KEY=sk-ant-...    # Anthropic Claude
 ```
 
 ---
@@ -367,6 +368,7 @@ bin/
 - [x] Savings report
 - [x] Real-time coaching via SSE
 - [x] Prompt optimization analysis
+- [x] v5 TypeScript refactor (Fastify + React + pnpm monorepo)
 - [ ] Enterprise: secure team sync with anonymized aggregation
 - [ ] PM integration: Jira/Linear/GitHub Issues velocity correlation
 - [ ] Cross-regional benchmarking
