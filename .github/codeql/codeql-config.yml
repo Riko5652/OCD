@@ -1,0 +1,10 @@
+name: "OCD CodeQL Configuration"
+
+# Rate limiting is handled globally via @fastify/rate-limit plugin registered
+# at server startup (apps/server/src/index.ts). CodeQL's per-route analysis
+# doesn't detect Fastify plugin-based rate limiting, so we exclude this query.
+# Additional mitigations: localhost-only by default, optional AUTH_TOKEN,
+# LLM endpoints have stricter per-IP rate limits.
+query-filters:
+  - exclude:
+      id: js/missing-rate-limiting
