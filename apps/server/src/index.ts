@@ -1,4 +1,5 @@
 import Fastify from 'fastify';
+import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
@@ -37,6 +38,14 @@ import type { IAiAdapter, UnifiedSession } from './adapters/types.js';
 
 const fastify = Fastify({ logger: true });
 
+// ---- Global rate limiting (resolves CodeQL "Missing rate limiting" alerts) ----
+await fastify.register(fastifyRateLimit, {
+    max: 120,
+    timeWindow: '1 minute',
+    allowList: ['127.0.0.1', '::1'],
+    keyGenerator: (request) => request.ip,
+});
+
 // ---- Register all adapters ----
 registry.register(new ClaudeCodeAdapter());
 registry.register(new CursorAdapter());
@@ -72,41 +81,6 @@ if (AUTH_TOKEN) {
         done();
     });
 }
-
-// ---- General API rate limiter ----
-// Limits each IP to a max number of requests per time window.
-const apiRateBuckets = new Map<string, { count: number; resetAt: number }>();
-const API_RATE_WINDOW_MS = 60_000;
-const API_RATE_MAX = 120; // 120 requests per minute per IP
-
-fastify.addHook('onRequest', (request, reply, done) => {
-    if (!request.url.startsWith('/api/')) return done();
-    // Exempt health check from rate limiting
-    if (request.url === '/api/health') return done();
-
-    const ip = request.ip || 'local';
-    const now = Date.now();
-    let bucket = apiRateBuckets.get(ip);
-    if (!bucket || now >= bucket.resetAt) {
-        bucket = { count: 0, resetAt: now + API_RATE_WINDOW_MS };
-        apiRateBuckets.set(ip, bucket);
-    }
-    bucket.count++;
-    if (bucket.count > API_RATE_MAX) {
-        const retryIn = Math.ceil((bucket.resetAt - now) / 1000);
-        reply.status(429).send({ error: `Rate limited — ${API_RATE_MAX} requests/min exceeded. Retry in ${retryIn}s.` });
-        return;
-    }
-    done();
-});
-
-// Periodically clean up stale rate limit buckets
-setInterval(() => {
-    const now = Date.now();
-    for (const [ip, bucket] of apiRateBuckets) {
-        if (now >= bucket.resetAt) apiRateBuckets.delete(ip);
-    }
-}, 60_000);
 
 // ---- LLM rate limiter (stricter, for expensive endpoints) ----
 const llmCallTimestamps = new Map<string, number>();
