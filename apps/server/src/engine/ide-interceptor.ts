@@ -89,7 +89,7 @@ function sendOsNotification(title: string, body: string): void {
 
 async function findSimilarSolution(trace: string): Promise<{ session_id: string; similarity: number; title: string; tldr: string } | null> {
     const db = getDb();
-    const rows = db.prepare('SELECT session_id, embedding FROM session_embeddings').all() as any[];
+    const rows = db.prepare('SELECT session_id, embedding FROM session_embeddings ORDER BY created_at DESC LIMIT 1000').all() as any[];
     if (!rows.length) return null;
 
     let queryVec: number[];
