@@ -9,6 +9,7 @@ import { getNegativeConstraints } from './engine/anti-pattern-graph.js';
 import { makeArbitrageDecision, getArbitrageSummary } from './engine/token-arbiter.js';
 import { getShareableEmbeddings, getKnownPeers } from './engine/p2p-sync.js';
 import { submitTrace } from './engine/ide-interceptor.js';
+import { computeEffectSizes, getAttributionReport } from './engine/prompt-coach.js';
 
 initDb();
 
@@ -279,6 +280,23 @@ server.tool(
             response += `  • Turns to first edit: ${(metrics.avg_to_edit || 0).toFixed(1)}\n`;
             response += `  • Sessions with file context: ${((metrics.with_context / metrics.total) * 100).toFixed(0)}%\n\n`;
         }
+
+        // Effect sizes from prompt science engine
+        try {
+            const effects = computeEffectSizes();
+            if (effects.length) {
+                response += 'Evidence-Based Effect Sizes:\n';
+                for (const e of effects) {
+                    if (e.delta != null && e.delta_pct != null) {
+                        response += `  • ${e.signal}: ${e.delta > 0 ? '+' : ''}${e.delta} quality points (${e.delta_pct > 0 ? '+' : ''}${e.delta_pct}%) — n=${e.sample_with}/${e.sample_without}\n`;
+                    } else {
+                        response += `  • ${e.signal}: avg quality ${e.with_avg} (n=${e.sample_with})\n`;
+                    }
+                }
+                response += '\n';
+            }
+        } catch { /* effect sizes unavailable */ }
+
         response += 'Best Practices:\n';
         response += '  1. Include file context in first message (improves first-attempt success)\n';
         response += '  2. Use constraints (e.g., "keep under 50 lines") to reduce re-asks\n';
@@ -421,6 +439,49 @@ server.tool(
         response += `Summary: ${result.tldr || 'No summary available'}\n\n`;
         response += `Use get_similar_solutions with the error text for full context.`;
         return { content: [{ type: 'text' as const, text: response }] };
+    }
+);
+
+// ---- Tool 16: get_attribution_report ----
+server.tool(
+    'get_attribution_report',
+    'Get an AI vs. human code authorship breakdown for commits. Shows per-project, per-branch, and per-tool attribution percentages for engineering managers, compliance reporting, and velocity tracking.',
+    {
+        project: z.string().optional().describe('Filter by project name (matches branch names)'),
+        branch: z.string().optional().describe('Filter by exact branch name'),
+        days: z.number().optional().describe('Look back N days (default: all time)'),
+    },
+    async ({ project, branch, days }) => {
+        try {
+            const report = getAttributionReport({ project, branch, days });
+            if (!report.summary || report.summary.total_commits === 0) {
+                return { content: [{ type: 'text' as const, text: 'No commit attribution data available. Run the Git Scanner to score commits.' }] };
+            }
+            const s = report.summary;
+            let response = `AI Attribution Report${project ? ` — ${project}` : ''}${branch ? ` (${branch})` : ''}${days ? ` (last ${days}d)` : ''}:\n\n`;
+            response += `Summary:\n`;
+            response += `  Commits: ${s.total_commits} | Avg AI: ${s.avg_ai_percentage}% | Range: ${s.min_ai_percentage}–${s.max_ai_percentage}%\n`;
+            response += `  AI Lines: ${s.total_ai_lines} | Human Lines: ${s.total_human_lines} | AI Ratio: ${s.ai_ratio}%\n\n`;
+
+            if (report.by_branch.length) {
+                response += 'By Branch:\n';
+                for (const b of report.by_branch) {
+                    response += `  • ${b.branch}: ${b.commits} commits, ${b.avg_ai_pct}% AI (${b.ai_lines} AI / ${b.human_lines} human lines)\n`;
+                }
+                response += '\n';
+            }
+
+            if (report.by_tool.length) {
+                response += 'By Tool:\n';
+                for (const t of report.by_tool) {
+                    response += `  • ${t.tool}: ${t.commits} commits, ${t.avg_ai_pct}% AI, ${t.ai_lines} AI lines\n`;
+                }
+            }
+
+            return { content: [{ type: 'text' as const, text: response }] };
+        } catch (e: any) {
+            return { content: [{ type: 'text' as const, text: 'Error: ' + e.message }], isError: true };
+        }
     }
 );
 

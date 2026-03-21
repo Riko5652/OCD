@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from 'recharts';
-import { Brain, TrendingUp, Sparkles, Lightbulb, Target, FileText, BarChart2, Loader2, RefreshCw, Zap, AlertTriangle } from 'lucide-react';
+import { Brain, TrendingUp, Sparkles, Lightbulb, Target, BarChart2, Loader2, RefreshCw, Zap, AlertTriangle, FlaskConical, ShieldAlert, BookOpen } from 'lucide-react';
 
 function MarkdownBlock({ text }: { text: string }) {
     const lines = text.split('\n');
@@ -32,8 +32,12 @@ export default function Insights() {
     const { data: recommendations } = useApi<any[]>('/api/recommendations');
     const { data: dailyPick } = useApi<any>('/api/insights/daily-pick');
     const { data: ollamaStatus } = useApi<any>('/api/ollama/status');
+    const { data: effectSizes } = useApi<any>('/api/prompt-coach/effects');
+    const { data: templates } = useApi<any>('/api/prompt-coach/templates');
+    const { data: improvements } = useApi<any>('/api/prompt-coach/improve');
 
     const [view, setView] = useState<'profile' | 'trends' | 'prompts' | 'daily' | 'deep' | 'recommendations'>('profile');
+    const [promptScienceTab, setPromptScienceTab] = useState<'evidence' | 'templates' | 'antipatterns'>('evidence');
     const [deepText, setDeepText] = useState('');
     const [deepLoading, setDeepLoading] = useState(false);
     const [refreshingPick, setRefreshingPick] = useState(false);
@@ -41,7 +45,7 @@ export default function Insights() {
     const tabs = [
         { id: 'profile' as const, label: 'How You Work', icon: <Target className="w-4 h-4" /> },
         { id: 'trends' as const, label: 'Trends', icon: <TrendingUp className="w-4 h-4" /> },
-        { id: 'prompts' as const, label: 'Prompt Quality', icon: <FileText className="w-4 h-4" /> },
+        { id: 'prompts' as const, label: 'Prompt Science', icon: <FlaskConical className="w-4 h-4" /> },
         { id: 'daily' as const, label: 'Daily Pick', icon: <Sparkles className="w-4 h-4" /> },
         { id: 'deep' as const, label: 'Deep Analyze', icon: <Brain className="w-4 h-4" /> },
         { id: 'recommendations' as const, label: 'Optimize', icon: <Lightbulb className="w-4 h-4" /> },
@@ -167,43 +171,188 @@ export default function Insights() {
                 </div>
             )}
 
-            {/* Prompt Metrics */}
-            {view === 'prompts' && promptMetrics && (
+            {/* Prompt Science */}
+            {view === 'prompts' && (
                 <div className="space-y-6">
-                    <p className="text-xs text-zinc-500">Based on {promptMetrics.totalSessions} analyzed sessions</p>
-                    {promptMetrics.avgTurnsToFirstEdit != null && (
-                        <div className="glass-panel p-6 border-brand/20">
-                            <h3 className="text-xs font-black text-brand mb-2 uppercase tracking-widest">Avg Turns to First Edit</h3>
-                            <p className="text-5xl font-black text-white">{promptMetrics.avgTurnsToFirstEdit}</p>
-                            <p className="text-[10px] text-zinc-500 mt-1">turns before first Write/Edit/Bash call</p>
+                    <p className="text-xs text-zinc-500">Based on {promptMetrics?.totalSessions || 0} analyzed sessions — evidence-based prompt engineering from your history</p>
+
+                    {/* Sub-tabs for Prompt Science */}
+                    <div className="flex gap-2">
+                        {([
+                            { id: 'evidence' as const, label: 'Evidence', icon: <FlaskConical className="w-3 h-3" /> },
+                            { id: 'templates' as const, label: 'Templates', icon: <BookOpen className="w-3 h-3" /> },
+                            { id: 'antipatterns' as const, label: 'Anti-Patterns', icon: <ShieldAlert className="w-3 h-3" /> },
+                        ]).map(t => (
+                            <button key={t.id} onClick={() => setPromptScienceTab(t.id)}
+                                className={`px-3 py-1.5 flex items-center gap-1.5 rounded-lg text-[10px] font-black uppercase tracking-widest transition-all ${promptScienceTab === t.id ? 'bg-neonPink/20 text-neonPink border border-neonPink/50' : 'text-zinc-500 hover:text-white border border-transparent hover:bg-[#111]'}`}>
+                                {t.icon} {t.label}
+                            </button>
+                        ))}
+                    </div>
+
+                    {/* Evidence tab — effect sizes + correlations */}
+                    {promptScienceTab === 'evidence' && (
+                        <div className="space-y-6">
+                            {promptMetrics?.avgTurnsToFirstEdit != null && (
+                                <div className="glass-panel p-6 border-brand/20">
+                                    <h3 className="text-xs font-black text-brand mb-2 uppercase tracking-widest">Avg Turns to First Edit</h3>
+                                    <p className="text-5xl font-black text-white">{promptMetrics.avgTurnsToFirstEdit}</p>
+                                    <p className="text-[10px] text-zinc-500 mt-1">turns before first Write/Edit/Bash call</p>
+                                </div>
+                            )}
+
+                            {/* Effect Sizes */}
+                            {effectSizes?.effects?.length > 0 && (
+                                <div className="glass-panel p-6 border-neonPink/20">
+                                    <h3 className="text-xs font-black text-neonPink mb-4 uppercase tracking-widest flex items-center gap-2">
+                                        <FlaskConical className="w-4 h-4" /> Evidence-Based Effect Sizes
+                                    </h3>
+                                    <div className="space-y-3">
+                                        {effectSizes.effects.map((e: any, i: number) => (
+                                            <div key={i} className="flex items-center gap-4 p-4 bg-[#050505] rounded-xl border border-[#222]">
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-bold text-white">{e.signal}</p>
+                                                    <p className="text-[10px] text-zinc-500 mt-1">
+                                                        n={e.sample_with}{e.sample_without > 0 ? `/${e.sample_without}` : ''}
+                                                    </p>
+                                                </div>
+                                                <div className="text-center px-4">
+                                                    <p className="text-lg font-black text-neonGreen">{e.with_avg ?? '—'}</p>
+                                                    <p className="text-[9px] text-zinc-500">Avg Quality</p>
+                                                </div>
+                                                {e.without_avg != null && (
+                                                    <div className="text-center px-4">
+                                                        <p className="text-lg font-black text-zinc-500">{e.without_avg}</p>
+                                                        <p className="text-[9px] text-zinc-500">Without</p>
+                                                    </div>
+                                                )}
+                                                {e.delta != null && (
+                                                    <div className={`text-xs font-black px-2 py-1 rounded ${e.delta > 0 ? 'text-neonGreen bg-neonGreen/10' : 'text-red-400 bg-red-400/10'}`}>
+                                                        {e.delta > 0 ? '+' : ''}{e.delta} pts ({e.delta_pct > 0 ? '+' : ''}{e.delta_pct}%)
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Original correlations */}
+                            {promptMetrics?.correlations?.length > 0 && (
+                                <div className="glass-panel p-6">
+                                    <h3 className="text-xs font-black text-zinc-400 mb-4 uppercase tracking-widest">Quality Correlations</h3>
+                                    <div className="space-y-4">
+                                        {(promptMetrics.correlations || []).map((c: any, i: number) => (
+                                            <div key={i} className="flex items-center gap-4 p-4 bg-[#050505] rounded-xl border border-[#222]">
+                                                <div className="flex-1">
+                                                    <p className="text-sm font-bold text-white">{c.signal}</p>
+                                                    <p className="text-[10px] text-zinc-500 mt-1">{c.rate}% of sessions</p>
+                                                </div>
+                                                <div className="text-center px-4">
+                                                    <p className="text-lg font-black text-neonGreen">{c.with ?? '—'}</p>
+                                                    <p className="text-[9px] text-zinc-500">{c.withLabel || 'With'}</p>
+                                                </div>
+                                                <div className="text-center px-4">
+                                                    <p className="text-lg font-black text-zinc-500">{c.without ?? '—'}</p>
+                                                    <p className="text-[9px] text-zinc-500">{c.withoutLabel || 'Without'}</p>
+                                                </div>
+                                                {c.with != null && c.without != null && (
+                                                    <div className={`text-xs font-black px-2 py-1 rounded ${c.with > c.without ? 'text-neonGreen bg-neonGreen/10' : 'text-red-400 bg-red-400/10'}`}>
+                                                        {c.with > c.without ? '+' : ''}{((c.with - c.without) / (c.without || 1) * 100).toFixed(0)}%
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
                         </div>
                     )}
-                    <div className="glass-panel p-6">
-                        <h3 className="text-xs font-black text-zinc-400 mb-4 uppercase tracking-widest">Quality Correlations</h3>
-                        <div className="space-y-4">
-                            {(promptMetrics.correlations || []).map((c: any, i: number) => (
-                                <div key={i} className="flex items-center gap-4 p-4 bg-[#050505] rounded-xl border border-[#222]">
-                                    <div className="flex-1">
-                                        <p className="text-sm font-bold text-white">{c.signal}</p>
-                                        <p className="text-[10px] text-zinc-500 mt-1">{c.rate}% of sessions</p>
+
+                    {/* Templates tab — best prompts by task type */}
+                    {promptScienceTab === 'templates' && (
+                        <div className="space-y-6">
+                            {templates?.templates && Object.keys(templates.templates).length > 0 ? (
+                                Object.entries(templates.templates).map(([taskType, sessions]: [string, any]) => (
+                                    <div key={taskType} className="glass-panel p-6 border-[#222]">
+                                        <h3 className="text-xs font-black text-brand mb-4 uppercase tracking-widest">{taskType}</h3>
+                                        <div className="space-y-3">
+                                            {sessions.slice(0, 3).map((s: any, i: number) => (
+                                                <div key={i} className="p-4 bg-[#050505] rounded-xl border border-[#222]">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-[10px] font-black uppercase tracking-widest px-2 py-0.5 rounded bg-brand/10 text-brand border border-brand/30">{s.tool}</span>
+                                                            <span className="text-[10px] font-mono text-zinc-500">{s.model}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-3 text-[10px]">
+                                                            <span className="text-neonGreen font-bold">Q: {s.quality}</span>
+                                                            <span className="text-zinc-500">{s.turns} turns</span>
+                                                            <span className="text-zinc-500">{s.cache_hit}% cache</span>
+                                                        </div>
+                                                    </div>
+                                                    {s.first_prompt && (
+                                                        <p className="text-xs text-zinc-400 leading-relaxed mt-2 bg-[#111] p-3 rounded border border-[#1a1a1a] font-mono">
+                                                            {s.first_prompt}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div className="text-center px-4">
-                                        <p className="text-lg font-black text-neonGreen">{c.with ?? '—'}</p>
-                                        <p className="text-[9px] text-zinc-500">{c.withLabel || 'With'}</p>
+                                ))
+                            ) : (
+                                <p className="text-zinc-600 text-sm py-8 text-center">No high-quality prompt templates extracted yet. Requires sessions with quality &gt; 70.</p>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Anti-patterns tab */}
+                    {promptScienceTab === 'antipatterns' && (
+                        <div className="space-y-6">
+                            {improvements?.low_quality_patterns?.length > 0 ? (
+                                <>
+                                    <div className="glass-panel p-6 border-red-400/20">
+                                        <h3 className="text-xs font-black text-red-400 mb-4 uppercase tracking-widest flex items-center gap-2">
+                                            <ShieldAlert className="w-4 h-4" /> Low-Quality Session Patterns
+                                        </h3>
+                                        <div className="space-y-3">
+                                            {improvements.low_quality_patterns.map((p: any, i: number) => (
+                                                <div key={i} className="p-4 bg-[#050505] rounded-xl border border-red-400/10">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-400">{p.tool} · Q: {p.quality}</span>
+                                                        <span className="text-[10px] font-mono text-zinc-600">{p.session_id?.slice(0, 12)}</span>
+                                                    </div>
+                                                    {p.gaps.length > 0 && (
+                                                        <ul className="space-y-1">
+                                                            {p.gaps.map((g: string, j: number) => (
+                                                                <li key={j} className="text-xs text-red-300 flex items-center gap-2">
+                                                                    <span className="w-1 h-1 rounded-full bg-red-400" /> {g}
+                                                                </li>
+                                                            ))}
+                                                        </ul>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
                                     </div>
-                                    <div className="text-center px-4">
-                                        <p className="text-lg font-black text-zinc-500">{c.without ?? '—'}</p>
-                                        <p className="text-[9px] text-zinc-500">{c.withoutLabel || 'Without'}</p>
-                                    </div>
-                                    {c.with != null && c.without != null && (
-                                        <div className={`text-xs font-black px-2 py-1 rounded ${c.with > c.without ? 'text-neonGreen bg-neonGreen/10' : 'text-red-400 bg-red-400/10'}`}>
-                                            {c.with > c.without ? '+' : ''}{((c.with - c.without) / (c.without || 1) * 100).toFixed(0)}%
+                                    {improvements.optimal?.tips?.length > 0 && (
+                                        <div className="glass-panel p-6 border-neonGreen/20">
+                                            <h3 className="text-xs font-black text-neonGreen mb-4 uppercase tracking-widest">What Works Instead</h3>
+                                            <ul className="space-y-2">
+                                                {improvements.optimal.tips.map((tip: string, i: number) => (
+                                                    <li key={i} className="text-sm text-zinc-300 flex items-start gap-2">
+                                                        <span className="text-neonGreen mt-0.5">+</span> {tip}
+                                                    </li>
+                                                ))}
+                                            </ul>
                                         </div>
                                     )}
-                                </div>
-                            ))}
+                                </>
+                            ) : (
+                                <p className="text-zinc-600 text-sm py-8 text-center">No anti-patterns detected yet. Requires sessions with quality &lt; 50.</p>
+                            )}
                         </div>
-                    </div>
+                    )}
                 </div>
             )}
 

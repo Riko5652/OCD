@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useContext } from 'react';
 import { useApi } from '../hooks/useApi';
+import { FocusModeContext } from '../App';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, Legend } from 'recharts';
 import { ArrowRightLeft, BrainCircuit, DollarSign, Bot, BarChart2, Target, Terminal, Wallet, GitCommit, FileCode, Users, Trophy, Navigation } from 'lucide-react';
 
@@ -18,6 +19,7 @@ export default function Performance() {
     const { data: modelPerf } = useApi<any[]>('/api/models/performance');
     const { data: winRates } = useApi<any[]>('/api/models/win-rates');
     const { data: routing } = useApi<any>('/api/models/routing');
+    const focusMode = useContext(FocusModeContext);
     const [view, setView] = useState<'tools' | 'models' | 'costs' | 'agentic' | 'authorship' | 'codegen' | 'modelperf' | 'winrates' | 'routing'>('tools');
 
     const tabs = [
@@ -40,14 +42,21 @@ export default function Performance() {
             </div>
 
             {/* Sub-tabs */}
-            <div className="flex gap-2 glass-panel p-2 w-fit overflow-x-auto max-w-full">
-                {tabs.map(t => (
-                    <button key={t.id} onClick={() => setView(t.id)}
-                        className={`px-4 py-2 flex items-center gap-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${view === t.id ? 'bg-brand/20 text-brand border border-brand/50 shadow-neon-brand' : 'text-zinc-500 hover:text-white border border-transparent hover:bg-[#111]'}`}>
-                        {t.icon} <span>{t.label}</span>
-                    </button>
-                ))}
-            </div>
+            {!focusMode && (
+                <div className="flex gap-2 glass-panel p-2 w-fit overflow-x-auto max-w-full">
+                    {tabs.map(t => (
+                        <button key={t.id} onClick={() => setView(t.id)}
+                            className={`px-4 py-2 flex items-center gap-2 rounded-lg text-xs font-black uppercase tracking-widest transition-all ${view === t.id ? 'bg-brand/20 text-brand border border-brand/50 shadow-neon-brand' : 'text-zinc-500 hover:text-white border border-transparent hover:bg-[#111]'}`}>
+                            {t.icon} <span>{t.label}</span>
+                        </button>
+                    ))}
+                </div>
+            )}
+            {focusMode && (
+                <div className="glass-panel p-4 border-brand/20 bg-brand/5 text-center">
+                    <p className="text-[10px] text-brand font-black uppercase tracking-widest">Focus Mode — showing Tool Comparison only</p>
+                </div>
+            )}
 
             {/* Tool Comparison */}
             {view === 'tools' && (
@@ -88,7 +97,7 @@ export default function Performance() {
             )}
 
             {/* Code Generation */}
-            {view === 'codegen' && (
+            {view === 'codegen' && !focusMode && (
                 <div className="space-y-6">
                     {/* Code Generation Stats */}
                     <div className="glass-panel p-6 border-neonGreen/20">
@@ -134,7 +143,7 @@ export default function Performance() {
             )}
 
             {/* Code Authorship */}
-            {view === 'authorship' && (
+            {view === 'authorship' && !focusMode && (
                 <div className="space-y-6">
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="glass-panel p-6 border-neonPink/20 hover:border-neonPink/50 transition-colors">
@@ -217,7 +226,7 @@ export default function Performance() {
             )}
 
             {/* Model Usage */}
-            {view === 'models' && (
+            {view === 'models' && !focusMode && (
                 <div className="glass-panel p-6 border-neonBlue/20">
                     <h3 className="text-xs font-black text-zinc-400 mb-6 uppercase tracking-widest flex items-center gap-2"><BrainCircuit className="w-4 h-4 text-neonBlue" /> Model Breakdown</h3>
                     <div className="space-y-4">
@@ -242,7 +251,7 @@ export default function Performance() {
             )}
 
             {/* Costs */}
-            {view === 'costs' && (
+            {view === 'costs' && !focusMode && (
                 <div className="space-y-6">
                     <div className="grid grid-cols-3 gap-6">
                         <div className="glass-panel p-6 border-[#222]">
@@ -274,7 +283,7 @@ export default function Performance() {
             )}
 
             {/* Agentic Scores */}
-            {view === 'agentic' && (
+            {view === 'agentic' && !focusMode && (
                 <div className="glass-panel p-6 border-brand/30 shadow-neon-brand">
                     <h3 className="text-xs font-black text-brand mb-6 uppercase tracking-widest flex items-center gap-2 drop-shadow-glow-brand"><Bot className="w-4 h-4" /> Agentic Leaderboard</h3>
                     <div className="space-y-3">
@@ -305,7 +314,7 @@ export default function Performance() {
             )}
 
             {/* Model Performance Table */}
-            {view === 'modelperf' && (
+            {view === 'modelperf' && !focusMode && (
                 <div className="glass-panel p-6 border-[#222]">
                     <h3 className="text-xs font-black text-zinc-400 mb-6 uppercase tracking-widest flex items-center gap-2">
                         <BarChart2 className="w-4 h-4 text-neonBlue" /> Model Performance Benchmark
@@ -360,7 +369,7 @@ export default function Performance() {
             )}
 
             {/* Model Win Rates */}
-            {view === 'winrates' && (
+            {view === 'winrates' && !focusMode && (
                 <div className="glass-panel p-6 border-neonPink/20">
                     <h3 className="text-xs font-black text-neonPink mb-6 uppercase tracking-widest flex items-center gap-2">
                         <Trophy className="w-4 h-4" /> Model Win Rates by Task
@@ -409,7 +418,7 @@ export default function Performance() {
             )}
 
             {/* Routing Recommendation */}
-            {view === 'routing' && (
+            {view === 'routing' && !focusMode && (
                 <div className="space-y-6">
                     <div className="glass-panel p-6 border-brand/20 bg-gradient-to-br from-[#0a0a0a] to-[#050505]">
                         <h3 className="text-xs font-black text-brand mb-4 uppercase tracking-widest flex items-center gap-2">

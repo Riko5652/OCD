@@ -3,7 +3,7 @@ import type { FastifyInstance } from 'fastify';
 import { getDb } from '../db/index.js';
 import { computeToolModelWinRates, getRoutingRecommendation } from '../engine/cross-tool-router.js';
 import { detectToolSwitches, getCrossToolStats } from '../engine/cross-tool.js';
-import { getOptimalPromptStructure, suggestImprovements, extractPromptTemplates } from '../engine/prompt-coach.js';
+import { getOptimalPromptStructure, suggestImprovements, extractPromptTemplates, computeEffectSizes, getAttributionReport } from '../engine/prompt-coach.js';
 import { getTopicBreakdown, getTopicSummary } from '../engine/topic-segmenter.js';
 import { computeAllProjects, computeProjectInsights } from '../engine/project-insights.js';
 import { streamDeepAnalysis, getInsightDebugPayload, detectProvider, buildDailyPickPrompt, callAzure } from '../engine/llm-analyzer.js';
@@ -152,6 +152,21 @@ export default async function intelligenceRoutes(fastify: FastifyInstance, opts:
 
     fastify.get('/api/prompt-coach/improve', async (request) => {
         return suggestImprovements((request.query as any).task_type || 'general');
+    });
+
+    // Prompt science: effect sizes
+    fastify.get('/api/prompt-coach/effects', async () => {
+        return { effects: computeEffectSizes() };
+    });
+
+    // Attribution report
+    fastify.get('/api/attribution-report', async (request) => {
+        const { project, branch, days } = request.query as any;
+        return getAttributionReport({
+            project: project ? sanitizeString(project, 200) : undefined,
+            branch: branch ? sanitizeString(branch, 200) : undefined,
+            days: days ? clampInt(days, 1, 365, 30) : undefined,
+        });
     });
 
     // Recommendations

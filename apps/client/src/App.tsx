@@ -9,7 +9,10 @@ import ImportModal from './components/ImportModal';
 import ToastContainer, { toast } from './components/Toast';
 import { useSSE, triggerRefresh } from './hooks/useApi';
 
-import { Zap, Activity, FolderGit2, UserCog, Brain, Upload, Menu, X, WifiOff, Download, Sun, Moon } from 'lucide-react';
+import { Zap, Activity, FolderGit2, UserCog, Brain, Upload, Menu, X, WifiOff, Download, Sun, Moon, Crosshair } from 'lucide-react';
+import { createContext } from 'react';
+
+export const FocusModeContext = createContext(false);
 import { useTheme } from './hooks/useTheme';
 
 type Page = 'command' | 'performance' | 'workspaces' | 'profile' | 'insights';
@@ -31,6 +34,7 @@ export default function App() {
     const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
     const [offline, setOffline] = useState(!navigator.onLine);
     const [installPrompt, setInstallPrompt] = useState<any>(null);
+    const [focusMode, setFocusMode] = useState(false);
     const { theme, toggle: toggleTheme } = useTheme();
 
     // Online/offline detection
@@ -89,6 +93,7 @@ export default function App() {
     const navigate = (p: string) => { setPage(p as Page); setMobileNavOpen(false); };
 
     return (
+        <FocusModeContext.Provider value={focusMode}>
         <div className="min-h-screen flex bg-background">
             {/* Command Palette (Cmd+K) */}
             <CommandPalette onNavigate={navigate} onRefresh={handleRefresh} onOpenImport={() => setImportOpen(true)} />
@@ -129,9 +134,14 @@ export default function App() {
                         </h1>
                         <p className="text-[10px] text-neonBlue font-mono mt-1 uppercase tracking-widest neon-text-blue">v5.0</p>
                     </div>
-                    <button onClick={toggleTheme} className="p-2 rounded-lg bg-[#111] border border-[#222] hover:border-brand/50 transition-colors" title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
-                        {theme === 'dark' ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-neonBlue" />}
-                    </button>
+                    <div className="flex gap-1.5">
+                        <button onClick={() => setFocusMode(!focusMode)} className={`p-2 rounded-lg border transition-colors ${focusMode ? 'bg-brand/20 border-brand/50 shadow-neon-brand' : 'bg-[#111] border-[#222] hover:border-brand/50'}`} title={focusMode ? 'Exit Focus Mode' : 'Enter Focus Mode — show only key metrics'}>
+                            <Crosshair className={`w-4 h-4 ${focusMode ? 'text-brand' : 'text-zinc-500'}`} />
+                        </button>
+                        <button onClick={toggleTheme} className="p-2 rounded-lg bg-[#111] border border-[#222] hover:border-brand/50 transition-colors" title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}>
+                            {theme === 'dark' ? <Sun className="w-4 h-4 text-yellow-400" /> : <Moon className="w-4 h-4 text-neonBlue" />}
+                        </button>
+                    </div>
                 </div>
                 <nav className="flex-1 p-3 space-y-2 mt-2 overflow-y-auto">
                     {NAV_ITEMS.map(item => (
@@ -199,5 +209,6 @@ export default function App() {
                 ))}
             </nav>
         </div>
+        </FocusModeContext.Provider>
     );
 }

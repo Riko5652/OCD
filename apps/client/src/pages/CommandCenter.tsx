@@ -1,7 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useContext } from 'react';
 import { useApi } from '../hooks/useApi';
+import { FocusModeContext } from '../App';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from 'recharts';
-import { Target, FileText, Zap, Trophy, Coins, TrendingUp, BarChart2, Sparkles, Loader2 } from 'lucide-react';
+import { Target, FileText, Zap, Trophy, Coins, TrendingUp, BarChart2, Sparkles, Loader2, ChevronDown, ChevronRight } from 'lucide-react';
 
 function KpiCard({ label, value, sub, color = 'brand', icon }: { label: string; value: string | number; sub?: string; color?: string; icon?: React.ReactNode }) {
     const borderColor = color === 'brand' ? 'hover:border-brand/50 hover:shadow-neon-brand' : color === 'purple' ? 'hover:border-neonPink/50 hover:shadow-neon-pink' : color === 'emerald' ? 'hover:border-neonGreen/50 hover:shadow-neon-green' : 'hover:border-neonPink/50 hover:shadow-neon-pink';
@@ -21,10 +22,7 @@ function KpiCard({ label, value, sub, color = 'brand', icon }: { label: string; 
 function SavingsWidget({ data }: { data: any }) {
     if (!data) return null;
     return (
-        <div className="glass-panel p-6 border-brand/30 shadow-neon-brand bg-gradient-to-br from-[#111] to-[#000]">
-            <h3 className="text-xs font-black text-brand mb-6 uppercase tracking-widest drop-shadow-glow-brand flex items-center gap-2">
-                <Coins className="w-4 h-4" /> Savings Report
-            </h3>
+        <div>
             <div className="grid grid-cols-3 gap-6">
                 <div className="bg-[#050505] p-4 rounded-xl border border-[#222]">
                     <p className="text-3xl font-black text-neonGreen drop-shadow-glow-green">${data.dollars?.total_estimated_cost || 0}</p>
@@ -58,6 +56,9 @@ export default function CommandCenter() {
 
     const [insights, setInsights] = useState<string>('');
     const [loadingInsights, setLoadingInsights] = useState(false);
+    const [showInsights, setShowInsights] = useState(false);
+    const [showSavings, setShowSavings] = useState(false);
+    const focusMode = useContext(FocusModeContext);
 
     useEffect(() => {
         setLoadingInsights(true);
@@ -118,17 +119,31 @@ export default function CommandCenter() {
                 <KpiCard label="Avg Quality" value={(g.avg_quality || 0).toFixed(0)} icon={<Trophy className="text-neonPink w-6 h-6" />} color="pink" sub={`${fmtTokens(g.total_lines_added)} lines generated`} />
             </div>
 
-            {/* CI/CD Optimization Insights */}
-            <div className="glass-panel p-6 border-neonBlue/30 bg-gradient-to-r from-[#050505] to-[#0a0a0a] min-h-[200px]">
-                <h3 className="text-xs font-black text-neonBlue mb-4 uppercase tracking-widest flex items-center gap-2 drop-shadow-glow-blue">
-                    <Sparkles className="w-4 h-4" /> CI/CD Workflow Optimization
-                    {loadingInsights && <Loader2 className="w-3 h-3 animate-spin ml-2 text-neonBlue/70" />}
-                </h3>
-                <div className="bg-[#111] p-5 rounded-lg border border-neonBlue/20">
-                    <pre className="text-sm text-zinc-300 font-sans leading-relaxed whitespace-pre-wrap break-words">
-                        {insights || 'Analyzing your recent sessions to generate personalized workflow improvements...'}
-                    </pre>
+            {focusMode && (
+                <div className="glass-panel p-4 border-brand/20 bg-brand/5 text-center">
+                    <p className="text-[10px] text-brand font-black uppercase tracking-widest">Focus Mode — showing key metrics only</p>
                 </div>
+            )}
+
+            {!focusMode && <>
+            {/* CI/CD Optimization Insights — Collapsible */}
+            <div className="glass-panel border-neonBlue/30 bg-gradient-to-r from-[#050505] to-[#0a0a0a]">
+                <button onClick={() => setShowInsights(!showInsights)} className="w-full p-6 flex items-center justify-between group">
+                    <h3 className="text-xs font-black text-neonBlue uppercase tracking-widest flex items-center gap-2 drop-shadow-glow-blue">
+                        <Sparkles className="w-4 h-4" /> CI/CD Workflow Optimization
+                        {loadingInsights && <Loader2 className="w-3 h-3 animate-spin ml-2 text-neonBlue/70" />}
+                    </h3>
+                    {showInsights ? <ChevronDown className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" /> : <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />}
+                </button>
+                {showInsights && (
+                    <div className="px-6 pb-6">
+                        <div className="bg-[#111] p-5 rounded-lg border border-neonBlue/20">
+                            <pre className="text-sm text-zinc-300 font-sans leading-relaxed whitespace-pre-wrap break-words">
+                                {insights || 'Analyzing your recent sessions to generate personalized workflow improvements...'}
+                            </pre>
+                        </div>
+                    </div>
+                )}
             </div>
 
             {/* Charts Row */}
@@ -167,8 +182,21 @@ export default function CommandCenter() {
                 </div>
             </div>
 
-            {/* Savings */}
-            <SavingsWidget data={savings} />
+            {/* Savings — Collapsible */}
+            <div className="glass-panel border-brand/30">
+                <button onClick={() => setShowSavings(!showSavings)} className="w-full p-6 flex items-center justify-between group">
+                    <h3 className="text-xs font-black text-brand uppercase tracking-widest flex items-center gap-2 drop-shadow-glow-brand">
+                        <Coins className="w-4 h-4" /> Savings Report
+                    </h3>
+                    {showSavings ? <ChevronDown className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" /> : <ChevronRight className="w-4 h-4 text-zinc-500 group-hover:text-white transition-colors" />}
+                </button>
+                {showSavings && (
+                    <div className="px-6 pb-6">
+                        <SavingsWidget data={savings} />
+                    </div>
+                )}
+            </div>
+            </>}
         </div>
     );
 }
