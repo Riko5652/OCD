@@ -5,7 +5,7 @@
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-green)](LICENSE)
 [![Tools](https://img.shields.io/badge/tools-7-blue)](#what-gets-tracked)
-[![MCP](https://img.shields.io/badge/MCP-15%20tools-purple)](#mcp-setup-30-seconds-no-api-key)
+[![MCP](https://img.shields.io/badge/MCP-18%20tools-purple)](#mcp-setup-30-seconds-no-api-key)
 [![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
 [![npm](https://img.shields.io/npm/v/ocd)](https://www.npmjs.com/package/ocd)
 
@@ -19,6 +19,7 @@
 - **Anti-Hallucination Negative Prompt Injector** — Builds an Anti-Pattern Graph from your failing sessions and injects explicit `DO NOT use X` constraints into new prompts via the `get_negative_constraints` MCP tool.
 - **Token Arbitrage & Cost Routing** — Classifies every prompt by task type and complexity, routes to local Ollama (free) when your historical success rate is ≥ 92%, and logs estimated savings per request.
 - **P2P Secure Team Memory** — Syncs embeddings across teammates on the same LAN or Tailscale using UDP discovery + HMAC-SHA256 authentication. No cloud, no source code shared — embeddings only.
+- **Session Health Check** — New `get_session_health_check` MCP tool gives agents cross-session self-awareness: quality degradation thresholds, historical cache baselines, daily token budgets, and structured `continue/compact/new_session` action signals. OCD informs, the agent decides.
 
 ---
 
@@ -43,7 +44,9 @@
 
 ## What it actively does for you
 
-This is not a passive analytics dashboard. It's a system that makes you faster:
+This is not a passive analytics dashboard. It's a system that makes you faster — and helps you do more within your usage caps:
+
+**Token Budget Tracker** — Real-time burn rate monitoring: today's usage, 7-day average, weekly cost forecast, and efficiency-per-tool ranking (tokens per quality point). Works with any single tool from day one.
 
 **Semantic Memory** — When Claude Code solves a complex migration in 15 turns, the system vectorizes the solution, the context, and the error logs. Two weeks later, when you hit a similar error in Cursor, the MCP server bypasses the LLM's knowledge cutoff and injects the exact, locally-proven solution into your prompt context. It's a self-building brain across all your AI tools.
 
@@ -51,7 +54,7 @@ This is not a passive analytics dashboard. It's a system that makes you faster:
 
 **Real-time Coaching** — SSE-pushed nudges every 60 seconds: alerts when sessions run too long, cache hit rate drops, error spikes occur, or you're idle. Dismissible, actionable, and based on your patterns.
 
-**Prompt Optimization** — Extracts high-quality prompt patterns from your best sessions (quality > 75), grouped by task type. Shows you what works and what doesn't.
+**Prompt Science** — Evidence-based prompt engineering grounded in your session history. Mines your best sessions (quality > 75) to discover patterns that improve quality, reduce turns, and optimize cache hits. Every recommendation includes effect sizes and sample counts so you know exactly what works — and by how much.
 
 **Savings Report** — Concrete metrics on what the system saves you: cache hit savings ($), turns saved vs baseline, time estimates. Toggle between relative metrics and dollar estimates.
 
@@ -63,11 +66,31 @@ This is not a passive analytics dashboard. It's a system that makes you faster:
 
 **P2P Team Memory** *(new)* — Shares embeddings (never source code) with teammates over UDP + HMAC-SHA256. Works on LAN or Tailscale. Query peer solutions with `get_team_memory` — a shared brain with zero cloud dependency.
 
+**AI Attribution Reporting** — Every commit is scored with an `ai_percentage` (0–100%) tracking how much code was AI-assisted vs. human-authored. Query per-project, per-branch, or per-timeframe via the `get_attribution_report` MCP tool or REST API. Built for engineering managers who need velocity tracking, code review prep, and impact reporting.
+
+---
+
+## Compliance & Data Governance
+
+OCD is built for teams that care about data residency, auditability, and security:
+
+- **100% local-first** — All data lives on your machine in SQLite. Nothing is transmitted unless you explicitly configure a cloud LLM provider.
+- **Read-only adapters** — OCD never writes to your AI tools' files. Architectural guarantee, not a config option.
+- **Zero telemetry** — No analytics, no tracking, no phone-home. Verified by source audit.
+- **Audit logging** — Token arbitrage decisions, IDE interceptions, and P2P sync events are logged with timestamps for regulatory review.
+- **AI attribution tracking** — Every commit scored with AI vs. human authorship percentage. Exportable for compliance reporting.
+- **Authenticated P2P** — Team memory sharing uses HMAC-SHA256 authentication. Embeddings only — source code is never transmitted.
+- **Prompt injection protection** — All session text is sanitized before storage and display. CSP headers enforced on the dashboard.
+- **Authentication support** — Optional `AUTH_TOKEN` environment variable for shared/CI environments.
+- **AGPL-3.0** — Full source available for security audit. Commercial licensing available for enterprises requiring proprietary deployment.
+
+See [PRIVACY.md](PRIVACY.md) for the full data handling policy.
+
 ---
 
 ## MCP Setup (30 seconds, no API key)
 
-The dashboard exposes an MCP server with **15 tools** that any AI agent can call mid-session. Zero API keys needed.
+The dashboard exposes an MCP server with **18 tools** that any AI agent can call mid-session. Zero API keys needed.
 
 ```bash
 # Auto-setup for all detected MCP clients
@@ -103,12 +126,15 @@ This writes the correct config to Claude Code, Cursor, and Windsurf automaticall
 | `get_project_stats` | Token/session/model breakdown for a project |
 | `get_model_comparison` | claude-sonnet vs gpt-4o vs gemini on your actual sessions |
 | `push_handoff_note` | Save a note before switching tools |
-| `get_optimal_prompt_structure` | Prompt patterns from your highest-quality sessions |
+| `get_optimal_prompt_structure` | **Evidence-based prompt science** — patterns with effect sizes and confidence levels from your best sessions |
+| **`get_attribution_report`** | **NEW — AI vs. human authorship breakdown per project/branch/timeframe** |
+| **`get_efficiency_tips`** | **NEW — personalized token-saving tips: burn rate, quick wins, waste detection** |
 | `get_topic_summary` | Executive summary of work on a topic within a project |
 | **`get_negative_constraints`** | **NEW — inject "DO NOT use X" clauses derived from your local failure history** |
 | **`get_arbitrage_recommendation`** | **NEW — local vs cloud routing recommendation with estimated savings** |
 | **`get_team_memory`** | **NEW — search peer-synced embeddings for solutions from your teammates** |
 | **`submit_ide_trace`** | **NEW — manually submit a stack trace for instant proactive analysis** |
+| **`get_session_health_check`** | **NEW — cross-session health signals: status, suggested action, quality baselines, nudges** |
 
 ---
 
@@ -197,15 +223,19 @@ Embeddings use Ollama (nomic-embed-text) when available, falling back to a built
 
 ## Dashboard navigation
 
-### 4-pillar layout
+### 5-pillar layout
 
-**Command Center** — KPI cards, daily activity, savings report, CI/CD optimization insights.
+**Command Center** — KPI cards, daily activity, savings report, CI/CD optimization insights. Collapsible sections to reduce cognitive load.
+
+**Insights** — AI-powered analysis with 6 sub-tabs: How You Work, Trends, Prompt Science, Daily Pick, Deep Analyze, Optimize.
+
+**Performance** — 9 tabbed views: Tool Comparison, Model Usage, Model Performance, Win Rates, Routing, Cost Tracking, Code Generation, Code Authorship, Agentic Scores.
 
 **Workspaces** — Per-project rollup: tokens, lines added, dominant tool/model, drill-down.
 
-**Performance** — Token breakdowns, tool comparisons, model benchmarks, cost tracking.
-
 **Profile** — Gamified: level, XP, streak, achievements, activity heatmap, flow state.
+
+**Focus Mode** — App-level toggle that reduces each page to its most actionable KPIs + single recommendation. Toggle via sidebar button.
 
 ---
 
@@ -299,7 +329,7 @@ ANTHROPIC_API_KEY=sk-ant-...    # Anthropic Claude
 └───────────────────────┬─────────────────────────────────┘
                         │ stdio
 ┌───────────────────────▼─────────────────────────────────┐
-│                   MCP Server (11 tools)                  │
+│                   MCP Server (18 tools)                  │
 │                                                          │
 │  get_similar_solutions    →  vector search + graph walk  │
 │  get_knowledge_context    →  graph neighborhood          │
@@ -366,7 +396,8 @@ apps/
     db/
       index.ts         # Database initialization
       schema.ts        # SQLite schema + migration
-    mcp-handoff.ts   # MCP Universal Brain server (11 tools)
+    mcp-handoff.ts   # MCP Universal Brain server (18 tools)
+    token-budget.ts        # NEW — daily burn rate, weekly forecast, per-tool efficiency
     index.ts         # Fastify app + all API routes
     config.ts        # Auto-detected paths + discovery report
   client/src/        # React + Vite dashboard UI
@@ -400,6 +431,8 @@ bin/
 - [x] **Anti-hallucination negative prompt injector** (Anti-Pattern Graph + MCP tool)
 - [x] **Token arbitrage & cost routing** (Ollama proxy + per-request savings log)
 - [x] **P2P secure team memory** (UDP discovery + HMAC-SHA256 embedding sync)
+- [x] **Session health check** (cross-session quality baselines + structured action signals)
+- [x] **Token efficiency tips** (burn rate, quick wins, waste detection)
 - [ ] Enterprise: secure team sync with anonymized aggregation
 - [ ] PM integration: Jira/Linear/GitHub Issues velocity correlation
 - [ ] Cross-regional benchmarking

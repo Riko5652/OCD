@@ -9,6 +9,9 @@ import { getNegativeConstraints } from './engine/anti-pattern-graph.js';
 import { makeArbitrageDecision, getArbitrageSummary } from './engine/token-arbiter.js';
 import { getShareableEmbeddings, getKnownPeers } from './engine/p2p-sync.js';
 import { submitTrace } from './engine/ide-interceptor.js';
+import { computeEffectSizes, getAttributionReport } from './engine/prompt-coach.js';
+import { computeTokenBudget } from './engine/token-budget.js';
+import { getSessionHealthCheck } from './engine/session-coach.js';
 
 initDb();
 
@@ -279,6 +282,23 @@ server.tool(
             response += `  • Turns to first edit: ${(metrics.avg_to_edit || 0).toFixed(1)}\n`;
             response += `  • Sessions with file context: ${((metrics.with_context / metrics.total) * 100).toFixed(0)}%\n\n`;
         }
+
+        // Effect sizes from prompt science engine
+        try {
+            const effects = computeEffectSizes();
+            if (effects.length) {
+                response += 'Evidence-Based Effect Sizes:\n';
+                for (const e of effects) {
+                    if (e.delta != null && e.delta_pct != null) {
+                        response += `  • ${e.signal}: ${e.delta > 0 ? '+' : ''}${e.delta} quality points (${e.delta_pct > 0 ? '+' : ''}${e.delta_pct}%) — n=${e.sample_with}/${e.sample_without}\n`;
+                    } else {
+                        response += `  • ${e.signal}: avg quality ${e.with_avg} (n=${e.sample_with})\n`;
+                    }
+                }
+                response += '\n';
+            }
+        } catch { /* effect sizes unavailable */ }
+
         response += 'Best Practices:\n';
         response += '  1. Include file context in first message (improves first-attempt success)\n';
         response += '  2. Use constraints (e.g., "keep under 50 lines") to reduce re-asks\n';
@@ -423,6 +443,135 @@ server.tool(
         return { content: [{ type: 'text' as const, text: response }] };
     }
 );
+
+// ---- Tool 16: get_attribution_report ----
+server.tool(
+    'get_attribution_report',
+    'Get an AI vs. human code authorship breakdown for commits. Shows per-project, per-branch, and per-tool attribution percentages for engineering managers, compliance reporting, and velocity tracking.',
+    {
+        project: z.string().optional().describe('Filter by project name (matches branch names)'),
+        branch: z.string().optional().describe('Filter by exact branch name'),
+        days: z.number().optional().describe('Look back N days (default: all time)'),
+    },
+    async ({ project, branch, days }) => {
+        try {
+            const report = getAttributionReport({ project, branch, days });
+            if (!report.summary || report.summary.total_commits === 0) {
+                return { content: [{ type: 'text' as const, text: 'No commit attribution data available. Run the Git Scanner to score commits.' }] };
+            }
+            const s = report.summary;
+            let response = `AI Attribution Report${project ? ` — ${project}` : ''}${branch ? ` (${branch})` : ''}${days ? ` (last ${days}d)` : ''}:\n\n`;
+            response += `Summary:\n`;
+            response += `  Commits: ${s.total_commits} | Avg AI: ${s.avg_ai_percentage}% | Range: ${s.min_ai_percentage}–${s.max_ai_percentage}%\n`;
+            response += `  AI Lines: ${s.total_ai_lines} | Human Lines: ${s.total_human_lines} | AI Ratio: ${s.ai_ratio}%\n\n`;
+
+            if (report.by_branch.length) {
+                response += 'By Branch:\n';
+                for (const b of report.by_branch) {
+                    response += `  • ${b.branch}: ${b.commits} commits, ${b.avg_ai_pct}% AI (${b.ai_lines} AI / ${b.human_lines} human lines)\n`;
+                }
+                response += '\n';
+            }
+
+            if (report.by_tool.length) {
+                response += 'By Tool:\n';
+                for (const t of report.by_tool) {
+                    response += `  • ${t.tool}: ${t.commits} commits, ${t.avg_ai_pct}% AI, ${t.ai_lines} AI lines\n`;
+                }
+            }
+
+            return { content: [{ type: 'text' as const, text: response }] };
+        } catch (e: any) {
+            return { content: [{ type: 'text' as const, text: 'Error: ' + e.message }], isError: true };
+        }
+    }
+);
+
+// ---- Tool 17: get_efficiency_tips ----
+server.tool(
+    'get_efficiency_tips',
+    'Get personalized token-saving tips based on your usage patterns. Returns your daily burn rate, weekly forecast, top token consumers, and actionable quick wins to reduce waste.',
+    {},
+    async () => {
+        try {
+            const budget = computeTokenBudget();
+            let response = 'Token Efficiency Report:\n\n';
+
+            response += `Today: ${fmtTokenCount(budget.today.input_tokens + budget.today.output_tokens)} tokens, ${budget.today.sessions} sessions, ${budget.today.turns} turns\n`;
+            response += `7-Day Avg: ${fmtTokenCount(budget.daily_avg.input_tokens + budget.daily_avg.output_tokens)}/day, ~$${budget.daily_avg.cost}/day\n`;
+            response += `Weekly Forecast: ${fmtTokenCount(budget.weekly_forecast.tokens)} tokens, ~$${budget.weekly_forecast.cost}\n\n`;
+
+            if (budget.quick_wins.length) {
+                response += 'Quick Wins to Save Tokens:\n';
+                for (const w of budget.quick_wins) {
+                    response += `  ${w.priority}. ${w.tip}\n     Impact: ${w.impact}\n\n`;
+                }
+            }
+
+            if (budget.efficiency_by_tool.length) {
+                response += 'Efficiency by Tool (tokens per quality point — lower is better):\n';
+                for (const t of budget.efficiency_by_tool) {
+                    response += `  • ${t.tool}: ${t.tokens_per_quality_point} tokens/quality (Q=${t.avg_quality}, cache=${t.avg_cache}%, ${t.sessions} sessions)\n`;
+                }
+            }
+
+            return { content: [{ type: 'text' as const, text: response }] };
+        } catch (e: any) {
+            return { content: [{ type: 'text' as const, text: 'Error: ' + e.message }], isError: true };
+        }
+    }
+);
+
+// ---- Tool 18: get_session_health_check ----
+server.tool(
+    'get_session_health_check',
+    'Check your current session health using cross-session patterns. Returns a status (healthy/degrading/critical), a suggested action (continue/compact/new_session), and context-aware nudges based on your historical usage patterns. Call this periodically to stay ahead of quality degradation.',
+    {},
+    async () => {
+        try {
+            const health = getSessionHealthCheck();
+
+            let response = `Session Health: ${health.status.toUpperCase()}\n`;
+            response += `Suggested Action: ${health.suggested_action}\n\n`;
+
+            response += `Current Session:\n`;
+            response += `  Turns: ${health.current.turns} | Tokens: ${health.current.tokens_k}K\n`;
+            response += `  Cache Hit: ${health.current.cache_hit_pct}% | Error Rate: ${health.current.error_rate_pct}%\n`;
+            response += `  Duration: ${health.current.duration_min} min\n\n`;
+
+            response += `Cross-Session Baselines:\n`;
+            const cs = health.cross_session;
+            if (cs.avg_turns_before_quality_drop) {
+                response += `  Quality drops after ~${cs.avg_turns_before_quality_drop} turns (your pattern)\n`;
+            }
+            if (cs.avg_cache_hit_pct) {
+                response += `  Your avg cache hit: ${cs.avg_cache_hit_pct}% | Avg quality: ${cs.avg_quality_score}\n`;
+            }
+            response += `  Today: ${cs.sessions_today} sessions, ${cs.tokens_today_k}K tokens`;
+            if (cs.daily_avg_tokens_k) {
+                response += ` (daily avg: ${cs.daily_avg_tokens_k}K)`;
+            }
+            response += '\n';
+
+            if (health.nudges.length) {
+                response += `\nNudges:\n`;
+                for (const nudge of health.nudges) {
+                    response += `  ⚠ ${nudge}\n`;
+                }
+            }
+
+            return { content: [{ type: 'text' as const, text: response }] };
+        } catch (e: any) {
+            return { content: [{ type: 'text' as const, text: 'Error: ' + e.message }], isError: true };
+        }
+    }
+);
+
+function fmtTokenCount(n: number): string {
+    if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+    if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
+    return String(n);
+}
 
 async function startMcp() {
     const transport = new StdioServerTransport();

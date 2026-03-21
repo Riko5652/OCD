@@ -222,6 +222,7 @@ export function migrate(db: Database) {
       dimensions INTEGER,
       created_at INTEGER NOT NULL
     );
+    CREATE INDEX IF NOT EXISTS idx_se_created_at ON session_embeddings(created_at);
 
     -- Feature: Anti-Hallucination Negative Prompt Injector
     -- Tracks repeated failure patterns so future agents can avoid them

@@ -4,6 +4,35 @@ All notable changes to OCD (Omni Coder Dashboard) are documented here.
 
 ---
 
+## [5.2.0] — 2026-03-21
+
+### Added — Session Self-Awareness & Efficiency
+
+#### **Session Health Check** (`engine/session-coach.ts`, `mcp-handoff.ts`)
+- Cross-session pattern analysis: average turns before quality drops, historical cache hit baselines, daily token averages
+- Structured health signals: `status` (healthy/degrading/critical) + `suggested_action` (continue/compact/new_session)
+- Context-aware nudges comparing current session to 30-day historical patterns
+- Daily token budget monitoring with 14-day average comparison
+- New MCP tool: **`get_session_health_check`** — agents call this periodically for self-awareness they can't have on their own
+
+#### **Token Efficiency Tips** (`engine/token-budget.ts`, `mcp-handoff.ts`)
+- Daily burn rate tracking: today's usage, 7-day average, weekly cost forecast
+- Per-tool efficiency ranking (tokens per quality point)
+- Actionable quick wins to reduce waste
+- New MCP tool: **`get_efficiency_tips`**
+
+#### **Architecture Decision Record**
+- ADR: Reject session intervention — OCD stays read-only (`docs/architecture-blueprint-review.md`)
+- Formal documentation of the design principle: OCD informs, the agent decides, the user stays in control
+
+### Improved
+- Onboarding flow with token efficiency value proposition
+- Actionable takeaways to reduce dashboard fatigue
+- Prompt science grounded in effect sizes and confidence levels
+- Added index on `session_embeddings.created_at` for ORDER BY performance
+
+---
+
 ## [5.1.0] — 2026-03-21
 
 ### Added — Proactive Intelligence Layer
