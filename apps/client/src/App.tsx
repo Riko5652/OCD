@@ -9,7 +9,7 @@ import ImportModal from './components/ImportModal';
 import ToastContainer, { toast } from './components/Toast';
 import { useSSE, triggerRefresh } from './hooks/useApi';
 
-import { Zap, Activity, FolderGit2, UserCog, Brain, Upload, Menu, X } from 'lucide-react';
+import { Zap, Activity, FolderGit2, UserCog, Brain, Upload, Menu, X, WifiOff, Download } from 'lucide-react';
 
 type Page = 'command' | 'performance' | 'workspaces' | 'profile' | 'insights';
 
@@ -28,6 +28,31 @@ export default function App() {
     const [importOpen, setImportOpen] = useState(false);
     const [mobileNavOpen, setMobileNavOpen] = useState(false);
     const [updateAvailable, setUpdateAvailable] = useState<string | null>(null);
+    const [offline, setOffline] = useState(!navigator.onLine);
+    const [installPrompt, setInstallPrompt] = useState<any>(null);
+
+    // Online/offline detection
+    useEffect(() => {
+        const on = () => setOffline(false);
+        const off = () => { setOffline(true); toast({ message: 'You are offline — showing cached data', severity: 'warning' }); };
+        window.addEventListener('online', on);
+        window.addEventListener('offline', off);
+        return () => { window.removeEventListener('online', on); window.removeEventListener('offline', off); };
+    }, []);
+
+    // PWA install prompt
+    useEffect(() => {
+        const handler = (e: Event) => { e.preventDefault(); setInstallPrompt(e); };
+        window.addEventListener('beforeinstallprompt', handler);
+        return () => window.removeEventListener('beforeinstallprompt', handler);
+    }, []);
+
+    const handleInstall = async () => {
+        if (!installPrompt) return;
+        installPrompt.prompt();
+        await installPrompt.userChoice;
+        setInstallPrompt(null);
+    };
 
     // SSE for live updates + coach nudges
     const handleSSE = useCallback((event: string, data: any) => {
@@ -72,8 +97,15 @@ export default function App() {
             {/* Toast Notifications */}
             <ToastContainer />
 
+            {/* Offline Banner */}
+            {offline && (
+                <div className="fixed top-0 left-0 right-0 z-50 bg-yellow-500/90 text-black text-center py-2 text-xs font-bold flex items-center justify-center gap-2">
+                    <WifiOff className="w-3.5 h-3.5" /> Offline — showing cached data
+                </div>
+            )}
+
             {/* Version Update Banner */}
-            {updateAvailable && (
+            {updateAvailable && !offline && (
                 <div className="fixed top-0 left-0 right-0 z-40 bg-brand/90 text-white text-center py-2 text-xs font-bold">
                     Update available: v{updateAvailable} — <code className="bg-black/20 px-2 py-0.5 rounded">npm install -g ocd</code>
                     <button onClick={() => setUpdateAvailable(null)} className="ml-4 text-white/70 hover:text-white">dismiss</button>
@@ -127,6 +159,12 @@ export default function App() {
                         <p className="text-[10px] text-slate-600 text-center">
                             Last sync: {new Date(lastRefresh).toLocaleTimeString()}
                         </p>
+                    )}
+                    {installPrompt && (
+                        <button onClick={handleInstall}
+                            className="w-full py-2 px-4 rounded-xl text-xs font-bold uppercase tracking-wider bg-neonGreen/10 text-neonGreen border border-neonGreen/30 hover:bg-neonGreen/20 hover:shadow-neon-green transition-all flex items-center justify-center gap-2">
+                            <Download className="w-3.5 h-3.5" /> Install App
+                        </button>
                     )}
                     <p className="text-[9px] text-zinc-700 text-center mt-1">
                         <kbd className="px-1.5 py-0.5 bg-[#111] border border-[#333] rounded text-[9px] font-mono">⌘K</kbd> command palette

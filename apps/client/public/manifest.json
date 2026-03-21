@@ -1,0 +1,16 @@
+{
+  "name": "OCD — Obsessive Coding Diagnostics",
+  "short_name": "OCD",
+  "description": "Cross-tool AI coding analytics dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#ff5500",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
