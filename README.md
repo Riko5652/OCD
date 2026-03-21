@@ -1,4 +1,4 @@
-# OCD - Omni Coder Dashboard v5.0
+# OCD - Omni Coder Dashboard v5.2
 
 > An AI memory engine that learns from your coding sessions, recommends the right tool for every task, and injects proven solutions into your workflow — all local, no API keys required.
 
@@ -11,15 +11,87 @@
 
 ---
 
-## 🆕 Latest Additions (v5.1)
+## 🆕 Latest Additions (v5.2)
 
-> **New in this release** — four proactive intelligence features that act before you type a prompt:
+> **New in this release** — architecture hardening, test infrastructure, and production-readiness improvements:
+
+- **Session Health Check** — New `get_session_health_check` MCP tool gives agents cross-session self-awareness: quality degradation thresholds, historical cache baselines, daily token budgets, and structured `continue/compact/new_session` action signals. OCD informs, the agent decides.
+- **Token Efficiency Tips** — Personalized `get_efficiency_tips` MCP tool: real-time burn rate, waste detection, quick wins, and onboarding guidance that works from your very first session.
+- **Architecture Hardening** — Structured logging (pino), Swagger/OpenAPI docs, route modularization, and DB index tuning for production-grade deployments.
+- **Test Infrastructure** — Comprehensive test suite with Vitest covering adapters, analytics, MCP tools, and API routes.
+- **Prompt Science** — Evidence-based prompt engineering: mines your best sessions to discover patterns that improve quality, reduce turns, and optimize cache hits — with effect sizes and sample counts.
+
+<details>
+<summary><strong>v5.1 additions</strong> (click to expand)</summary>
 
 - **Proactive IDE Interception** — Background watcher monitors your terminal for stack traces, finds matching solutions via vector search, and fires OS-level notifications + SSE pushes to your IDE instantly — no prompt needed.
 - **Anti-Hallucination Negative Prompt Injector** — Builds an Anti-Pattern Graph from your failing sessions and injects explicit `DO NOT use X` constraints into new prompts via the `get_negative_constraints` MCP tool.
 - **Token Arbitrage & Cost Routing** — Classifies every prompt by task type and complexity, routes to local Ollama (free) when your historical success rate is ≥ 92%, and logs estimated savings per request.
 - **P2P Secure Team Memory** — Syncs embeddings across teammates on the same LAN or Tailscale using UDP discovery + HMAC-SHA256 authentication. No cloud, no source code shared — embeddings only.
-- **Session Health Check** — New `get_session_health_check` MCP tool gives agents cross-session self-awareness: quality degradation thresholds, historical cache baselines, daily token budgets, and structured `continue/compact/new_session` action signals. OCD informs, the agent decides.
+
+</details>
+
+---
+
+## Usage by Experience Level
+
+Whether you just installed your first AI coding tool or you're orchestrating multi-agent pipelines, OCD meets you where you are.
+
+### Beginner — "I just started using AI coding tools"
+
+```bash
+npx ocd                    # 1. Launch — zero config, auto-detects your tools
+```
+
+- **What you get on day one:** A visual dashboard showing every session across all your AI tools, how many tokens you used, and which sessions succeeded vs. failed.
+- **Start here:** Open the **Command Center** tab — it shows your daily activity, top tools, and a savings estimate.
+- **Key MCP tools to try:**
+  - `get_efficiency_tips` — personalized tips to reduce token waste, even with one session of data
+  - `get_routing_recommendation` — asks "which tool + model should I use for this task?" and answers with your own data
+- **Tip:** Just use your AI tools normally. OCD watches in the background and builds your personal knowledge base automatically.
+
+### Intermediate — "I use multiple AI tools and want to optimize"
+
+```bash
+npx ocd --setup-mcp        # Auto-configure MCP for Claude Code, Cursor, Windsurf
+```
+
+- **Unlock cross-tool intelligence:** OCD tracks sessions across all 7 supported tools. The **Performance** tab lets you compare win rates, token costs, and resolution speed per tool and model.
+- **Semantic memory kicks in:** After ~20 quality sessions, `get_similar_solutions` starts returning proven fixes from your own history. You'll see solutions from Claude Code surfaced in Cursor, and vice versa.
+- **Key MCP tools to add:**
+  - `get_similar_solutions` — vector search across all your past sessions
+  - `get_optimal_prompt_structure` — evidence-based prompt patterns mined from your best sessions, with effect sizes
+  - `get_session_health_check` — periodic health signals so your agent knows when to compact or start fresh
+  - `get_negative_constraints` — auto-injects "DO NOT" clauses from your failure history
+- **Tip:** Check the **Insights → Prompt Science** tab weekly. It surfaces which prompt structures, lengths, and patterns correlate with higher quality in your sessions.
+
+### Advanced — "I want full agent orchestration and team workflows"
+
+```bash
+# Local embeddings for highest-quality semantic search
+OLLAMA_HOST=http://localhost:11434 npx ocd
+
+# Enable P2P team memory (LAN or Tailscale)
+P2P_ENABLED=true P2P_SECRET=your-team-key npx ocd
+
+# Docker for always-on deployment
+docker compose up -d
+```
+
+- **Agent-grade MCP integration:** All 18 MCP tools are designed for autonomous agent consumption — structured JSON responses, confidence scores, and action signals (`continue/compact/new_session`).
+- **Token arbitrage:** Route prompts to local Ollama when your historical success rate is high enough, saving API costs automatically. Full audit trail via `get_arbitrage_recommendation`.
+- **P2P team memory:** Share embeddings (never source code) across your team with HMAC-SHA256 authentication. Query teammate solutions with `get_team_memory`.
+- **Proactive IDE interception:** Terminal watcher detects stack traces and pushes matched solutions via OS notifications + SSE before you open a new prompt.
+- **Production deployment:**
+  - Swagger/OpenAPI docs at `/docs` for REST API integration
+  - Structured JSON logging (pino) for log aggregation pipelines
+  - `AUTH_TOKEN` env var for shared/CI environments
+  - Webhook + API endpoints for CI/CD session ingestion
+- **Key MCP tools for agents:**
+  - `get_session_health_check` — cross-session self-awareness for long-running agents
+  - `get_knowledge_context` — graph neighborhood traversal for deep context injection
+  - `push_handoff_note` — cross-tool context bridge when switching between agents
+  - `get_attribution_report` — AI vs. human authorship tracking for engineering managers
 
 ---
 
