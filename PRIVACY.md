@@ -21,7 +21,7 @@ The tool reads local session log files produced by AI coding tools you have inst
 - **Claude Code** — session JSONL files at `~/.claude/projects/`
 - **Cursor** — SQLite databases at `~/.cursor/` and platform-specific app data directories
 - **Aider** — conversation history files in project directories
-- **Windsurf, Copilot, Continue, and other adapters** — as described in the adapter source files under `src/adapters/`
+- **Windsurf, Copilot, Continue, and other adapters** — as described in the adapter source files under `apps/server/src/adapters/`
 
 All file access is read-only. The tool does not write to, modify, or delete any source log files. These files already exist on your machine as a result of your normal use of those AI tools.
 

@@ -41,9 +41,19 @@ export function computeProfile() {
     const avgQWithFile = withFile.length ? (withFile.reduce((a, r) => a + r.quality_score, 0) / withFile.length).toFixed(1) : null;
     const avgQWithoutFile = withoutFile.length ? (withoutFile.reduce((a, r) => a + r.quality_score, 0) / withoutFile.length).toFixed(1) : null;
 
+    const buckets: Record<string, number> = { '<50': 0, '50-200': 0, '200-500': 0, '500-1k': 0, '>1k': 0 };
+    for (const r of pm) {
+        const t = r.first_turn_tokens || 0;
+        if (t < 50) buckets['<50']++;
+        else if (t < 200) buckets['50-200']++;
+        else if (t < 500) buckets['200-500']++;
+        else if (t < 1000) buckets['500-1k']++;
+        else buckets['>1k']++;
+    }
+
     return {
         medianTurns, medianDurationMin, primaryTool, peakHour, toolBreakdown, fileContextRate,
-        constrainedRate, avgQWithFile, avgQWithoutFile, sessionCount: sessions.length
+        constrainedRate, avgQWithFile, avgQWithoutFile, firstTurnBuckets: buckets, sessionCount: sessions.length
     };
 }
 
@@ -66,7 +76,31 @@ export function computeTrends(days = 0) {
             return { date: row.date, value: valid.length ? valid.reduce((a: number, b: number) => a + b, 0) / valid.length : null };
         });
     }
-    return { cacheHit: rolling7(daily, 'cache_hit'), quality: rolling7(daily, 'quality') };
+    const baseline30 = daily.slice(0, Math.max(0, daily.length - 30));
+    const validBaseline = baseline30.filter(r => r.cache_hit != null);
+    const cacheBaseline = validBaseline.length
+        ? validBaseline.reduce((a: number, r: any) => a + r.cache_hit, 0) / validBaseline.length : null;
+
+    let reaskTrend: any[], errorTrend: any[];
+    if (!days || days <= 0) {
+        reaskTrend = db.prepare(`SELECT DATE(s.started_at / 1000, 'unixepoch') as date, AVG(pm.reask_rate) as reask_rate
+            FROM prompt_metrics pm JOIN sessions s ON pm.session_id = s.id GROUP BY date ORDER BY date ASC`).all() as any[];
+        errorTrend = db.prepare(`SELECT DATE(started_at / 1000, 'unixepoch') as date,
+            CAST(SUM(error_count) AS REAL) / COUNT(*) as error_rate FROM sessions GROUP BY date ORDER BY date ASC`).all() as any[];
+    } else {
+        const since = new Date(); since.setDate(since.getDate() - days);
+        const sinceStr = since.toISOString().split('T')[0];
+        reaskTrend = db.prepare(`SELECT DATE(s.started_at / 1000, 'unixepoch') as date, AVG(pm.reask_rate) as reask_rate
+            FROM prompt_metrics pm JOIN sessions s ON pm.session_id = s.id WHERE DATE(s.started_at / 1000, 'unixepoch') >= ? GROUP BY date ORDER BY date ASC`).all(sinceStr) as any[];
+        errorTrend = db.prepare(`SELECT DATE(started_at / 1000, 'unixepoch') as date,
+            CAST(SUM(error_count) AS REAL) / COUNT(*) as error_rate FROM sessions WHERE DATE(started_at / 1000, 'unixepoch') >= ? GROUP BY date ORDER BY date ASC`).all(sinceStr) as any[];
+    }
+
+    return {
+        cacheHit: rolling7(daily, 'cache_hit'), quality: rolling7(daily, 'quality'),
+        cacheBaseline: cacheBaseline ? Math.round(cacheBaseline * 10) / 10 : null,
+        reaskRate: rolling7(reaskTrend, 'reask_rate'), errorRate: rolling7(errorTrend, 'error_rate'),
+    };
 }
 
 export function computePromptMetrics() {
@@ -91,8 +125,14 @@ export function computePromptMetrics() {
             rate: Math.round(rows.filter(r => r.constraint_count > 0).length / rows.length * 100)
         },
         {
-            signal: 'Long prompt (>500 tok)', with: avgQ(rows.filter(r => r.first_turn_tokens > 500)), without: avgQ(rows.filter(r => r.first_turn_tokens < 200)),
+            signal: 'Long prompt (>500 tok)', withLabel: 'Long (>500 tok)', withoutLabel: 'Short (<200 tok)',
+            with: avgQ(rows.filter(r => r.first_turn_tokens > 500)), without: avgQ(rows.filter(r => r.first_turn_tokens < 200)),
             rate: Math.round(rows.filter(r => r.first_turn_tokens > 500).length / rows.length * 100)
+        },
+        {
+            signal: 'Re-ask rate', withLabel: 'Low reask (<10%)', withoutLabel: 'High reask (>30%)',
+            with: avgQ(rows.filter(r => r.reask_rate < 0.1)), without: avgQ(rows.filter(r => r.reask_rate > 0.3)),
+            rate: Math.round(rows.filter(r => r.reask_rate < 0.1).length / rows.length * 100)
         },
     ];
 

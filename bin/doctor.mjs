@@ -59,8 +59,14 @@ if (existsSync(join(ROOT, '.env'))) {
 }
 
 // 6. Database
-if (existsSync(join(ROOT, 'data', 'dashboard.db'))) {
-  console.log('  ✅ Database: exists');
+const dbPaths = [
+  join(ROOT, 'data', 'analytics.db'),
+  join(ROOT, '.data', 'ai-productivity.db'),
+  join(os.homedir(), '.ai-productivity-dashboard', 'ai-productivity.db'),
+];
+const dbFound = dbPaths.find(p => existsSync(p));
+if (dbFound) {
+  console.log(`  ✅ Database: ${dbFound}`);
 } else {
   console.log('  ℹ️  Database: will be created on first run');
 }
@@ -71,10 +77,30 @@ const tools = [
   { name: 'Cursor', check: () => {
     const base = process.platform === 'win32'
       ? join(os.homedir(), 'AppData', 'Roaming', 'Cursor', 'User', 'globalStorage')
-      : join(os.homedir(), '.config', 'Cursor', 'User', 'globalStorage');
+      : process.platform === 'darwin'
+        ? join(os.homedir(), 'Library', 'Application Support', 'Cursor', 'User', 'globalStorage')
+        : join(os.homedir(), '.config', 'Cursor', 'User', 'globalStorage');
     return existsSync(base);
   }},
   { name: 'Aider', check: () => existsSync(join(os.homedir(), '.aider.chat.history.md')) },
+  { name: 'Antigravity (Gemini)', check: () => existsSync(join(os.homedir(), '.gemini', 'antigravity')) },
+  { name: 'Windsurf', check: () => {
+    const base = process.platform === 'win32'
+      ? join(os.homedir(), 'AppData', 'Roaming', 'Windsurf')
+      : process.platform === 'darwin'
+        ? join(os.homedir(), 'Library', 'Application Support', 'Windsurf')
+        : join(os.homedir(), '.config', 'Windsurf');
+    return existsSync(base);
+  }},
+  { name: 'GitHub Copilot', check: () => {
+    const base = process.platform === 'win32'
+      ? join(os.homedir(), 'AppData', 'Roaming', 'Code', 'User', 'globalStorage', 'github.copilot')
+      : process.platform === 'darwin'
+        ? join(os.homedir(), 'Library', 'Application Support', 'Code', 'User', 'globalStorage', 'github.copilot')
+        : join(os.homedir(), '.config', 'Code', 'User', 'globalStorage', 'github.copilot');
+    return existsSync(base);
+  }},
+  { name: 'Continue.dev', check: () => existsSync(join(os.homedir(), '.continue', 'sessions')) },
 ];
 
 console.log('\n  AI Tools detected:');

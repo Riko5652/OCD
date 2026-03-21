@@ -10,7 +10,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o-mini';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const ANTHROPIC_MODEL = process.env.ANTHROPIC_MODEL || 'claude-haiku-4-5-20251001';
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY || 'AIzaSyB2wgA8KhrWrtRp3jvOiDcjrxFWoqaB9y4';
+const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 // Cascade: try in order, fall back on 404/5xx
 const GEMINI_CASCADE = (process.env.GEMINI_MODEL ? [process.env.GEMINI_MODEL] : [
     'gemini-2.5-pro',
@@ -18,7 +18,9 @@ const GEMINI_CASCADE = (process.env.GEMINI_MODEL ? [process.env.GEMINI_MODEL] : 
     'gemini-3-flash-preview',
 ]);
 
-function sanitize(text: string, maxLen = 200): string { return (text || '').replace(/[\x00-\x1f]/g, ' ').slice(0, maxLen); }
+function sanitize(text: string, maxLen = 200): string {
+    return (text || '').replace(/[\x00-\x1f]/g, ' ').replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#x27;' }[c] || c)).slice(0, maxLen);
+}
 
 export async function detectProvider() {
     try {
@@ -207,10 +209,10 @@ async function* streamGeminiCascade(prompt: string): AsyncGenerator<string & { _
     let lastErr: Error | null = null;
     for (const model of GEMINI_CASCADE) {
         try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse&key=${GEMINI_API_KEY}`;
-            const r = await fetch(url, {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?alt=sse`;
+            const r = await fetch(`${url}&key=${GEMINI_API_KEY}`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': GEMINI_API_KEY },
                 body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }] }),
                 signal: AbortSignal.timeout(60000)
             });

@@ -14,15 +14,17 @@
 
 ## Screenshots
 
+> Screenshots below show the v5 React dashboard with Tailwind CSS. The UI includes four pillars: Command Center, Performance, Workspaces, and Profile.
+
 <p align="center">
-  <img src="docs/screenshots/command-center.png" alt="Command Center — KPIs, activity charts, savings report" width="100%">
+  <img src="docs/screenshots/command-center.png" alt="Command Center — KPIs, daily activity charts, savings report" width="100%">
 </p>
 
 <details>
 <summary><strong>More screenshots</strong> (click to expand)</summary>
 
 <p align="center">
-  <img src="docs/screenshots/performance.png" alt="Insights & Optimization — prompt analysis, coaching, trends" width="100%">
+  <img src="docs/screenshots/performance.png" alt="Performance — tool comparison, model usage, cost tracking, code generation" width="100%">
 </p>
 
 </details>
@@ -295,63 +297,65 @@ Data flow:
 ```
 
 **Key design decisions:**
-- **Zero external dependencies for core** — no Redis, no Postgres, no cloud. SQLite via sql.js runs in-process.
+- **Zero external dependencies for core** — no Redis, no Postgres, no cloud. SQLite via better-sqlite3 runs in-process.
 - **Read-only adapters** — the dashboard never writes to your AI tools' files. It only reads.
 - **Embeddings are optional** — works without Ollama via a built-in text hashing fallback. Quality is lower but functional.
 - **MCP over stdio** — no HTTP server for MCP. Uses the standard Model Context Protocol stdio transport, so any MCP-compatible client can connect.
-- **No build step** — vanilla JS, ESM modules, no TypeScript, no Webpack. `node src/server.js` and it runs.
+- **TypeScript monorepo** — pnpm workspace with separate server (Fastify) and client (React + Vite) apps.
 
 ---
 
 ## Tech
 
-- **Node.js 18+ ESM** — no build step
-- **Express 4** — API server with SSE
-- **SQLite (sql.js)** — local database + vector storage
+- **Node.js 18+ ESM** — TypeScript monorepo with pnpm workspaces
+- **Fastify 5** — API server with SSE
+- **React 18 + Vite** — client dashboard with Tailwind CSS + Recharts
+- **SQLite (better-sqlite3)** — local database + vector storage
 - **In-memory knowledge graph** — session relationship traversal
-- **Chart.js** (CDN) — browser-rendered charts
 - **@modelcontextprotocol/sdk** — MCP stdio server
-- **chokidar** — file watching for live updates
-- **Service Worker** — offline-capable PWA
-
-No React. No Webpack. No TypeScript compilation.
+- **File watchers** — live updates when AI tool data changes
 
 ---
 
 ## Project structure
 
 ```
-src/
-  adapters/        # One file per AI tool (claude-code, cursor, aider, ...)
-  engine/          # Analytics + intelligence engines
-    cross-tool-router.js   # Task classification + win-rate routing
-    savings-report.js      # Cost/time savings calculations
-    agentic-scorer.js      # Autonomy scoring
-    session-coach.js       # Real-time SSE nudges
-    prompt-coach.js        # Prompt patterns from best sessions
-    topic-segmenter.js     # Topic detection + project relevance
-  lib/
-    vector-store.js  # SQLite-based vector embeddings
-    knowledge-graph.js # In-memory session relationship graph
-    sanitize.js      # Prompt injection protection
-  mcp-handoff.js   # MCP Universal Brain server (11 tools)
-  server.js        # Express app + all API routes
-  db.js            # SQLite schema + migration
-  config.js        # Auto-detected paths + discovery report
-public/            # Static frontend (HTML + vanilla JS)
+apps/
+  server/src/
+    adapters/        # One file per AI tool (claude-code, cursor, aider, ...)
+    engine/          # Analytics + intelligence engines
+      cross-tool-router.ts   # Task classification + win-rate routing
+      savings-report.ts      # Cost/time savings calculations
+      agentic-scorer.ts      # Autonomy scoring
+      session-coach.ts       # Real-time SSE nudges
+      prompt-coach.ts        # Prompt patterns from best sessions
+      topic-segmenter.ts     # Topic detection + project relevance
+      watcher.ts             # File system watchers for live updates
+    lib/
+      vector-store.ts  # SQLite-based vector embeddings
+      knowledge-graph.ts # In-memory session relationship graph
+      bookmarklet.ts   # Browser capture for ChatGPT/Claude/Gemini
+    db/
+      index.ts         # Database initialization
+      schema.ts        # SQLite schema + migration
+    mcp-handoff.ts   # MCP Universal Brain server (11 tools)
+    index.ts         # Fastify app + all API routes
+    config.ts        # Auto-detected paths + discovery report
+  client/src/        # React + Vite dashboard UI
+    pages/           # CommandCenter, Performance, Workspaces, Profile
 bin/
   ai-dashboard.js  # CLI entrypoint
   setup-mcp.js     # MCP auto-setup for Claude Code / Cursor / Windsurf
+  doctor.mjs       # Health check
 ```
 
 ---
 
 ## Adding a new AI tool
 
-1. Create `src/adapters/your-tool.js` with `id`, `name`, and `getSessions()`
-2. Call `register(adapter)` at the bottom
-3. Import it in `src/server.js`
-4. Add a seed row in `src/db.js`
+1. Create `apps/server/src/adapters/your-tool.ts` implementing `IAiAdapter`
+2. Register it in `apps/server/src/index.ts` with `registry.register(new YourAdapter())`
+3. The tool will be auto-seeded in the database on startup
 
 ---
 

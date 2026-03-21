@@ -14,7 +14,7 @@
  */
 
 import { execFileSync } from 'child_process';
-import { existsSync, mkdirSync, writeFileSync, copyFileSync, cpSync } from 'fs';
+import { existsSync, mkdirSync, writeFileSync, copyFileSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
@@ -43,14 +43,6 @@ try {
     '--external:better-sqlite3',
     '--external:fsevents',
   ], { stdio: 'inherit', cwd: ROOT });
-
-  // Copy public/ folder next to dist for static file serving
-  const publicSrc = join(ROOT, 'public');
-  const publicDst = join(distDir, 'public');
-  if (existsSync(publicSrc)) {
-    cpSync(publicSrc, publicDst, { recursive: true });
-    console.log('   Copied public/ assets');
-  }
 
   // ── Step 2: Generate SEA blob ──────────────────────────────────────────
   console.log('\n2. Generating SEA blob...');

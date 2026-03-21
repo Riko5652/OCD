@@ -27,13 +27,21 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
+
+      - name: Build apps
+        run: pnpm run build
 
       - name: Install build tools
         run: npm install -g postject esbuild
@@ -72,14 +80,14 @@ jobs:
             ### Install via npm (recommended)
 
             ```bash
-            npm install -g ai-productivity-dashboard
-            ai-dashboard
+            npm install -g ocd
+            ocd
             ```
 
             Or run without installing:
 
             ```bash
-            npx ai-productivity-dashboard
+            npx ocd
             ```
 
             ### Standalone binaries (experimental)
@@ -100,14 +108,21 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
           registry-url: 'https://registry.npmjs.org'
-          cache: 'npm'
+          cache: 'pnpm'
 
       - name: Install dependencies
-        run: npm ci
+        run: pnpm install --frozen-lockfile
+
+      - name: Build apps
+        run: pnpm run build
 
       - name: Verify package
         run: npm pack --dry-run

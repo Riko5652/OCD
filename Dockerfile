@@ -1,5 +1,5 @@
-# AI Productivity Dashboard v3.0 — Docker image
-# Runs the dashboard server; your AI tool data is mounted from the host.
+# OCD (Omni Coder Dashboard) v5.0 — Docker image
+# Runs the dashboard server with built client; your AI tool data is mounted from the host.
 #
 # Quick start:
 #   docker compose up
@@ -15,17 +15,30 @@
 
 FROM node:20-alpine
 
+# Install pnpm
+RUN corepack enable && corepack prepare pnpm@latest --activate
+
 WORKDIR /app
 
-# Install dependencies first (cache layer)
-COPY package.json package-lock.json ./
-RUN npm ci --omit=dev
+# Copy workspace config and package files first (cache layer)
+COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
+COPY apps/server/package.json ./apps/server/
+COPY apps/client/package.json ./apps/client/
+
+# Install all dependencies (including devDependencies for build)
+RUN pnpm install --frozen-lockfile
 
 # Copy source
-COPY src/ ./src/
-COPY public/ ./public/
+COPY apps/ ./apps/
 COPY bin/ ./bin/
 COPY .env.example ./
+
+# Build client (Vite) and server (TypeScript)
+RUN pnpm --filter @ocd/client run build
+RUN pnpm --filter @ocd/server run build
+
+# Remove devDependencies after build
+RUN pnpm prune --prod
 
 # Data directory for SQLite DB
 RUN mkdir -p /app/data
@@ -41,4 +54,4 @@ ENV PORT=3030
 ENV DB_PATH=/app/data/analytics.db
 ENV NODE_ENV=production
 
-CMD ["node", "src/server.js"]
+CMD ["node", "apps/server/dist/index.js"]
