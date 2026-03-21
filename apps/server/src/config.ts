@@ -133,7 +133,7 @@ function getAiderHistoryCount(): number {
 
 // ---- Exported config ----
 export const config = {
-    port: parseInt(process.env.PORT || '3000', 10),
+    port: parseInt(process.env.PORT || '3030', 10),
     dbPath: process.env.DB_PATH || join(DATA_DIR, 'ai-productivity.db'),
 
     cursor: {

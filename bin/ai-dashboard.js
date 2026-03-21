@@ -66,13 +66,35 @@ if (!noOpen) {
   setTimeout(async () => {
     const url = `http://localhost:${PORT}`;
     const platform = process.platform;
-    const { exec } = await import('child_process');
-    const cmd = platform === 'darwin' ? `open "${url}"` :
-                platform === 'win32'  ? `start "" "${url}"` :
-                                        `xdg-open "${url}"`;
-    exec(cmd);
+    const { execFile } = await import('child_process');
+    const cmd = platform === 'darwin' ? 'open'
+              : platform === 'win32'  ? 'cmd'
+              : 'xdg-open';
+    const cmdArgs = platform === 'win32' ? ['/c', 'start', '', url] : [url];
+    execFile(cmd, cmdArgs, () => {});
   }, 2000);
 }
 
 // ── Start the server ─────────────────────────────────────────────────────────
-import '../src/server.js';
+// Try compiled JS first, fall back to tsx for development
+import { existsSync } from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
+
+const __bindir = dirname(fileURLToPath(import.meta.url));
+const distEntry = join(__bindir, '..', 'apps', 'server', 'dist', 'index.js');
+
+if (existsSync(distEntry)) {
+  await import(distEntry);
+} else {
+  // Development mode: try tsx for TypeScript execution
+  try {
+    await import('tsx');
+    await import('../apps/server/src/index.ts');
+  } catch {
+    console.error('\x1b[31m✖ Server not built.\x1b[0m');
+    console.error('  For production:  pnpm run build && pnpm run start');
+    console.error('  For development: pnpm --filter @ocd/server run dev');
+    process.exit(1);
+  }
+}

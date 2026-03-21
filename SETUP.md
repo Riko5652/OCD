@@ -1,6 +1,6 @@
-# Setup Guide — v3.0
+# Setup Guide — v5.0
 
-This guide covers installation on **Windows**, **macOS**, and **Linux**, and explains how to tell the dashboard which AI tools to track and where their data lives. v3.0 adds PWA support, SEA binary builds, and GitHub Codespaces.
+This guide covers installation on **Windows**, **macOS**, and **Linux**, and explains how to tell the dashboard which AI tools to track and where their data lives. v5.0 uses a TypeScript monorepo with pnpm, React client, and Fastify server.
 
 ---
 
@@ -8,18 +8,19 @@ This guide covers installation on **Windows**, **macOS**, and **Linux**, and exp
 
 ```bash
 # Option A: npx — no install needed
-npx ai-productivity-dashboard
+npx ocd
 
 # Option B: global install
-npm install -g ai-productivity-dashboard
-ai-dashboard
+npm install -g ocd
+ocd
 
 # Option C: clone and run
-git clone https://github.com/Riko5652/ai-productivity-dashboard
-cd ai-productivity-dashboard
+git clone https://github.com/Riko5652/OCD
+cd OCD
 cp .env.example .env
-npm install
-npm start
+pnpm install
+pnpm run build
+pnpm run start
 
 # Option D: Docker
 docker compose up

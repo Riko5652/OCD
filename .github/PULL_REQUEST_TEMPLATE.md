@@ -13,8 +13,8 @@ Closes #<!-- issue number -->
 
 ## Changes Made
 <!-- List the key files changed and what was changed -->
-- `src/...` —
-- `public/...` —
+- `apps/server/src/...` —
+- `apps/client/src/...` —
 
 ## Testing Done
 - [ ] Ran `npm start` and verified the dashboard loads at `http://localhost:3030`
@@ -28,8 +28,8 @@ Closes #<!-- issue number -->
 - [ ] No new telemetry or analytics added
 
 ## New AI Tool Adapter (if applicable)
-- [ ] Adapter created in `src/adapters/`
-- [ ] Registered in `src/server.js`
+- [ ] Adapter created in `apps/server/src/adapters/`
+- [ ] Registered in `apps/server/src/index.ts`
 - [ ] Mock seeder added to `seed-mock.mjs`
 - [ ] Data source path documented in this PR
 

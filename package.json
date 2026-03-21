@@ -1,13 +1,45 @@
 {
   "name": "ocd",
-  "version": "4.0.0",
-  "private": true,
+  "version": "5.0.0",
+  "type": "module",
   "description": "OCD (Omni Coder Dashboard) — An AI memory engine that learns from your coding sessions, recommends tools, and injects proven solutions via MCP.",
   "author": {
     "name": "Dor Lipetz",
     "url": "https://github.com/Riko5652"
   },
   "license": "AGPL-3.0-or-later",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Riko5652/OCD.git"
+  },
+  "homepage": "https://github.com/Riko5652/OCD#readme",
+  "keywords": [
+    "ai",
+    "productivity",
+    "dashboard",
+    "claude",
+    "cursor",
+    "copilot",
+    "mcp",
+    "developer-tools"
+  ],
+  "bin": {
+    "ai-dashboard": "./bin/ai-dashboard.js",
+    "ocd": "./bin/ai-dashboard.js"
+  },
+  "files": [
+    "apps/server/dist/",
+    "apps/server/package.json",
+    "apps/client/dist/",
+    "apps/client/package.json",
+    "bin/",
+    "pnpm-workspace.yaml",
+    ".env.example",
+    "Dockerfile",
+    "docker-compose.yml",
+    "README.md",
+    "PRIVACY.md"
+  ],
   "engines": {
     "node": ">=18.0.0"
   },
@@ -15,6 +47,9 @@
     "dev": "pnpm --filter ./apps/* run dev",
     "build": "pnpm --filter ./apps/* run build",
     "start": "pnpm --filter ./apps/server run start",
-    "mcp": "pnpm --filter ./apps/server run mcp"
+    "mcp": "pnpm --filter ./apps/server run mcp",
+    "doctor": "node bin/doctor.mjs",
+    "feedback": "node bin/feedback.mjs",
+    "prepare": "pnpm run build"
   }
 }

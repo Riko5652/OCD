@@ -5,7 +5,7 @@ import { migrate } from './schema.js';
 
 const DB_DIR = join(process.cwd(), '.data');
 if (!existsSync(DB_DIR)) {
-    mkdirSync(DB_DIR, { recursive: true });
+    mkdirSync(DB_DIR, { recursive: true, mode: 0o700 });
 }
 
 const DB_PATH = join(DB_DIR, 'ai-productivity.db');

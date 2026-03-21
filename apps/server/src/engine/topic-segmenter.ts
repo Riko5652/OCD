@@ -36,9 +36,10 @@ export function scoreProjectRelevance(session: any, projectName: string | null):
     const raw = (() => { try { return JSON.parse(session.raw_data || '{}'); } catch { return {}; } })();
     const corpus = [session.title || '', session.tldr || '', (raw.filesEdited || []).join(' ')].join(' ').toLowerCase();
 
-    const escaped = projectName.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const projectPattern = new RegExp(escaped.replace(/[-_]/g, '[\\-_]?'), 'i');
-    if (projectPattern.test(corpus)) return 0.9;
+    // Use simple string matching instead of dynamic regex to avoid ReDoS
+    const normalizedProject = projectName.toLowerCase().replace(/[-_]/g, '');
+    const normalizedCorpus = corpus.replace(/[-_]/g, '');
+    if (normalizedCorpus.includes(normalizedProject)) return 0.9;
     if ((raw.filesEdited || []).some((f: string) => f.toLowerCase().includes(projectName.toLowerCase()))) return 0.85;
     const topic = detectTopic(session);
     if (['writing', 'planning'].includes(topic) && (raw.filesEdited || []).length === 0) return 0.2;

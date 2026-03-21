@@ -1,8 +1,8 @@
 #!/usr/bin/env node
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import os from 'os';
 
-const repoUrl = 'https://github.com/Riko5652/ai-productivity-dashboard/issues/new';
+const repoUrl = 'https://github.com/Riko5652/OCD/issues/new';
 
 const title = encodeURIComponent('[Feedback] Dashboard user thoughts');
 const body = encodeURIComponent(
@@ -20,7 +20,8 @@ const issueUrl = `${repoUrl}?title=${title}&body=${body}&labels=feedback`;
 
 console.log('\n💬 Opening GitHub Feedback Form in your browser...\n');
 
-const command = os.platform() === 'win32' ? 'start ""'
+const command = os.platform() === 'win32' ? 'cmd'
   : os.platform() === 'darwin' ? 'open'
   : 'xdg-open';
-exec(`${command} "${issueUrl}"`);
+const cmdArgs = os.platform() === 'win32' ? ['/c', 'start', '', issueUrl] : [issueUrl];
+execFile(command, cmdArgs, () => {});
