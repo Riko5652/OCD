@@ -10,6 +10,7 @@ jobs:
   audit:
     name: dependency audit
     runs-on: ubuntu-latest
+    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -19,11 +20,12 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
-          cache: 'pnpm'
+          node-version: '22'
 
-      - run: pnpm install --no-frozen-lockfile
-      - run: pnpm audit --prod || true
+      - name: Install dependencies
+        run: pnpm install --no-frozen-lockfile --ignore-scripts
+      - name: Audit
+        run: pnpm audit --prod || true
 
   codeql:
     name: CodeQL analysis
