@@ -4,7 +4,7 @@ All notable changes to OCD (Omni Coder Dashboard) are documented here.
 
 ---
 
-## [5.3.0] — 2026-03-22
+## [5.4.0] — 2026-03-22
 
 ### Added — True Semantic Memory & Developer Experience
 
