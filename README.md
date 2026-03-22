@@ -1,4 +1,4 @@
-# OCD - Omni Coder Dashboard v5.2
+# OCD - Omni Coder Dashboard v5.2.1
 
 > An AI memory engine that learns from your coding sessions, recommends the right tool for every task, and injects proven solutions into your workflow — all local, no API keys required.
 
@@ -11,9 +11,16 @@
 
 ---
 
-## 🆕 Latest Additions (v5.2)
+## 🆕 Latest Additions (v5.2.1)
 
-> **New in this release** — architecture hardening, test infrastructure, and production-readiness improvements:
+> **New in this release** — platform parity and single-tool user optimization:
+
+- **Platform Parity** — All adapters (Windsurf, Continue.dev, Copilot, Aider) now match Claude Code's parsing depth: turn-level analysis, code metrics, tool detection, and error tracking across every platform.
+- **Single-Tool User Optimization** — Most users use one tool. The routing engine now detects this and provides model-level recommendations, workflow pattern analysis, and tool-specific tips instead of irrelevant cross-tool comparisons.
+- **Smarter `get_routing_recommendation`** — Single-tool users get model comparison, high-vs-low quality session patterns, and actionable tips specific to their tool.
+
+<details>
+<summary><strong>v5.2 additions</strong> (click to expand)</summary>
 
 - **Session Health Check** — New `get_session_health_check` MCP tool gives agents cross-session self-awareness: quality degradation thresholds, historical cache baselines, daily token budgets, and structured `continue/compact/new_session` action signals. OCD informs, the agent decides.
 - **Token Efficiency Tips** — Personalized `get_efficiency_tips` MCP tool: real-time burn rate, waste detection, quick wins, and onboarding guidance that works from your very first session.
@@ -21,8 +28,10 @@
 - **Test Infrastructure** — Comprehensive test suite with Vitest covering adapters, analytics, MCP tools, and API routes.
 - **Prompt Science** — Evidence-based prompt engineering: mines your best sessions to discover patterns that improve quality, reduce turns, and optimize cache hits — with effect sizes and sample counts.
 
+</details>
+
 <details>
-<summary><strong>v5.1 additions</strong> (click to expand)</summary>
+<summary><strong>v5.1 additions</strong></summary>
 
 - **Proactive IDE Interception** — Background watcher monitors your terminal for stack traces, finds matching solutions via vector search, and fires OS-level notifications + SSE pushes to your IDE instantly — no prompt needed.
 - **Anti-Hallucination Negative Prompt Injector** — Builds an Anti-Pattern Graph from your failing sessions and injects explicit `DO NOT use X` constraints into new prompts via the `get_negative_constraints` MCP tool.
