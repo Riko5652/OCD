@@ -1,6 +1,6 @@
-# Setup Guide — v5.0
+# Setup Guide — v5.2.1
 
-This guide covers installation on **Windows**, **macOS**, and **Linux**, and explains how to tell the dashboard which AI tools to track and where their data lives. v5.0 uses a TypeScript monorepo with pnpm, React client, and Fastify server.
+This guide covers installation on **Windows**, **macOS**, and **Linux**, and explains how to tell the dashboard which AI tools to track and where their data lives. v5.2.1 uses a TypeScript monorepo with pnpm, React client, and Fastify server.
 
 ---
 
@@ -8,10 +8,10 @@ This guide covers installation on **Windows**, **macOS**, and **Linux**, and exp
 
 ```bash
 # Option A: npx — no install needed
-npx ocd
+npx omni-coder-dashboard
 
 # Option B: global install
-npm install -g ocd
+npm install -g omni-coder-dashboard
 ocd
 
 # Option C: clone and run
@@ -163,7 +163,7 @@ The dashboard includes an MCP server that lets any AI agent query your live prod
   "mcpServers": {
     "ai-brain": {
       "command": "npx",
-      "args": ["ai-productivity-dashboard", "--mcp"]
+      "args": ["omni-coder-dashboard", "--mcp"]
     }
   }
 }
@@ -197,8 +197,8 @@ Or if installed globally:
 
 ```bash
 # Clone the repo
-git clone https://github.com/Riko5652/ai-productivity-dashboard
-cd ai-productivity-dashboard
+git clone https://github.com/Riko5652/omni-coder-dashboard
+cd omni-coder-dashboard
 
 # Start (builds image automatically)
 docker compose up

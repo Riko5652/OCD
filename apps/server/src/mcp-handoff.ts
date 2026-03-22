@@ -17,7 +17,7 @@ initDb();
 
 const server = new McpServer({
     name: 'AI Productivity Engine',
-    version: '5.0.0',
+    version: '5.2.1',
 });
 
 const vectorService = new VectorService();
@@ -663,7 +663,7 @@ function fmtTokenCount(n: number): string {
 async function startMcp() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error('AI Productivity Engine MCP Server v5.0 running on stdio');
+    console.error('AI Productivity Engine MCP Server v5.2.1 running on stdio');
 }
 
 startMcp().catch(console.error);

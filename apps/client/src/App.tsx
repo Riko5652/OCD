@@ -134,7 +134,7 @@ export default function App() {
                         <h1 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-brand to-neonPink drop-shadow-glow-brand">
                             OCD
                         </h1>
-                        <p className="text-[10px] text-neonBlue font-mono mt-1 uppercase tracking-widest neon-text-blue">v5.0</p>
+                        <p className="text-[10px] text-neonBlue font-mono mt-1 uppercase tracking-widest neon-text-blue">v5.2.1</p>
                     </div>
                     <div className="flex gap-1.5">
                         <button onClick={() => setFocusMode(!focusMode)} className={`p-2 rounded-lg border transition-colors ${focusMode ? 'bg-brand/20 border-brand/50 shadow-neon-brand' : 'bg-[#111] border-[#222] hover:border-brand/50'}`} title={focusMode ? 'Exit Focus Mode' : 'Enter Focus Mode — show only key metrics'}>

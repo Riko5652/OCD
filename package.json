@@ -1,6 +1,6 @@
 {
-  "name": "ocd",
-  "version": "5.0.0",
+  "name": "omni-coder-dashboard",
+  "version": "5.2.1",
   "type": "module",
   "description": "OCD (Omni Coder Dashboard) — An AI memory engine that learns from your coding sessions, recommends tools, and injects proven solutions via MCP.",
   "author": {

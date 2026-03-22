@@ -4,7 +4,7 @@
 
 > Track every AI coding session across Claude Code, Cursor, Windsurf, Copilot, Aider, Continue.dev, and Gemini. Get semantic memory, cross-tool routing, prompt science, token budgeting, and 18 MCP tools — all 100% local, no API keys required.
 
-[![npm](https://img.shields.io/npm/v/ocd)](https://www.npmjs.com/package/ocd)
+[![npm](https://img.shields.io/npm/v/omni-coder-dashboard)](https://www.npmjs.com/package/omni-coder-dashboard)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-green)](LICENSE)
 [![Tools](https://img.shields.io/badge/tools-7%20adapters-blue)](#what-gets-tracked)
@@ -56,7 +56,7 @@ Whether you just installed your first AI coding tool or you're orchestrating mul
 ### Beginner — "I just started using AI coding tools"
 
 ```bash
-npx ocd                    # 1. Launch — zero config, auto-detects your tools
+npx omni-coder-dashboard                    # 1. Launch — zero config, auto-detects your tools
 ```
 
 - **What you get on day one:** A visual dashboard showing every session across all your AI tools, how many tokens you used, and which sessions succeeded vs. failed.
@@ -69,7 +69,7 @@ npx ocd                    # 1. Launch — zero config, auto-detects your tools
 ### Intermediate — "I use multiple AI tools and want to optimize"
 
 ```bash
-npx ocd --setup-mcp        # Auto-configure MCP for Claude Code, Cursor, Windsurf
+npx omni-coder-dashboard --setup-mcp        # Auto-configure MCP for Claude Code, Cursor, Windsurf
 ```
 
 - **Unlock cross-tool intelligence:** OCD tracks sessions across all 7 supported tools. The **Performance** tab lets you compare win rates, token costs, and resolution speed per tool and model.
@@ -85,10 +85,10 @@ npx ocd --setup-mcp        # Auto-configure MCP for Claude Code, Cursor, Windsur
 
 ```bash
 # Local embeddings for highest-quality semantic search
-OLLAMA_HOST=http://localhost:11434 npx ocd
+OLLAMA_HOST=http://localhost:11434 npx omni-coder-dashboard
 
 # Enable P2P team memory (LAN or Tailscale)
-P2P_ENABLED=true P2P_SECRET=your-team-key npx ocd
+P2P_ENABLED=true P2P_SECRET=your-team-key npx omni-coder-dashboard
 
 # Docker for always-on deployment
 docker compose up -d
@@ -207,10 +207,10 @@ The dashboard exposes an MCP server with **18 tools** that any AI agent can call
 
 ```bash
 # Auto-setup for all detected MCP clients
-npx ocd --setup-mcp
+npx omni-coder-dashboard --setup-mcp
 
 # Or add to a specific project
-npx ocd --setup-mcp --project
+npx omni-coder-dashboard --setup-mcp --project
 ```
 
 This writes the correct config to Claude Code, Cursor, and Windsurf automatically. Or manually add to your `.mcp.json`:
@@ -274,10 +274,10 @@ curl -X POST http://localhost:3030/api/webhook/session \
 
 ```bash
 # No install — just run (zero config)
-npx ocd
+npx omni-coder-dashboard
 
 # Or install globally
-npm install -g ocd
+npm install -g omni-coder-dashboard
 ocd
 
 # Clone and run (development)
