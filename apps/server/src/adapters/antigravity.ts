@@ -225,6 +225,16 @@ export class AntigravityAdapter implements IAiAdapter {
 
             const totalVersions = arts.reduce((s, a) => s + a.version, 0);
 
+            // Use conversation .pb file size as a token estimate fallback
+            let convFileSize = 0;
+            for (const baseDir of this.getAllDirs()) {
+                const convPath = join(baseDir, 'conversations', `${id}.pb`);
+                if (existsSync(convPath)) {
+                    try { convFileSize = statSync(convPath).size; } catch { /* skip */ }
+                    break;
+                }
+            }
+
             let estimatedOutput = 0;
             for (const a of arts) {
                 // Use actual file size if available (4 chars/token heuristic)
@@ -239,16 +249,40 @@ export class AntigravityAdapter implements IAiAdapter {
             }
             // Log files indicate real conversation depth — use log size to estimate input tokens
             const logTokens = arts.reduce((s, a) => s + Math.round(a.logSize / 4), 0);
-            const totalInput = logTokens || (arts.length > 0 ? scratchPerSession : 0);
+            let totalInput = logTokens || (arts.length > 0 ? scratchPerSession : 0);
             if (arts.length > 0) estimatedOutput += scratchPerSession;
+
+            // Fallback: use conversation .pb file size to estimate tokens when no artifacts exist
+            // Encrypted .pb files are roughly 8 bytes per token (conservative estimate)
+            if (convFileSize > 0 && arts.length === 0) {
+                const convTokenEstimate = Math.round(convFileSize / 8);
+                totalInput = Math.round(convTokenEstimate * 0.6);
+                estimatedOutput = Math.round(convTokenEstimate * 0.4);
+            }
+
+            // Try to extract title from task.md if no summary available
+            let title = arts[0]?.summary || undefined;
+            if (!title) {
+                for (const baseDir of this.getAllDirs()) {
+                    const taskPath = join(baseDir, 'brain', id, 'task.md');
+                    if (existsSync(taskPath)) {
+                        try {
+                            const content = readFileSync(taskPath, 'utf-8');
+                            const firstLine = content.split('\n').find(l => l.trim().length > 0);
+                            if (firstLine) title = firstLine.replace(/^#+\s*/, '').trim().slice(0, 200);
+                        } catch { /* skip */ }
+                        break;
+                    }
+                }
+            }
 
             sessions.push({
                 id: `ag-${id}`,
                 tool_id: 'antigravity',
-                title: arts[0]?.summary || undefined,
+                title,
                 started_at: earliest || lastView || Date.now(),
                 ended_at: latest || lastView,
-                total_turns: Math.max(arts.length, totalVersions),
+                total_turns: Math.max(arts.length, totalVersions) || (convFileSize > 0 ? 1 : 0),
                 total_input_tokens: totalInput,
                 total_output_tokens: estimatedOutput,
                 total_cache_read: 0,
