@@ -1,5 +1,5 @@
 import { useApi } from '../hooks/useApi';
-import { CheckCircle, XCircle, AlertCircle, Zap, ArrowRight, BarChart2, Brain, Shield, Terminal } from 'lucide-react';
+import { CheckCircle, XCircle, AlertCircle, Zap, ArrowRight, BarChart2, Brain, Shield, Terminal, Link2 } from 'lucide-react';
 
 interface OnboardingProps {
     onDismiss: () => void;
@@ -7,6 +7,7 @@ interface OnboardingProps {
 
 export default function Onboarding({ onDismiss }: OnboardingProps) {
     const { data: overview } = useApi<any>('/api/overview');
+    const { data: mcpStatus } = useApi<any>('/api/mcp-status');
 
     const tools = overview?.tools || [];
     const totalSessions = overview?.global?.total_sessions || 0;
@@ -23,6 +24,9 @@ export default function Onboarding({ onDismiss }: OnboardingProps) {
 
     const detectedTools = knownTools.filter(t => tools.some((s: any) => s.tool_id === t.id));
     const missingTools = knownTools.filter(t => !tools.some((s: any) => s.tool_id === t.id));
+
+    const mcpTools = mcpStatus?.tools || [];
+    const mcpConfigured = mcpStatus?.any_configured || false;
 
     const readinessLevel = totalSessions >= 50 ? 'full' : totalSessions >= 20 ? 'moderate' : totalSessions >= 5 ? 'basic' : 'empty';
     const readinessMap = {
@@ -78,6 +82,40 @@ export default function Onboarding({ onDismiss }: OnboardingProps) {
                             ))}
                         </div>
                     </details>
+                )}
+            </div>
+
+            {/* MCP Connection Status */}
+            <div className="glass-panel p-6">
+                <h3 className="text-xs font-black text-zinc-400 mb-4 uppercase tracking-widest">
+                    <Link2 className="w-3.5 h-3.5 inline mr-2 -mt-0.5" />
+                    MCP Server — 18 Agent Tools
+                </h3>
+                {mcpConfigured ? (
+                    <div className="space-y-2">
+                        {mcpTools.map((t: any) => (
+                            <div key={t.tool} className={`flex items-center gap-3 p-3 rounded-lg border ${t.configured ? 'bg-neonGreen/5 border-neonGreen/20' : 'bg-[#050505] border-[#222]'}`}>
+                                {t.configured ? <CheckCircle className="w-4 h-4 text-neonGreen shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-zinc-600 shrink-0" />}
+                                <span className={`text-sm font-bold ${t.configured ? 'text-white' : 'text-zinc-500'}`}>{t.tool}</span>
+                                <span className="text-[10px] text-zinc-500 ml-auto">{t.configured ? 'Connected' : 'Not configured'}</span>
+                            </div>
+                        ))}
+                        <p className="text-[10px] text-neonGreen mt-2">Your AI agents can now call 18 MCP tools: semantic search, health checks, routing, anti-hallucination, and more.</p>
+                    </div>
+                ) : (
+                    <div>
+                        <div className="flex items-center gap-3 p-3 bg-yellow-400/5 rounded-lg border border-yellow-400/20">
+                            <AlertCircle className="w-4 h-4 text-yellow-400 shrink-0" />
+                            <div>
+                                <p className="text-sm text-zinc-300">MCP not configured yet</p>
+                                <p className="text-[10px] text-zinc-500 mt-1">Run this to connect your AI tools to OCD's 18 agent tools:</p>
+                            </div>
+                        </div>
+                        <div className="mt-3 p-3 bg-[#050505] rounded-lg border border-[#222]">
+                            <code className="text-xs text-brand font-mono">npx omni-coder-dashboard --setup-mcp</code>
+                        </div>
+                        <p className="text-[10px] text-zinc-600 mt-2">This auto-configures Claude Code, Cursor, and Windsurf. Takes 5 seconds.</p>
+                    </div>
                 )}
             </div>
 
