@@ -316,3 +316,11 @@ export function stopP2pSync() {
 }
 
 export function getNodeId_(): string { return NODE_ID; }
+
+/** Returns P2P security warnings for the dashboard. */
+export function getP2pSecurityStatus(): { enabled: boolean; warnings: string[] } {
+    const warnings: string[] = [];
+    if (!P2P_SECRET) return { enabled: false, warnings };
+    warnings.push('P2P sync uses plaintext HTTP — embeddings and metadata are transmitted unencrypted on the LAN. HMAC authentication prevents tampering but does not prevent eavesdropping. Consider using a VPN or Tailscale for sensitive environments.');
+    return { enabled: true, warnings };
+}

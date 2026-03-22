@@ -6,10 +6,49 @@ const OLLAMA_HOST = process.env.OLLAMA_HOST || 'http://localhost:11434';
 
 let embeddingProvider: string | null = null;
 
+// ─── Local ONNX model (all-MiniLM-L6-v2 via @xenova/transformers) ────────
+
+let localPipeline: any = null;
+let localModelFailed = false;
+
+async function getLocalPipeline(): Promise<any> {
+    if (localPipeline) return localPipeline;
+    if (localModelFailed) return null;
+    try {
+        const { pipeline } = await import('@xenova/transformers');
+        localPipeline = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2', {
+            quantized: true,
+        });
+        console.log('[vector-store] Local ONNX model loaded (all-MiniLM-L6-v2)');
+        return localPipeline;
+    } catch (e: any) {
+        localModelFailed = true;
+        console.warn(`[vector-store] Local ONNX model unavailable: ${e.message}`);
+        return null;
+    }
+}
+
+async function embedViaLocal(text: string): Promise<number[]> {
+    const pipe = await getLocalPipeline();
+    if (!pipe) throw new Error('Local model not available');
+    const output = await pipe(text.slice(0, 512), { pooling: 'mean', normalize: true });
+    return Array.from(output.data as Float32Array);
+}
+
 // ─── Provider resolution ────────────────────────────────────────────────────
 
 async function resolveProvider(): Promise<string> {
     if (embeddingProvider) return embeddingProvider;
+
+    // 1. Try local ONNX model first (zero-config, real semantic embeddings)
+    if (!localModelFailed) {
+        try {
+            const pipe = await getLocalPipeline();
+            if (pipe) { embeddingProvider = 'local'; return embeddingProvider; }
+        } catch { /* fall through */ }
+    }
+
+    // 2. Ollama (local, requires user setup)
     try {
         const resp = await fetch(`${OLLAMA_HOST}/api/embeddings`, {
             method: 'POST', headers: { 'Content-Type': 'application/json' },
@@ -19,6 +58,7 @@ async function resolveProvider(): Promise<string> {
         if (resp.ok) { embeddingProvider = 'ollama'; return embeddingProvider; }
     } catch { /* not available */ }
 
+    // 3. OpenAI (requires API key)
     if (process.env.OPENAI_API_KEY) {
         try {
             const resp = await fetch('https://api.openai.com/v1/embeddings', {
@@ -31,6 +71,7 @@ async function resolveProvider(): Promise<string> {
         } catch { /* not available */ }
     }
 
+    // 4. Hash fallback (keyword matching only — not semantic)
     embeddingProvider = 'hash';
     return embeddingProvider;
 }
@@ -39,9 +80,18 @@ async function resolveProvider(): Promise<string> {
 
 export async function embedText(text: string): Promise<number[]> {
     const provider = await resolveProvider();
+    if (provider === 'local') return embedViaLocal(text);
     if (provider === 'ollama') return embedViaOllama(text);
     if (provider === 'openai') return embedViaOpenAI(text);
     return hashEmbed(text);
+}
+
+/** Returns the current embedding provider name and whether it's semantic. */
+export async function getEmbeddingStatus(): Promise<{ provider: string; isSemantic: boolean; dimensions: number }> {
+    const provider = await resolveProvider();
+    const isSemantic = provider !== 'hash';
+    const dimensions = provider === 'local' ? 384 : provider === 'hash' ? EMBEDDING_DIM : provider === 'ollama' ? 768 : 1536;
+    return { provider, isSemantic, dimensions };
 }
 
 async function embedViaOllama(text: string): Promise<number[]> {
@@ -162,9 +212,11 @@ export function cosineSimilarity(a: number[], b: number[]): number {
     return denom === 0 ? 0 : dot / denom;
 }
 
-export async function findSimilar(query: string, topK = 5): Promise<Array<{ session_id: string; similarity: number; session: any }>> {
+export async function findSimilar(query: string, topK = 5): Promise<Array<{ session_id: string; similarity: number; session: any; matchType: string }>> {
     const db = getDb();
     const queryEmbedding = await embedText(query);
+    const provider = await resolveProvider();
+    const matchType = provider === 'hash' ? 'keyword' : 'semantic';
     const rows = db.prepare('SELECT session_id, embedding FROM session_embeddings').all() as any[];
     if (!rows.length) return [];
 
@@ -179,7 +231,7 @@ export async function findSimilar(query: string, topK = 5): Promise<Array<{ sess
 
     scored.sort((a, b) => b.similarity - a.similarity);
     const getSession = db.prepare('SELECT * FROM sessions WHERE id = ?');
-    return scored.slice(0, topK).map(r => ({ ...r, session: getSession.get(r.session_id) || null }));
+    return scored.slice(0, topK).map(r => ({ ...r, matchType, session: getSession.get(r.session_id) || null }));
 }
 
 // ─── Legacy-compatible VectorService class ──────────────────────────────────
@@ -203,13 +255,15 @@ export class VectorService {
     async searchSimilarSessions(queryText: string, limit = 5, matchThreshold = 0.5) {
         const db = getDb();
         const queryVector = await embedText(queryText);
-        const rows = db.prepare('SELECT session_id, embedding FROM session_embeddings ORDER BY created_at DESC LIMIT 1000').all() as any[];
-        const results: Array<{ session_id: string; similarity: number }> = [];
+        const provider = await resolveProvider();
+        const matchType = provider === 'hash' ? 'keyword' : 'semantic';
+        const rows = db.prepare('SELECT session_id, embedding FROM session_embeddings').all() as any[];
+        const results: Array<{ session_id: string; similarity: number; matchType: string }> = [];
         for (const row of rows) {
             try {
                 const storedVector = JSON.parse(row.embedding) as number[];
                 const similarity = cosineSimilarity(queryVector, storedVector);
-                if (similarity >= matchThreshold) results.push({ session_id: row.session_id, similarity });
+                if (similarity >= matchThreshold) results.push({ session_id: row.session_id, similarity, matchType });
             } catch { /* skip */ }
         }
         return results.sort((a, b) => b.similarity - a.similarity).slice(0, limit);

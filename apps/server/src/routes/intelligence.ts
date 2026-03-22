@@ -12,12 +12,13 @@ import { getNegativeConstraints } from '../engine/anti-pattern-graph.js';
 import { makeArbitrageDecision, logArbitrageDecision, proxyCompletion, getArbitrageSummary } from '../engine/token-arbiter.js';
 import {
     getKnownPeers, getShareableEmbeddings, syncWithAllPeers,
-    validatePeerRequest, getNodeId_,
+    validatePeerRequest, getNodeId_, getP2pSecurityStatus,
 } from '../engine/p2p-sync.js';
 import { discoverRepos } from '../engine/git-scanner.js';
 import { AntigravityAdapter } from '../adapters/antigravity.js';
 import { registry } from '../adapters/registry.js';
 import { getBookmarkletCode } from '../lib/bookmarklet.js';
+import { getEmbeddingStatus, findSimilar } from '../lib/vector-store.js';
 import type { CacheStore, LlmRateLimiter } from './types.js';
 
 function clampInt(val: any, min: number, max: number, fallback: number): number {
@@ -51,6 +52,39 @@ export default async function intelligenceRoutes(fastify: FastifyInstance, opts:
     fastify.get('/api/ollama/status', async () => {
         try { return await detectProvider(); }
         catch (e: any) { return { available: false, error: e.message }; }
+    });
+
+    // Embedding / vector memory status
+    fastify.get('/api/embedding/status', async () => {
+        const db = getDb();
+        const status = await getEmbeddingStatus();
+        const totalSessions = (db.prepare('SELECT COUNT(*) as cnt FROM sessions').get() as any).cnt;
+        const embeddedSessions = (db.prepare('SELECT COUNT(*) as cnt FROM session_embeddings').get() as any).cnt;
+        const providers = db.prepare('SELECT provider, COUNT(*) as cnt FROM session_embeddings GROUP BY provider').all() as any[];
+        return {
+            ...status,
+            totalSessions,
+            embeddedSessions,
+            coveragePct: totalSessions > 0 ? Math.round((embeddedSessions / totalSessions) * 100) : 0,
+            providerBreakdown: providers,
+        };
+    });
+
+    // Live similarity search
+    fastify.get('/api/embedding/search', async (request) => {
+        const query = sanitizeString((request.query as any).q, 500);
+        if (!query) return { results: [] };
+        const results = await findSimilar(query, clampInt((request.query as any).limit, 1, 20, 5));
+        return {
+            results: results.map(r => ({
+                session_id: r.session_id,
+                similarity: r.similarity,
+                matchType: r.matchType,
+                title: r.session?.title || 'Unknown',
+                tldr: r.session?.tldr || '',
+                quality: r.session?.quality_score || null,
+            })),
+        };
     });
 
     fastify.get('/api/insights/deep-analyze', async (request, reply) => {
@@ -313,6 +347,7 @@ export default async function intelligenceRoutes(fastify: FastifyInstance, opts:
     fastify.get('/api/p2p/peers', async () => ({
         node_id: getNodeId_(),
         peers: getKnownPeers(),
+        security: getP2pSecurityStatus(),
     }));
 
     fastify.post('/api/p2p/embeddings', async (request, reply) => {

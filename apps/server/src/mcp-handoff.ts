@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { initDb, getDb } from './db/index.js';
-import { VectorService } from './lib/vector-store.js';
+import { VectorService, getEmbeddingStatus } from './lib/vector-store.js';
 import { computeOverview, computeCostAnalysis, computePersonalInsights } from './engine/analytics.js';
 import { getAgenticLeaderboard } from './engine/agentic-scorer.js';
 import { getNegativeConstraints } from './engine/anti-pattern-graph.js';
@@ -37,11 +37,12 @@ server.tool(
                 return { content: [{ type: 'text' as const, text: 'No relevant past solutions found in memory.' }] };
             }
             const db = getDb();
-            let response = 'Relevant solutions from past sessions:\n\n';
+            const matchType = results[0]?.matchType || 'keyword';
+            let response = `Relevant solutions from past sessions (${matchType} match):\n\n`;
             for (const res of results) {
                 const row = db.prepare('SELECT title, tldr, code_lines_added, quality_score, primary_model, tool_id FROM sessions WHERE id = ?').get(res.session_id) as any;
                 if (row) {
-                    response += `--- ${row.title || 'Unknown'} (${(res.similarity * 100).toFixed(1)}% match) ---\n`;
+                    response += `--- ${row.title || 'Unknown'} (${(res.similarity * 100).toFixed(1)}% ${matchType} match) ---\n`;
                     response += `Tool: ${row.tool_id} | Model: ${row.primary_model} | Quality: ${row.quality_score || 'N/A'}\n`;
                     response += `TLDR: ${row.tldr || 'No summary'} | Lines: +${row.code_lines_added}\n\n`;
                 }

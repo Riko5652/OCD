@@ -70,6 +70,7 @@
     "mcp": "pnpm --filter ./apps/server run mcp",
     "doctor": "node bin/doctor.mjs",
     "feedback": "node bin/feedback.mjs",
+    "install-hook": "node bin/install-hook.js",
     "test": "pnpm --filter @ocd/server run test",
     "prepare": "pnpm run build"
   }
