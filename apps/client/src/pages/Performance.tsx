@@ -16,7 +16,8 @@ export default function Performance() {
     const { data: codeGen } = useApi<any>('/api/code-generation');
     const { data: agentic } = useApi<any>('/api/agentic/scores');
     const { data: commits } = useApi<any[]>('/api/commits');
-    const { data: modelPerf } = useApi<any[]>('/api/models/performance');
+    const { data: modelPerfData } = useApi<any>('/api/models/performance');
+    const modelPerf = Array.isArray(modelPerfData) ? modelPerfData : modelPerfData?.models ?? [];
     const { data: winRatesData } = useApi<any>('/api/routing/win-rates');
     const winRates = Array.isArray(winRatesData) ? winRatesData : winRatesData?.win_rates ?? [];
     const { data: routing } = useApi<any>('/api/routing/recommend');
