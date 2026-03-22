@@ -79,8 +79,10 @@ function sendOsNotification(title: string, body: string): void {
             const script = `display notification "${body.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}"`;
             execFile('osascript', ['-e', script], { timeout: 3000 }, () => {});
         } else if (os === 'win32') {
-            const ps = `[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime] | Out-Null; $xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02); $xml.GetElementsByTagName('text')[0].AppendChild($xml.CreateTextNode('${title.replace(/'/g, "''")}')) | Out-Null; $xml.GetElementsByTagName('text')[1].AppendChild($xml.CreateTextNode('${body.slice(0, 200).replace(/'/g, "''")}')) | Out-Null; [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('OCD').Show([Windows.UI.Notifications.ToastNotification]::new($xml))`;
-            execFile('powershell', ['-Command', ps], { timeout: 5000 }, () => {});
+            const safeTitle = title.replace(/[`$"\\]/g, '').slice(0, 100);
+            const safeBody = body.replace(/[`$"\\]/g, '').slice(0, 200);
+            const ps = `[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime] | Out-Null; $xml = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02); $xml.GetElementsByTagName('text')[0].AppendChild($xml.CreateTextNode('${safeTitle.replace(/'/g, "''")}')) | Out-Null; $xml.GetElementsByTagName('text')[1].AppendChild($xml.CreateTextNode('${safeBody.replace(/'/g, "''")}')) | Out-Null; [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('OCD').Show([Windows.UI.Notifications.ToastNotification]::new($xml))`;
+            execFile('powershell', ['-NoProfile', '-NonInteractive', '-Command', ps], { timeout: 5000 }, () => {});
         }
     } catch { /* notification failure is non-critical */ }
 }

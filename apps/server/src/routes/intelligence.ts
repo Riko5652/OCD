@@ -367,7 +367,13 @@ export default async function intelligenceRoutes(fastify: FastifyInstance, opts:
         return { synced: results, peers_contacted: results.length };
     });
 
-    fastify.post('/api/p2p/hello', async (request) => {
+    fastify.post('/api/p2p/hello', async (request, reply) => {
+        const sig = (request.headers as Record<string, string>)['x-ocd-sig'] || '';
+        const rawBody = JSON.stringify(request.body);
+        if (!validatePeerRequest(rawBody, sig)) {
+            reply.status(401);
+            return { error: 'Invalid peer signature' };
+        }
         const { peer_id, host, port } = request.body as any;
         if (peer_id && host && port) {
             fastify.log.info(`[p2p] Hello from peer ${peer_id} at ${host}:${port}`);
@@ -381,12 +387,15 @@ export default async function intelligenceRoutes(fastify: FastifyInstance, opts:
     let latestVersionCache = { version: null as string | null, checkedAt: 0 };
 
     fastify.get('/api/version-check', async () => {
+        if (process.env.UPDATE_CHECK !== 'true') {
+            return { current: CURRENT_VERSION, latest: null, updateAvailable: null, note: 'Set UPDATE_CHECK=true to enable version checks' };
+        }
         const ONE_HOUR = 3600_000;
         if (latestVersionCache.version && Date.now() - latestVersionCache.checkedAt < ONE_HOUR) {
             return { current: CURRENT_VERSION, latest: latestVersionCache.version, updateAvailable: latestVersionCache.version !== CURRENT_VERSION };
         }
         try {
-            const resp = await fetch('https://registry.npmjs.org/ai-productivity-dashboard/latest', {
+            const resp = await fetch('https://registry.npmjs.org/omni-coder-dashboard/latest', {
                 headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(5000),
             });
             if (resp.ok) {

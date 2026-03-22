@@ -3,6 +3,7 @@ import fastifyRateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import fastifySwagger from '@fastify/swagger';
 import fastifySwaggerUi from '@fastify/swagger-ui';
+import { timingSafeEqual } from 'crypto';
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -127,7 +128,9 @@ if (AUTH_TOKEN) {
         if (!request.url.startsWith('/api/')) return done();
         const header = request.headers['authorization'] || '';
         const token = header.startsWith('Bearer ') ? header.slice(7) : '';
-        if (token !== AUTH_TOKEN) {
+        const tokenBuf = Buffer.from(token);
+        const secretBuf = Buffer.from(AUTH_TOKEN);
+        if (tokenBuf.length !== secretBuf.length || !timingSafeEqual(tokenBuf, secretBuf)) {
             reply.status(401).send({ error: 'Unauthorized — set Authorization: Bearer <AUTH_TOKEN>' });
             return;
         }
@@ -484,7 +487,16 @@ await fastify.register(intelligenceRoutes, { cache, llmRateLimit, broadcast, gen
 // ---- CORS for import endpoints ----
 fastify.addHook('onRequest', (request, reply, done) => {
     if (request.url.startsWith('/api/sessions/import') || request.url.startsWith('/api/webhook/')) {
-        reply.header('Access-Control-Allow-Origin', request.headers.origin || 'http://localhost:3030');
+        const ALLOWED_ORIGINS = new Set([
+            'http://localhost:3030',
+            'https://chatgpt.com',
+            'https://claude.ai',
+            'https://gemini.google.com',
+            'https://copilot.microsoft.com',
+        ]);
+        const reqOrigin = request.headers.origin || '';
+        const allowedOrigin = ALLOWED_ORIGINS.has(reqOrigin) ? reqOrigin : 'http://localhost:3030';
+        reply.header('Access-Control-Allow-Origin', allowedOrigin);
         reply.header('Access-Control-Allow-Methods', 'POST, OPTIONS');
         reply.header('Access-Control-Allow-Headers', 'Content-Type, X-Webhook-Secret');
         if (request.method === 'OPTIONS') {

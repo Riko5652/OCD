@@ -1,7 +1,7 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
-import { initDb, getDb } from './db/index.js';
+import { initDb, getDb, escapeLike } from './db/index.js';
 import { VectorService, getEmbeddingStatus } from './lib/vector-store.js';
 import { computeOverview, computeCostAnalysis, computePersonalInsights } from './engine/analytics.js';
 import { getAgenticLeaderboard } from './engine/agentic-scorer.js';
@@ -61,16 +61,17 @@ server.tool(
     { topic: z.string().describe('Domain/component name (e.g., "auth", "database", "ui")') },
     async ({ topic }) => {
         const db = getDb();
+        const escaped = escapeLike(topic);
         const clusters = db.prepare(`
             SELECT topic, summary, total_sessions, total_tokens
-            FROM topic_clusters WHERE topic LIKE ? ORDER BY total_sessions DESC LIMIT 5
-        `).all(`%${topic}%`) as any[];
+            FROM topic_clusters WHERE topic LIKE ? ESCAPE '\\' ORDER BY total_sessions DESC LIMIT 5
+        `).all(`%${escaped}%`) as any[];
 
         const sessions = db.prepare(`
             SELECT id, title, tool_id, primary_model, quality_score, code_lines_added
-            FROM sessions WHERE topic LIKE ? OR title LIKE ?
+            FROM sessions WHERE topic LIKE ? ESCAPE '\\' OR title LIKE ? ESCAPE '\\'
             ORDER BY quality_score DESC LIMIT 10
-        `).all(`%${topic}%`, `%${topic}%`) as any[];
+        `).all(`%${escaped}%`, `%${escaped}%`) as any[];
 
         if (!clusters.length && !sessions.length) {
             return { content: [{ type: 'text' as const, text: `No knowledge context found for "${topic}". Try a broader query.` }] };
@@ -291,7 +292,7 @@ server.tool(
     { project: z.string().describe('Project name to look up') },
     async ({ project }) => {
         const db = getDb();
-        const p = db.prepare('SELECT * FROM project_index WHERE name LIKE ?').get(`%${project}%`) as any;
+        const p = db.prepare("SELECT * FROM project_index WHERE name LIKE ? ESCAPE '\\'").get(`%${escapeLike(project)}%`) as any;
         if (!p) return { content: [{ type: 'text' as const, text: `Project "${project}" not found.` }] };
 
         let response = `Project: ${p.name}\n`;
@@ -405,7 +406,7 @@ server.tool(
         let sql = `SELECT topic, COUNT(*) as sessions, SUM(total_output_tokens) as tokens,
             AVG(quality_score) as avg_quality FROM sessions WHERE topic IS NOT NULL`;
         const params: any[] = [];
-        if (project) { sql += ' AND raw_data LIKE ?'; params.push(`%${project}%`); }
+        if (project) { sql += " AND raw_data LIKE ? ESCAPE '\\\\'"; params.push(`%${escapeLike(project)}%`); }
         sql += ' GROUP BY topic ORDER BY sessions DESC LIMIT 15';
         const rows = db.prepare(sql).all(...params) as any[];
 

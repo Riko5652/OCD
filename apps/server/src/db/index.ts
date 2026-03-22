@@ -33,3 +33,8 @@ export function getDb() {
     }
     return db;
 }
+
+/** Escape LIKE metacharacters (%, _, \) for safe use in parameterized LIKE queries. */
+export function escapeLike(s: string): string {
+    return s.replace(/[\\%_]/g, '\\$&');
+}

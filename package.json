@@ -64,7 +64,11 @@
     "onlyBuiltDependencies": [
       "better-sqlite3",
       "esbuild"
-    ]
+    ],
+    "overrides": {
+      "flatted": ">=3.4.2",
+      "esbuild": ">=0.25.0"
+    }
   },
   "scripts": {
     "dev": "pnpm --filter ./apps/* run dev",

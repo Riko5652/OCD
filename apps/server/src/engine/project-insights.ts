@@ -1,4 +1,4 @@
-import { getDb } from '../db/index.js';
+import { getDb, escapeLike } from '../db/index.js';
 
 function extractProjectName(session: any): string | null {
     try {
@@ -42,7 +42,7 @@ export function computeAllProjects() {
 
 export function computeProjectInsights(projectName: string) {
     const db = getDb();
-    const escapedName = projectName.replace(/[\\%_]/g, '\\$&');
+    const escapedName = escapeLike(projectName);
     const sessions = db.prepare(`
         SELECT tool_id, primary_model, total_turns, first_attempt_pct, cache_hit_pct, quality_score, error_count
         FROM sessions WHERE raw_data LIKE ? ESCAPE '\\' ORDER BY started_at DESC LIMIT 200

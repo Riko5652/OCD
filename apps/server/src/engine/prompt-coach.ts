@@ -1,4 +1,4 @@
-import { getDb } from '../db/index.js';
+import { getDb, escapeLike } from '../db/index.js';
 
 function sanitize(text: string, maxLen = 200): string {
     return (text || '').replace(/[\x00-\x1f]/g, ' ').slice(0, maxLen);
@@ -141,7 +141,7 @@ export function getAttributionReport(opts: { project?: string; branch?: string; 
     const conditions: string[] = [];
     const params: any[] = [];
 
-    if (opts.project) { conditions.push('branch LIKE ?'); params.push(`%${opts.project}%`); }
+    if (opts.project) { conditions.push("branch LIKE ? ESCAPE '\\'"); params.push(`%${escapeLike(opts.project)}%`); }
     if (opts.branch) { conditions.push('branch = ?'); params.push(opts.branch); }
     if (opts.days) {
         conditions.push('commit_date > ?');

@@ -1,4 +1,4 @@
-import { getDb } from '../db/index.js';
+import { getDb, escapeLike } from '../db/index.js';
 
 const TOPIC_SIGNALS: Record<string, RegExp[]> = {
     'db-work': [/sql|postgres|migration|schema|query|pgvector|memgraph|sqlite|database/i],
@@ -63,8 +63,8 @@ export function getTopicBreakdown(projectName: string) {
     const sessions = db.prepare(`
         SELECT id, tool_id, primary_model, topic, started_at, total_turns, total_input_tokens,
             total_output_tokens, quality_score, project_relevance_score, raw_data, title
-        FROM sessions WHERE raw_data LIKE ? ORDER BY started_at DESC LIMIT 200
-    `).all(`%${projectName}%`) as any[];
+        FROM sessions WHERE raw_data LIKE ? ESCAPE '\\' ORDER BY started_at DESC LIMIT 200
+    `).all(`%${escapeLike(projectName)}%`) as any[];
 
     const byTopic: Record<string, { sessions: any[]; total_tokens: number; low_relevance_count: number }> = {};
     for (const s of sessions) {

@@ -26,15 +26,15 @@ services:
       # macOS/Linux: defaults work automatically (~/.claude, etc.)
       - type: bind
         source: ${CLAUDE_DIR:-~/.claude}
-        target: /root/.claude
+        target: /home/dashboard/.claude
         read_only: true
       - type: bind
         source: ${CURSOR_DIR:-~/.cursor}
-        target: /root/.cursor
+        target: /home/dashboard/.cursor
         read_only: true
       - type: bind
         source: ${GEMINI_DIR:-~/.gemini}
-        target: /root/.gemini
+        target: /home/dashboard/.gemini
         read_only: true
       # Persistent database
       - ./data:/app/data
