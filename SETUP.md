@@ -1,6 +1,6 @@
-# Setup Guide — v5.3.0
+# Setup Guide — v5.4.0
 
-This guide covers installation on **Windows**, **macOS**, and **Linux**, and explains how to tell the dashboard which AI tools to track and where their data lives. v5.3.0 uses a TypeScript monorepo with pnpm, React client, and Fastify server.
+This guide covers installation on **Windows**, **macOS**, and **Linux**, and explains how to tell the dashboard which AI tools to track and where their data lives. v5.4.0 uses a TypeScript monorepo with pnpm, React client, and Fastify server.
 
 ---
 

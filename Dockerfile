@@ -1,4 +1,4 @@
-# OCD (Omni Coder Dashboard) v5.3.0 — Docker image
+# OCD (Omni Coder Dashboard) v5.4.0 — Docker image
 # Runs the dashboard server with built client and local ONNX embeddings.
 # Your AI tool data is mounted from the host (read-only).
 #

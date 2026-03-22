@@ -78,7 +78,7 @@ await fastify.register(fastifySwagger, {
         info: {
             title: 'OCD — Omni Coder Dashboard API',
             description: 'AI memory engine with real semantic embeddings (ONNX), 18 MCP tools, cross-tool routing, proactive IDE interception, and a Memory dashboard. Learns from your coding sessions across 7 tools. 100% local, zero API keys required.',
-            version: '5.3.0',
+            version: '5.4.0',
             license: { name: 'AGPL-3.0-or-later', url: 'https://www.gnu.org/licenses/agpl-3.0.en.html' },
         },
         servers: [{ url: `http://localhost:${config.port}`, description: 'Local development' }],
@@ -462,7 +462,7 @@ async function generateDailyPick() {
 
 // ---- Health route ----
 fastify.get('/api/health', async () => {
-    return { status: 'ok', version: '5.3.0', uptime: Math.round(process.uptime()) };
+    return { status: 'ok', version: '5.4.0', uptime: Math.round(process.uptime()) };
 });
 
 // ---- Ingest / Refresh routes ----
@@ -536,7 +536,7 @@ const start = async () => {
         }
 
         await fastify.listen({ port: config.port, host: BIND });
-        fastify.log.info(`\n  AI Productivity Dashboard v5.3.0\n  Open: http://localhost:${config.port}\n  API docs: http://localhost:${config.port}/docs\n`);
+        fastify.log.info(`\n  AI Productivity Dashboard v5.4.0\n  Open: http://localhost:${config.port}\n  API docs: http://localhost:${config.port}/docs\n`);
 
         fastify.log.info('Starting initial data ingestion...');
         const total = await ingestAll();

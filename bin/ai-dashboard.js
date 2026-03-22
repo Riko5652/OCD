@@ -36,7 +36,7 @@ if (args.includes('--setup-mcp')) {
 
 if (args.includes('--help') || args.includes('-h')) {
   console.log(`
-\x1b[1mai-dashboard\x1b[0m — OCD (Omni Coder Dashboard) v5.3.0
+\x1b[1mai-dashboard\x1b[0m — OCD (Omni Coder Dashboard) v5.4.0
 
   AI memory engine with real semantic embeddings, 18 MCP tools,
   cross-tool routing, and proactive IDE interception.

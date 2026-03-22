@@ -1,4 +1,4 @@
-# OCD — Omni Coder Dashboard v5.3.0
+# OCD — Omni Coder Dashboard v5.4.0
 
 ### The open-source AI memory engine for coding tools
 
@@ -18,7 +18,7 @@
 
 ---
 
-## What's New in v5.3.0
+## What's New in v5.4.0
 
 > **True semantic memory out of the box** — no Ollama, no API keys, no config.
 

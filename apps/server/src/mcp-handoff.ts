@@ -17,7 +17,7 @@ initDb();
 
 const server = new McpServer({
     name: 'AI Productivity Engine',
-    version: '5.3.0',
+    version: '5.4.0',
 });
 
 const vectorService = new VectorService();
