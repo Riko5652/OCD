@@ -80,14 +80,14 @@ jobs:
             ### Install via npm (recommended)
 
             ```bash
-            npm install -g ocd
+            npm install -g omni-coder-dashboard
             ocd
             ```
 
             Or run without installing:
 
             ```bash
-            npx ocd
+            npx omni-coder-dashboard
             ```
 
             ### Standalone binaries (experimental)
