@@ -318,6 +318,7 @@ export async function streamDeepAnalysis(res: any) {
     const sessions = db.prepare(`
         SELECT s.*, t.label as first_label FROM sessions s
         LEFT JOIN turns t ON t.session_id = s.id AND t.rowid = (SELECT MIN(rowid) FROM turns WHERE session_id = s.id)
+        WHERE s.total_turns > 0 OR s.total_output_tokens > 0
         ORDER BY s.started_at DESC LIMIT 10
     `).all() as any[];
 

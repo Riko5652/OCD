@@ -43,6 +43,12 @@
   "engines": {
     "node": ">=18.0.0"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "esbuild"
+    ]
+  },
   "scripts": {
     "dev": "pnpm --filter ./apps/* run dev",
     "build": "pnpm --filter ./apps/* run build",

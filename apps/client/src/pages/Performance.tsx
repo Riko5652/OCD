@@ -16,9 +16,11 @@ export default function Performance() {
     const { data: codeGen } = useApi<any>('/api/code-generation');
     const { data: agentic } = useApi<any>('/api/agentic/scores');
     const { data: commits } = useApi<any[]>('/api/commits');
-    const { data: modelPerf } = useApi<any[]>('/api/models/performance');
-    const { data: winRates } = useApi<any[]>('/api/models/win-rates');
-    const { data: routing } = useApi<any>('/api/models/routing');
+    const { data: modelPerfData } = useApi<any>('/api/models/performance');
+    const modelPerf = Array.isArray(modelPerfData) ? modelPerfData : modelPerfData?.models ?? [];
+    const { data: winRatesData } = useApi<any>('/api/routing/win-rates');
+    const winRates = Array.isArray(winRatesData) ? winRatesData : winRatesData?.win_rates ?? [];
+    const { data: routing } = useApi<any>('/api/routing/recommend');
     const focusMode = useContext(FocusModeContext);
     const [view, setView] = useState<'tools' | 'models' | 'costs' | 'agentic' | 'authorship' | 'codegen' | 'modelperf' | 'winrates' | 'routing'>('tools');
 
@@ -426,6 +428,21 @@ export default function Performance() {
                         </h3>
                         <p className="text-sm text-zinc-400 mb-6">Based on your historical data, these are the best model choices per task type and tool.</p>
                         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            {routing?.recommendation && (
+                                <div className="bg-[#050505] rounded-xl p-5 border border-[#222] hover:border-brand/40 transition-colors group">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500">{routing.recommendation.task_type || 'General'}</span>
+                                        <span className="px-2 py-0.5 rounded text-[9px] font-black uppercase tracking-widest border border-[#333]"
+                                            style={{ color: TOOL_COLORS[routing.recommendation.tool_id] || '#aaa' }}>{routing.recommendation.tool_id}</span>
+                                    </div>
+                                    <p className="text-lg font-black text-white mb-2 group-hover:text-brand transition-colors truncate">{routing.recommendation.recommended_model || routing.recommendation.model}</p>
+                                    <div className="flex items-center justify-between text-[10px] text-zinc-500">
+                                        <span>Win rate: <span className="text-neonGreen font-bold">{(routing.recommendation.win_rate || 0).toFixed(0)}%</span></span>
+                                        <span>Quality: <span className="text-neonBlue font-bold">{(routing.recommendation.avg_quality || 0).toFixed(0)}</span></span>
+                                    </div>
+                                    {routing.reason && <p className="text-[10px] text-zinc-600 mt-2 leading-relaxed">{routing.reason}</p>}
+                                </div>
+                            )}
                             {(routing?.recommendations || []).map((r: any, i: number) => (
                                 <div key={i} className="bg-[#050505] rounded-xl p-5 border border-[#222] hover:border-brand/40 transition-colors group">
                                     <div className="flex items-center justify-between mb-3">
@@ -442,7 +459,7 @@ export default function Performance() {
                                 </div>
                             ))}
                         </div>
-                        {(!routing?.recommendations || routing.recommendations.length === 0) && (
+                        {!routing?.recommendation && (!routing?.recommendations || routing.recommendations.length === 0) && (
                             <div className="text-center py-10">
                                 <p className="text-zinc-600 font-mono text-sm uppercase tracking-widest">Not enough data for routing recommendations.</p>
                                 <p className="text-zinc-700 text-xs mt-2">Use multiple tools and models to enable intelligent routing.</p>

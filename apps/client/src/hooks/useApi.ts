@@ -10,9 +10,12 @@ export function useApi<T>(endpoint: string, deps: unknown[] = []) {
     const refetch = useCallback(() => {
         setLoading(true);
         fetch(`${BASE}${endpoint}`)
-            .then(r => r.json())
+            .then(r => {
+                if (!r.ok) throw new Error(`HTTP ${r.status}`);
+                return r.json();
+            })
             .then(d => { setData(d); setError(null); })
-            .catch(e => setError(e.message))
+            .catch(e => { setError(e.message); setData(null); })
             .finally(() => setLoading(false));
     }, [endpoint, ...deps]);
 
