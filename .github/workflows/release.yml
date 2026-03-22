@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  packages: write
   id-token: write
 
 jobs:
@@ -75,7 +76,7 @@ jobs:
           files: dist/**/*
           generate_release_notes: true
           body: |
-            ## AI Productivity Dashboard ${{ github.ref_name }}
+            ## OCD (Omni Coder Dashboard) ${{ github.ref_name }}
 
             ### Install via npm (recommended)
 
@@ -90,6 +91,12 @@ jobs:
             npx omni-coder-dashboard
             ```
 
+            ### Install from GitHub Packages
+
+            ```bash
+            npm install -g @riko5652/ocd --registry=https://npm.pkg.github.com
+            ```
+
             ### Standalone binaries (experimental)
 
             If available, download the binary for your platform below — no Node.js required.
@@ -100,7 +107,7 @@ jobs:
             | macOS (Apple Silicon) | `ai-dashboard-macos-arm64` |
             | Windows | `ai-dashboard-win.exe` |
 
-  publish:
+  publish-npm:
     name: Publish to npm
     needs: release
     if: always()
@@ -127,7 +134,49 @@ jobs:
       - name: Verify package
         run: npm pack --dry-run
 
-      - name: Publish
+      - name: Publish to npm
         run: npm publish --provenance --access public
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  publish-gpr:
+    name: Publish to GitHub Packages
+    needs: release
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          registry-url: 'https://npm.pkg.github.com'
+          scope: '@riko5652'
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build apps
+        run: pnpm run build
+
+      - name: Configure package for GPR
+        run: |
+          node -e "
+            const pkg = require('./package.json');
+            pkg.name = '@riko5652/ocd';
+            pkg.publishConfig = { registry: 'https://npm.pkg.github.com' };
+            require('fs').writeFileSync('package.json', JSON.stringify(pkg, null, 2) + '\n');
+          "
+
+      - name: Publish to GitHub Packages
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
