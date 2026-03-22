@@ -23,6 +23,11 @@ function sanitize(text: string, maxLen = 200): string {
 }
 
 export async function detectProvider() {
+    // Allow explicit provider preference via env var (azure, ollama, gemini, openai, anthropic)
+    const preferredProvider = (process.env.PREFERRED_LLM_PROVIDER || '').toLowerCase();
+    if (preferredProvider === 'azure' && AZURE_OPENAI_API_KEY && AZURE_OPENAI_ENDPOINT) {
+        return { provider: 'azure' as const, model: AZURE_OPENAI_DEPLOYMENT, available: true };
+    }
     try {
         const r = await fetch(`${OLLAMA_HOST}/api/tags`, { signal: AbortSignal.timeout(2000) });
         if (r.ok) {
