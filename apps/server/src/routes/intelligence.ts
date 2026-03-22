@@ -377,7 +377,7 @@ export default async function intelligenceRoutes(fastify: FastifyInstance, opts:
     });
 
     // Version check
-    const CURRENT_VERSION = '5.2.1';
+    const CURRENT_VERSION = '5.3.0';
     let latestVersionCache = { version: null as string | null, checkedAt: 0 };
 
     fastify.get('/api/version-check', async () => {

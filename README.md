@@ -1,8 +1,8 @@
-# OCD — Omni Coder Dashboard v5.2.1
+# OCD — Omni Coder Dashboard v5.3.0
 
-### The open-source productivity engine for AI coding tools
+### The open-source AI memory engine for coding tools
 
-> Track every AI coding session across Claude Code, Cursor, Windsurf, Copilot, Aider, Continue.dev, and Gemini. Get semantic memory, cross-tool routing, prompt science, token budgeting, and 18 MCP tools — all 100% local, no API keys required.
+> A self-building brain across all your AI coding tools. Real semantic embeddings out of the box, 18 MCP tools, cross-tool routing, prompt science, proactive IDE interception, and a Memory dashboard — all 100% local, zero API keys required.
 
 [![npm](https://img.shields.io/npm/v/omni-coder-dashboard)](https://www.npmjs.com/package/omni-coder-dashboard)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
@@ -18,22 +18,26 @@
 
 ---
 
-## 🆕 Latest Additions (v5.2.1)
+## What's New in v5.3.0
 
-> **New in this release** — platform parity and single-tool user optimization:
+> **True semantic memory out of the box** — no Ollama, no API keys, no config.
 
-- **Platform Parity** — All adapters (Windsurf, Continue.dev, Copilot, Aider) now match Claude Code's parsing depth: turn-level analysis, code metrics, tool detection, and error tracking across every platform.
-- **Single-Tool User Optimization** — Most users use one tool. The routing engine now detects this and provides model-level recommendations, workflow pattern analysis, and tool-specific tips instead of irrelevant cross-tool comparisons.
-- **Smarter `get_routing_recommendation`** — Single-tool users get model comparison, high-vs-low quality session patterns, and actionable tips specific to their tool.
+- **Real Local Embeddings** — Ships `all-MiniLM-L6-v2` via ONNX runtime (`@xenova/transformers`). Every session gets 384-dimensional semantic vectors automatically. The hash-based fallback is now a last resort, not the default. Your "semantic memory" is actually semantic now.
+- **Memory Dashboard** — New "Memory" tab in Insights showing: active embedding provider, coverage %, provider breakdown, quality labels (semantic vs keyword), and a live similarity search box to test your memory bank.
+- **Shell Hook Installer** — `pnpm install-hook` (or `ocd install-hook`) appends a `PROMPT_COMMAND`/`precmd` hook to your `.bashrc`/`.zshrc` that automatically captures terminal errors for proactive IDE interception. No manual log file setup.
+- **Match Quality Labels** — MCP search results now say "(semantic match)" or "(keyword match)" so you know whether you're getting real vector similarity or just keyword overlap.
+- **P2P Security Transparency** — Dashboard shows a warning banner when P2P sync is active over plaintext HTTP, with guidance to use VPN/Tailscale for sensitive environments.
+- **No More 1000-Row Cap** — Similarity search now scans all embeddings, not an arbitrary subset.
 
 <details>
-<summary><strong>v5.2 additions</strong> (click to expand)</summary>
+<summary><strong>v5.2.x additions</strong> (click to expand)</summary>
 
-- **Session Health Check** — New `get_session_health_check` MCP tool gives agents cross-session self-awareness: quality degradation thresholds, historical cache baselines, daily token budgets, and structured `continue/compact/new_session` action signals. OCD informs, the agent decides.
-- **Token Efficiency Tips** — Personalized `get_efficiency_tips` MCP tool: real-time burn rate, waste detection, quick wins, and onboarding guidance that works from your very first session.
-- **Architecture Hardening** — Structured logging (pino), Swagger/OpenAPI docs, route modularization, and DB index tuning for production-grade deployments.
-- **Test Infrastructure** — Comprehensive test suite with Vitest covering adapters, analytics, MCP tools, and API routes.
-- **Prompt Science** — Evidence-based prompt engineering: mines your best sessions to discover patterns that improve quality, reduce turns, and optimize cache hits — with effect sizes and sample counts.
+- **Platform Parity** — All adapters (Windsurf, Continue.dev, Copilot, Aider) now match Claude Code's parsing depth: turn-level analysis, code metrics, tool detection, and error tracking across every platform.
+- **Single-Tool User Optimization** — The routing engine detects single-tool users and provides model-level recommendations instead of irrelevant cross-tool comparisons.
+- **Session Health Check** — `get_session_health_check` MCP tool gives agents cross-session self-awareness with structured `continue/compact/new_session` action signals.
+- **Token Efficiency Tips** — Personalized `get_efficiency_tips` MCP tool: burn rate, waste detection, quick wins from your very first session.
+- **Prompt Science** — Evidence-based prompt engineering with effect sizes and sample counts mined from your best sessions.
+- **Architecture Hardening** — Structured logging (pino), Swagger/OpenAPI docs, route modularization, DB index tuning.
 
 </details>
 
@@ -84,11 +88,17 @@ npx omni-coder-dashboard --setup-mcp        # Auto-configure MCP for Claude Code
 ### Advanced — "I want full agent orchestration and team workflows"
 
 ```bash
-# Local embeddings for highest-quality semantic search
+# Semantic embeddings work out of the box — no config needed
+npx omni-coder-dashboard
+
+# Upgrade to Ollama for 768-dim embeddings + LLM features
 OLLAMA_HOST=http://localhost:11434 npx omni-coder-dashboard
 
+# Auto-install shell hook for proactive IDE interception
+ocd install-hook
+
 # Enable P2P team memory (LAN or Tailscale)
-P2P_ENABLED=true P2P_SECRET=your-team-key npx omni-coder-dashboard
+P2P_SECRET=your-team-key npx omni-coder-dashboard
 
 # Docker for always-on deployment
 docker compose up -d
@@ -96,8 +106,8 @@ docker compose up -d
 
 - **Agent-grade MCP integration:** All 18 MCP tools are designed for autonomous agent consumption — structured JSON responses, confidence scores, and action signals (`continue/compact/new_session`).
 - **Token arbitrage:** Route prompts to local Ollama when your historical success rate is high enough, saving API costs automatically. Full audit trail via `get_arbitrage_recommendation`.
-- **P2P team memory:** Share embeddings (never source code) across your team with HMAC-SHA256 authentication. Query teammate solutions with `get_team_memory`.
-- **Proactive IDE interception:** Terminal watcher detects stack traces and pushes matched solutions via OS notifications + SSE before you open a new prompt.
+- **P2P team memory:** Share embeddings (never source code) across your team with HMAC-SHA256 authentication. Query teammate solutions with `get_team_memory`. Dashboard shows security warnings when running over plaintext HTTP.
+- **Proactive IDE interception:** Run `ocd install-hook` to auto-configure your shell. Errors are captured to `~/.ocd/terminal.log` and matched against your vector store in real time. Solutions are pushed via OS notifications + SSE before you open a new prompt.
 - **Production deployment:**
   - Swagger/OpenAPI docs at `/docs` for REST API integration
   - Structured JSON logging (pino) for log aggregation pipelines
@@ -161,7 +171,7 @@ This is not a passive analytics dashboard. It's a system that makes you faster �
 
 **Token Budget Tracker** — Real-time burn rate monitoring: today's usage, 7-day average, weekly cost forecast, and efficiency-per-tool ranking (tokens per quality point). Works with any single tool from day one.
 
-**Semantic Memory** — When Claude Code solves a complex migration in 15 turns, the system vectorizes the solution, the context, and the error logs. Two weeks later, when you hit a similar error in Cursor, the MCP server bypasses the LLM's knowledge cutoff and injects the exact, locally-proven solution into your prompt context. It's a self-building brain across all your AI tools.
+**Semantic Memory** — When Claude Code solves a complex migration in 15 turns, the system vectorizes the solution using a local ONNX neural model (all-MiniLM-L6-v2, 384 dimensions). Two weeks later, when you hit a similar error in Cursor, the MCP server finds the proven solution via real cosine similarity — not keyword matching — and injects it into your prompt context. Zero API keys, zero config, real semantic understanding out of the box.
 
 **Routing Recommendations** — "For postgres migrations, use Claude Code + claude-sonnet-4-6 (resolves in 4 turns, 87% win rate). Cursor + gpt-4o takes 11 turns." Based on your actual session history, not benchmarks.
 
@@ -171,13 +181,13 @@ This is not a passive analytics dashboard. It's a system that makes you faster �
 
 **Savings Report** — Concrete metrics on what the system saves you: cache hit savings ($), turns saved vs baseline, time estimates. Toggle between relative metrics and dollar estimates.
 
-**Proactive IDE Interception** *(new)* — Watches your terminal log files in the background. When a stack trace appears, the system queries your vector store and pushes a matched solution to your IDE via OS notification and SSE — before you even open a new prompt.
+**Proactive IDE Interception** — Watches your terminal for stack traces in the background. Run `ocd install-hook` to auto-configure your shell — errors are captured automatically. When a stack trace appears, the system queries your vector store and pushes a matched solution to your IDE via OS notification and SSE — before you even open a new prompt.
 
-**Anti-Hallucination Guard** *(new)* — Mines your failing sessions to build an Anti-Pattern Graph. The `get_negative_constraints` MCP tool injects `DO NOT use X` clauses at the start of any session, eliminating locally-known failure patterns.
+**Anti-Hallucination Guard**  — Mines your failing sessions to build an Anti-Pattern Graph. The `get_negative_constraints` MCP tool injects `DO NOT use X` clauses at the start of any session, eliminating locally-known failure patterns.
 
-**Token Arbitrage** *(new)* — Every prompt is classified by task type and routed to the cheapest viable model. When your local Ollama has a ≥ 92% win rate on a task type, it proxies there for free. Full audit log with per-request savings estimates.
+**Token Arbitrage**  — Every prompt is classified by task type and routed to the cheapest viable model. When your local Ollama has a ≥ 92% win rate on a task type, it proxies there for free. Full audit log with per-request savings estimates.
 
-**P2P Team Memory** *(new)* — Shares embeddings (never source code) with teammates over UDP + HMAC-SHA256. Works on LAN or Tailscale. Query peer solutions with `get_team_memory` — a shared brain with zero cloud dependency.
+**P2P Team Memory**  — Shares embeddings (never source code) with teammates over UDP + HMAC-SHA256. Works on LAN or Tailscale. Query peer solutions with `get_team_memory` — a shared brain with zero cloud dependency.
 
 **AI Attribution Reporting** — Every commit is scored with an `ai_percentage` (0–100%) tracking how much code was AI-assisted vs. human-authored. Query per-project, per-branch, or per-timeframe via the `get_attribution_report` MCP tool or REST API. Built for engineering managers who need velocity tracking, code review prep, and impact reporting.
 
@@ -192,7 +202,8 @@ OCD is built for teams that care about data residency, auditability, and securit
 - **Zero telemetry** — No analytics, no tracking, no phone-home. Verified by source audit.
 - **Audit logging** — Token arbitrage decisions, IDE interceptions, and P2P sync events are logged with timestamps for regulatory review.
 - **AI attribution tracking** — Every commit scored with AI vs. human authorship percentage. Exportable for compliance reporting.
-- **Authenticated P2P** — Team memory sharing uses HMAC-SHA256 authentication. Embeddings only — source code is never transmitted.
+- **Authenticated P2P** — Team memory sharing uses HMAC-SHA256 authentication. Embeddings only — source code is never transmitted. Dashboard displays a security warning when P2P runs over plaintext HTTP.
+- **Local-only ONNX model** — Semantic embeddings run entirely in-process via ONNX runtime. Model weights are cached locally (~30MB). No data leaves your machine for embedding generation.
 - **Prompt injection protection** — All session text is sanitized before storage and display. CSP headers enforced on the dashboard.
 - **Authentication support** — Optional `AUTH_TOKEN` environment variable for shared/CI environments.
 - **AGPL-3.0** — Full source available for security audit. Commercial licensing available for enterprises requiring proprietary deployment.
@@ -320,17 +331,26 @@ All data is read-only. Nothing is ever written to your AI tools' files.
 
 The dashboard doesn't just track sessions — it learns from them.
 
-**Vector Embeddings** — Every high-quality session (quality > 50) is vectorized: the solution approach, error logs, codebase context, and tool+model combo. Stored in SQLite, searched via cosine similarity.
+**Vector Embeddings** — Every high-quality session (quality > 50) is vectorized using a 4-tier provider cascade:
+
+| Priority | Provider | Dimensions | Quality | Setup |
+|----------|----------|-----------|---------|-------|
+| 1 | **Local ONNX** (all-MiniLM-L6-v2) | 384 | Real semantic | Zero config (auto-downloads ~30MB on first run) |
+| 2 | **Ollama** (nomic-embed-text) | 768 | Real semantic | Requires local Ollama server |
+| 3 | **OpenAI** (text-embedding-3-small) | 1536 | Real semantic | Requires API key |
+| 4 | **Hash fallback** | 512 | Keyword only | Automatic (last resort) |
+
+The local ONNX model is the default — real 384-dimensional semantic embeddings with zero configuration. No API keys, no external services, no Docker. It just works.
 
 **Knowledge Graph** — An in-memory graph connects sessions through shared files, projects, error patterns, tool chains, and task types. When you ask "what solved this before?", the system traverses the graph to find related solutions across all tools.
+
+**Memory Dashboard** — The Insights → Memory tab shows your embedding status at a glance: active provider, coverage percentage, provider breakdown, and a live similarity search box to test queries against your memory bank. Search results are labeled "semantic" or "keyword" so you always know what quality you're getting.
 
 **How it helps mid-session:**
 1. You hit an error in Cursor
 2. The MCP tool `get_similar_solutions` fires
-3. The system finds that Claude Code resolved a similar error last week
+3. The system finds that Claude Code resolved a similar error last week (semantic match, 87% similarity)
 4. It injects the proven solution, context, and approach into your current prompt
-
-Embeddings use Ollama (nomic-embed-text) when available, falling back to a built-in text hashing approach that works with zero external dependencies.
 
 ---
 
@@ -340,7 +360,7 @@ Embeddings use Ollama (nomic-embed-text) when available, falling back to a built
 
 **Command Center** — KPI cards, daily activity, savings report, CI/CD optimization insights. Collapsible sections to reduce cognitive load.
 
-**Insights** — AI-powered analysis with 6 sub-tabs: How You Work, Trends, Prompt Science, Daily Pick, Deep Analyze, Optimize.
+**Insights** — AI-powered analysis with 7 sub-tabs: How You Work, Trends, Prompt Science, Daily Pick, Deep Analyze, Optimize, Memory.
 
 **Performance** — 9 tabbed views: Tool Comparison, Model Usage, Model Performance, Win Rates, Routing, Cost Tracking, Code Generation, Code Authorship, Agentic Scores.
 
@@ -383,10 +403,12 @@ See [PRIVACY.md](PRIVACY.md) for the full policy.
 
 ## LLM provider (optional)
 
-The core dashboard works without any LLM. Optional providers are used for: Deep Analyze, Daily Pick, Topic Summaries, and higher-quality embeddings.
+The core dashboard — including real semantic embeddings — works without any LLM or API key. Optional providers are used for: Deep Analyze, Daily Pick, Topic Summaries, and higher-dimensional embeddings.
+
+**Embeddings require zero config.** The built-in ONNX model (all-MiniLM-L6-v2) provides 384-dim semantic vectors out of the box. Ollama/OpenAI give higher dimensionality if you want it, but are not required.
 
 ```env
-# Free, local — recommended
+# Free, local — recommended for LLM features (embeddings already work without this)
 OLLAMA_HOST=http://localhost:11434
 OLLAMA_MODEL=gemma2:2b
 
@@ -457,16 +479,17 @@ ANTHROPIC_API_KEY=sk-ant-...    # Anthropic Claude
 Data flow:
   1. Adapters read local session files (read-only, no writes)
   2. Sessions scored, classified, and stored in SQLite
-  3. High-quality sessions vectorized (Ollama or built-in hasher)
+  3. High-quality sessions vectorized (local ONNX → Ollama → OpenAI → hash)
   4. Knowledge graph links sessions by files, errors, tools, projects
   5. MCP tools query vectors + graph to inject context mid-session
   6. Dashboard renders analytics via REST; coach pushes SSE nudges
+  7. Shell hook captures terminal errors → IDE interceptor matches solutions
 ```
 
 **Key design decisions:**
 - **Zero external dependencies for core** — no Redis, no Postgres, no cloud. SQLite via better-sqlite3 runs in-process.
 - **Read-only adapters** — the dashboard never writes to your AI tools' files. It only reads.
-- **Embeddings are optional** — works without Ollama via a built-in text hashing fallback. Quality is lower but functional.
+- **Real semantic embeddings by default** — ships `all-MiniLM-L6-v2` via ONNX runtime. The hash fallback is a last resort, not the default. No API keys needed for semantic search.
 - **MCP over stdio** — no HTTP server for MCP. Uses the standard Model Context Protocol stdio transport, so any MCP-compatible client can connect.
 - **TypeScript monorepo** — pnpm workspace with separate server (Fastify) and client (React + Vite) apps.
 
@@ -475,9 +498,10 @@ Data flow:
 ## Tech
 
 - **Node.js 18+ ESM** — TypeScript monorepo with pnpm workspaces
-- **Fastify 5** — API server with SSE
+- **Fastify 5** — API server with SSE, Swagger/OpenAPI docs at `/docs`
 - **React 18 + Vite** — client dashboard with Tailwind CSS + Recharts
 - **SQLite (better-sqlite3)** — local database + vector storage
+- **@xenova/transformers** — local ONNX runtime for real semantic embeddings (all-MiniLM-L6-v2)
 - **In-memory knowledge graph** — session relationship traversal
 - **@modelcontextprotocol/sdk** — MCP stdio server
 - **File watchers** — live updates when AI tool data changes
@@ -503,21 +527,22 @@ apps/
       token-arbiter.ts       # NEW — cost routing proxy + Ollama arbitrage log
       p2p-sync.ts            # NEW — UDP peer discovery + HMAC-authenticated embedding sync
     lib/
-      vector-store.ts  # SQLite-based vector embeddings
+      vector-store.ts  # Embedding cascade: local ONNX → Ollama → OpenAI → hash
       knowledge-graph.ts # In-memory session relationship graph
       bookmarklet.ts   # Browser capture for ChatGPT/Claude/Gemini
     db/
       index.ts         # Database initialization
       schema.ts        # SQLite schema + migration
     mcp-handoff.ts   # MCP Universal Brain server (18 tools)
-    token-budget.ts        # NEW — daily burn rate, weekly forecast, per-tool efficiency
+    token-budget.ts  # Daily burn rate, weekly forecast, per-tool efficiency
     index.ts         # Fastify app + all API routes
     config.ts        # Auto-detected paths + discovery report
   client/src/        # React + Vite dashboard UI
-    pages/           # CommandCenter, Performance, Workspaces, Profile
+    pages/           # CommandCenter, Performance, Workspaces, Profile, Insights (incl. Memory tab)
 bin/
   ai-dashboard.js  # CLI entrypoint
   setup-mcp.js     # MCP auto-setup for Claude Code / Cursor / Windsurf
+  install-hook.js  # Shell hook installer for proactive IDE interception
   doctor.mjs       # Health check
 ```
 
@@ -546,6 +571,10 @@ bin/
 - [x] **P2P secure team memory** (UDP discovery + HMAC-SHA256 embedding sync)
 - [x] **Session health check** (cross-session quality baselines + structured action signals)
 - [x] **Token efficiency tips** (burn rate, quick wins, waste detection)
+- [x] **Real local semantic embeddings** (ONNX all-MiniLM-L6-v2, zero config)
+- [x] **Memory dashboard** (provider status, coverage, live similarity search)
+- [x] **Shell hook installer** (auto-capture terminal errors for IDE interception)
+- [x] **Match quality transparency** (semantic vs keyword labels in search results)
 - [ ] Enterprise: secure team sync with anonymized aggregation
 - [ ] PM integration: Jira/Linear/GitHub Issues velocity correlation
 - [ ] Cross-regional benchmarking

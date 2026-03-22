@@ -17,7 +17,7 @@ initDb();
 
 const server = new McpServer({
     name: 'AI Productivity Engine',
-    version: '5.2.1',
+    version: '5.3.0',
 });
 
 const vectorService = new VectorService();
@@ -25,7 +25,7 @@ const vectorService = new VectorService();
 // ---- Tool 1: get_similar_solutions ----
 server.tool(
     'get_similar_solutions',
-    'Search the universal memory bank for successful code implementations from past coding sessions.',
+    'Search the semantic memory bank for successful code implementations from past coding sessions. Uses real vector similarity (ONNX/Ollama/OpenAI) — results labeled as semantic or keyword match.',
     {
         query: z.string().describe('The coding problem, error message, or feature to search for.'),
         limit: z.number().optional().describe('Max results (default: 3)'),

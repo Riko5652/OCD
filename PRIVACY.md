@@ -33,9 +33,30 @@ The tool writes a single SQLite database file (default: `~/.ai-dashboard/dashboa
 
 - Aggregated session statistics (turn counts, token counts, quality scores, dates, tool IDs)
 - Inferred metadata (task classifications, topic labels, model performance rows)
+- Vector embeddings of session content (generated locally via ONNX model or external provider)
 - Cached LLM-generated summaries (stored locally, not re-sent on subsequent requests)
 
 This database is never transmitted anywhere. It exists solely to make the dashboard fast and to preserve computed results between restarts.
+
+---
+
+## Local Embedding Model
+
+By default, the tool generates semantic embeddings using a bundled ONNX neural model (`all-MiniLM-L6-v2`) that runs entirely in-process. On first use, the model weights (~30MB) are downloaded from the Hugging Face model hub and cached locally in your system's cache directory.
+
+- **No session content is sent to any external service for embedding generation** when using the default local model.
+- The model weights are a one-time download; subsequent runs use the cached copy.
+- If you configure Ollama or OpenAI as an embedding provider, session text (titles, summaries, tool metadata — not raw code) is sent to those services instead. You control this via environment variables.
+
+---
+
+## Shell Hook (IDE Interception)
+
+If you run `ocd install-hook`, the tool appends a hook to your `.bashrc` or `.zshrc` that captures stderr from failed terminal commands to `~/.ocd/terminal.log`. This file is watched by the OCD server for stack trace detection.
+
+- The hook only writes to a local log file on your machine.
+- No terminal output is transmitted to any external service.
+- The hook can be cleanly removed with `ocd install-hook --remove`.
 
 ---
 
@@ -66,6 +87,12 @@ The tool accesses these files read-only and processes them locally. No third par
 By default, the dashboard server binds only to `127.0.0.1` (localhost). It is not accessible from other machines on your network or the internet.
 
 If you set the `BIND` environment variable to `0.0.0.0` or any non-loopback address, the server will print a prominent warning at startup. In that configuration, you are responsible for restricting access. Setting the `AUTH_TOKEN` environment variable is strongly recommended — all API routes will then require a `Bearer` token, preventing unauthorized access to your session data.
+
+### P2P Team Memory
+
+If you enable P2P sync (`P2P_SECRET` env var), the tool shares session embeddings and metadata (titles, summaries, task types) with peers on the same LAN or Tailscale network. Source code and full prompt transcripts are never shared.
+
+**Important:** P2P communication uses plaintext HTTP with HMAC-SHA256 authentication. This prevents tampering but does not prevent eavesdropping on the network. The dashboard displays a security warning when P2P is active. For sensitive environments, use a VPN or Tailscale to encrypt the transport layer.
 
 ---
 
