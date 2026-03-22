@@ -75,6 +75,7 @@
     "feedback": "node bin/feedback.mjs",
     "install-hook": "node bin/install-hook.js",
     "test": "pnpm --filter @ocd/server run test",
+    "prepublishOnly": "pnpm run build && npm pack --dry-run",
     "prepare": "pnpm run build"
   }
 }
