@@ -535,12 +535,12 @@ const start = async () => {
             fastify.log.warn(`Server binding to ${BIND} (network accessible). Set AUTH_TOKEN env var to protect access.`);
         }
 
+        await fastify.listen({ port: config.port, host: BIND });
+        fastify.log.info(`\n  AI Productivity Dashboard v5.0\n  Open: http://localhost:${config.port}\n  API docs: http://localhost:${config.port}/docs\n`);
+
         fastify.log.info('Starting initial data ingestion...');
         const total = await ingestAll();
         fastify.log.info(`Ingested ${total} total sessions from ${registry.getAdapters().length} adapters.`);
-
-        await fastify.listen({ port: config.port, host: BIND });
-        fastify.log.info(`\n  AI Productivity Dashboard v5.0\n  Open: http://localhost:${config.port}\n  API docs: http://localhost:${config.port}/docs\n`);
 
         startWatchers(
             () => {

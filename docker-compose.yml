@@ -20,6 +20,9 @@ services:
       - "3030:3030"
     volumes:
       # AI tool data (read-only from host)
+      # Windows: set CLAUDE_DIR, CURSOR_DIR, GEMINI_DIR in .env or shell
+      #   e.g. CLAUDE_DIR=C:/Users/YourName/.claude
+      # macOS/Linux: defaults work automatically (~/.claude, etc.)
       - type: bind
         source: ${CLAUDE_DIR:-~/.claude}
         target: /root/.claude
@@ -28,7 +31,6 @@ services:
         source: ${CURSOR_DIR:-~/.cursor}
         target: /root/.cursor
         read_only: true
-        # Ignore if Cursor not installed
       - type: bind
         source: ${GEMINI_DIR:-~/.gemini}
         target: /root/.gemini
@@ -39,10 +41,16 @@ services:
       - PORT=3030
       - DB_PATH=/app/data/analytics.db
       - BIND=0.0.0.0   # required for Docker — container needs to accept external connections
-      # Optional: set your LLM API key for Deep Analyze feature
+      # Ollama running on host (Docker Desktop: use host.docker.internal)
+      # - OLLAMA_HOST=http://host.docker.internal:11434
+      # - OLLAMA_MODEL=qwen2.5-coder:7b
+      # Azure OpenAI (alternative to Ollama)
+      # - AZURE_OPENAI_API_KEY=
+      # - AZURE_OPENAI_ENDPOINT=
+      # - AZURE_OPENAI_DEPLOYMENT_CHAT=gpt-5.2-chat
+      # Other providers
       # - ANTHROPIC_API_KEY=
       # - OPENAI_API_KEY=
-      # - OLLAMA_HOST=http://host.docker.internal:11434
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3030/api/health"]
