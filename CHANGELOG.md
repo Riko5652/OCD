@@ -4,6 +4,24 @@ All notable changes to OCD (Omni Coder Dashboard) are documented here.
 
 ---
 
+## [5.2.1] — 2026-03-22
+
+### Added — Platform Parity & Single-Tool Optimization
+
+#### **Adapter Equalization** (`adapters/windsurf.ts`, `continue.ts`, `copilot.ts`, `aider.ts`)
+- All four non-Claude adapters now match Claude Code's parsing depth:
+  - **Windsurf**: turn-level parsing from `chat_messages`, code metrics extraction, tool detection, error tracking (64→200 lines)
+  - **Continue.dev**: full `getTurns()` implementation, code block extraction, slash command/tool tracking, context item support (72→200 lines)
+  - **Copilot**: code metrics from chat content, tool/agent detection, slash command tracking, per-language suggestion stats (160→250 lines)
+  - **Aider**: `getTurns()` with edit block parsing (search/replace, diff), error detection, edit format tracking, first-attempt success % (124→270 lines)
+
+#### **Single-Tool User Optimization** (`engine/cross-tool-router.ts`, `engine/token-budget.ts`, `mcp-handoff.ts`)
+- Cross-tool router detects single-tool users and provides model-level recommendations, workflow pattern analysis, and tool-specific tips instead of cross-tool routing
+- Token budget adds model cost-efficiency comparison and tool-specific quick wins for single-tool users
+- MCP `get_routing_recommendation` returns model comparison, workflow patterns (high vs low quality sessions), and actionable tips specific to the user's tool
+
+---
+
 ## [5.2.0] — 2026-03-21
 
 ### Added — Session Self-Awareness & Efficiency
