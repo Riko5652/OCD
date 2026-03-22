@@ -1,13 +1,20 @@
-# OCD - Omni Coder Dashboard v5.2.1
+# OCD — Omni Coder Dashboard v5.2.1
 
-> An AI memory engine that learns from your coding sessions, recommends the right tool for every task, and injects proven solutions into your workflow — all local, no API keys required.
+### The open-source productivity engine for AI coding tools
 
+> Track every AI coding session across Claude Code, Cursor, Windsurf, Copilot, Aider, Continue.dev, and Gemini. Get semantic memory, cross-tool routing, prompt science, token budgeting, and 18 MCP tools — all 100% local, no API keys required.
+
+[![npm](https://img.shields.io/npm/v/ocd)](https://www.npmjs.com/package/ocd)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-green)](LICENSE)
-[![Tools](https://img.shields.io/badge/tools-7-blue)](#what-gets-tracked)
+[![Tools](https://img.shields.io/badge/tools-7%20adapters-blue)](#what-gets-tracked)
 [![MCP](https://img.shields.io/badge/MCP-18%20tools-purple)](#mcp-setup-30-seconds-no-api-key)
 [![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
-[![npm](https://img.shields.io/npm/v/ocd)](https://www.npmjs.com/package/ocd)
+[![GitHub stars](https://img.shields.io/github/stars/Riko5652/OCD?style=social)](https://github.com/Riko5652/OCD)
+
+<p align="center">
+  <img src="docs/screenshots/command-center.png" alt="OCD Dashboard — Command Center showing cross-tool AI productivity metrics" width="100%">
+</p>
 
 ---
 
@@ -106,17 +113,42 @@ docker compose up -d
 
 ## Screenshots
 
-> The dashboard UI includes four pillars: Command Center, Performance, Workspaces, and Profile.
+### Command Center
+> Cross-tool KPIs, token burn rate, quick wins, daily activity, and sessions by tool — all in one view.
 
 <p align="center">
-  <img src="docs/screenshots/command-center.png" alt="Command Center — KPIs, daily activity charts, savings report" width="100%">
+  <img src="docs/screenshots/command-center.png" alt="OCD Command Center — 1.1K sessions, 77.9M tokens, 91.8% cache hit rate, token burn rate, quick wins, daily activity chart, sessions by tool" width="100%">
 </p>
 
 <details>
-<summary><strong>More screenshots</strong> (click to expand)</summary>
+<summary><strong>Insights — AI-powered analysis of your coding patterns</strong> (click to expand)</summary>
+
+#### How You Work
+> Median turns, session duration, primary tool, tool usage breakdown, file context rate, and prompt length distribution.
 
 <p align="center">
-  <img src="docs/screenshots/performance.png" alt="Performance — tool comparison, model usage, cost tracking, code generation" width="100%">
+  <img src="docs/screenshots/insights-how-you-work.png" alt="OCD Insights How You Work — 161 median turns, 73m median duration, claude-code primary tool, tool usage bars, prompt length distribution" width="100%">
+</p>
+
+#### Trends (7-Day Rolling)
+> Cache hit rate, quality score, re-ask rate, and error rate tracked over time with rolling averages.
+
+<p align="center">
+  <img src="docs/screenshots/insights-trends.png" alt="OCD Insights Trends — 7-day rolling charts for cache hit rate, quality score, re-ask rate, and error rate" width="100%">
+</p>
+
+#### Prompt Science
+> Evidence-based prompt engineering: effect sizes, quality correlations, and anti-patterns mined from your best sessions.
+
+<p align="center">
+  <img src="docs/screenshots/insights-prompt-science.png" alt="OCD Insights Prompt Science — avg turns to first edit, evidence-based effect sizes, quality correlations with sample counts" width="100%">
+</p>
+
+#### Optimize
+> AI-powered recommendations: subagent usage, bash overuse detection, long session warnings, caching insights, and workflow tips.
+
+<p align="center">
+  <img src="docs/screenshots/insights-optimize.png" alt="OCD Insights Optimize — actionable warnings for long sessions, bash overuse, poor caching, session abandonment rate" width="100%">
 </p>
 
 </details>

@@ -13,15 +13,29 @@
     "url": "https://github.com/Riko5652/OCD.git"
   },
   "homepage": "https://github.com/Riko5652/OCD#readme",
+  "bugs": {
+    "url": "https://github.com/Riko5652/OCD/issues"
+  },
   "keywords": [
     "ai",
     "productivity",
     "dashboard",
     "claude",
+    "claude-code",
     "cursor",
     "copilot",
+    "windsurf",
+    "aider",
+    "gemini",
     "mcp",
-    "developer-tools"
+    "mcp-server",
+    "developer-tools",
+    "session-analytics",
+    "semantic-memory",
+    "vector-search",
+    "prompt-engineering",
+    "token-optimization",
+    "local-first"
   ],
   "bin": {
     "ai-dashboard": "./bin/ai-dashboard.js",
