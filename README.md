@@ -63,12 +63,13 @@ Whether you just installed your first AI coding tool or you're orchestrating mul
 npx omni-coder-dashboard                    # 1. Launch — zero config, auto-detects your tools
 ```
 
-- **What you get on day one:** A visual dashboard showing every session across all your AI tools, how many tokens you used, and which sessions succeeded vs. failed.
-- **Start here:** Open the **Command Center** tab — it shows your daily activity, top tools, and a savings estimate.
+- **What you get on day one:** A visual dashboard showing every session across all your AI tools, how many tokens you used, and which sessions succeeded vs. failed. Semantic memory starts building immediately — every quality session is embedded with a local neural model (no API keys needed).
+- **Start here:** Open the **Command Center** tab — it shows your daily activity, top tools, and a savings estimate. Check **Insights → Memory** to see your embedding coverage grow.
 - **Key MCP tools to try:**
   - `get_efficiency_tips` — personalized tips to reduce token waste, even with one session of data
   - `get_routing_recommendation` — asks "which tool + model should I use for this task?" and answers with your own data
-- **Tip:** Just use your AI tools normally. OCD watches in the background and builds your personal knowledge base automatically.
+  - `get_similar_solutions` — finds past solutions matching your current error (works after ~5 sessions)
+- **Tip:** Just use your AI tools normally. OCD watches in the background and builds your personal knowledge base automatically. Run `ocd install-hook` to also capture terminal errors for proactive matching.
 
 ### Intermediate — "I use multiple AI tools and want to optimize"
 
@@ -77,7 +78,7 @@ npx omni-coder-dashboard --setup-mcp        # Auto-configure MCP for Claude Code
 ```
 
 - **Unlock cross-tool intelligence:** OCD tracks sessions across all 7 supported tools. The **Performance** tab lets you compare win rates, token costs, and resolution speed per tool and model.
-- **Semantic memory kicks in:** After ~20 quality sessions, `get_similar_solutions` starts returning proven fixes from your own history. You'll see solutions from Claude Code surfaced in Cursor, and vice versa.
+- **Semantic memory is already working:** Real 384-dim embeddings are generated automatically from day one. After ~20 quality sessions, `get_similar_solutions` starts returning strong matches. Solutions from Claude Code surface in Cursor, and vice versa. Check **Insights → Memory** to see your coverage and test live searches.
 - **Key MCP tools to add:**
   - `get_similar_solutions` — vector search across all your past sessions
   - `get_optimal_prompt_structure` — evidence-based prompt patterns mined from your best sessions, with effect sizes
