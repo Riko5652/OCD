@@ -1,6 +1,6 @@
-# Setup Guide — v5.2.1
+# Setup Guide — v5.3.0
 
-This guide covers installation on **Windows**, **macOS**, and **Linux**, and explains how to tell the dashboard which AI tools to track and where their data lives. v5.2.1 uses a TypeScript monorepo with pnpm, React client, and Fastify server.
+This guide covers installation on **Windows**, **macOS**, and **Linux**, and explains how to tell the dashboard which AI tools to track and where their data lives. v5.3.0 uses a TypeScript monorepo with pnpm, React client, and Fastify server.
 
 ---
 
@@ -180,7 +180,9 @@ Or if installed globally:
 }
 ```
 
-**Available MCP tools:**
+**Available MCP tools (18 total):**
+- `get_similar_solutions` — vector search across all past sessions (semantic or keyword match labeled)
+- `get_knowledge_context` — graph neighborhood traversal for deep context
 - `get_last_session_context` — pick up context when switching tools
 - `get_routing_recommendation` — "which tool should I use for this task?"
 - `get_efficiency_snapshot` — current week's metrics
@@ -189,7 +191,14 @@ Or if installed globally:
 - `get_model_comparison` — claude-sonnet vs gpt-4o vs gemini on your data
 - `push_handoff_note` — save a note before switching tools
 - `get_optimal_prompt_structure` — prompt templates from your best sessions
+- `get_attribution_report` — AI vs. human authorship breakdown
+- `get_efficiency_tips` — personalized token-saving tips
 - `get_topic_summary` — executive summary of what was worked on by topic
+- `get_negative_constraints` — anti-hallucination "DO NOT" clauses from failure history
+- `get_arbitrage_recommendation` — local vs cloud routing with savings estimate
+- `get_team_memory` — search peer-synced embeddings
+- `submit_ide_trace` — manually submit a stack trace for proactive analysis
+- `get_session_health_check` — cross-session health signals
 
 ---
 
@@ -219,9 +228,51 @@ CLAUDE_DIR=/custom/path/to/claude docker compose up
 
 ---
 
+## Semantic Embeddings
+
+**Embeddings work out of the box.** On first run, OCD downloads a ~30MB ONNX model (`all-MiniLM-L6-v2`) and generates real 384-dimensional semantic embeddings for every high-quality session. No API keys, no Ollama, no configuration needed.
+
+The embedding provider cascade is:
+
+1. **Local ONNX** (default) — 384 dims, real semantic, zero config
+2. **Ollama** — 768 dims, if `OLLAMA_HOST` is set and `nomic-embed-text` is available
+3. **OpenAI** — 1536 dims, if `OPENAI_API_KEY` is set
+4. **Hash fallback** — 512 dims, keyword-only (last resort)
+
+Check your active provider in the dashboard: **Insights → Memory** tab.
+
+---
+
+## Shell Hook (Proactive IDE Interception)
+
+OCD can detect stack traces in your terminal and proactively match them against your session memory. To enable this:
+
+```bash
+# Auto-install the shell hook
+pnpm install-hook         # if running from cloned repo
+# or
+ocd install-hook          # if installed globally
+# or
+node bin/install-hook.js  # from project root
+```
+
+This appends a `PROMPT_COMMAND` (bash) or `precmd` (zsh) hook to your shell RC that captures stderr from failed commands to `~/.ocd/terminal.log`. The OCD server watches this file and fires OS notifications when it finds a matching solution.
+
+**To remove:**
+```bash
+ocd install-hook --remove
+```
+
+**To force a specific shell:**
+```bash
+ocd install-hook --shell zsh
+```
+
+---
+
 ## LLM provider setup (optional)
 
-The LLM provider is only needed for the **Deep Analyze**, **Daily Automation Pick**, and **Project AI Suggestions** features. The rest of the dashboard works without any LLM.
+The LLM provider is only needed for the **Deep Analyze**, **Daily Automation Pick**, and **Project AI Suggestions** features. Semantic embeddings and the rest of the dashboard work without any LLM.
 
 **Free option — local Ollama:**
 ```bash

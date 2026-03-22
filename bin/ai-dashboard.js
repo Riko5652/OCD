@@ -20,6 +20,11 @@ const PORT = portFlagIdx !== -1 && args[portFlagIdx + 1]
   ? parseInt(args[portFlagIdx + 1], 10)
   : parseInt(process.env.PORT || '3030', 10);
 
+// install-hook: run shell hook installer
+if (args.includes('install-hook')) {
+  import('./install-hook.js');
+}
+
 // --setup-mcp: run MCP auto-setup instead of starting server
 if (args.includes('--setup-mcp')) {
   const setupArgs = [];
@@ -31,26 +36,37 @@ if (args.includes('--setup-mcp')) {
 
 if (args.includes('--help') || args.includes('-h')) {
   console.log(`
-\x1b[1mai-dashboard\x1b[0m — AI Productivity Dashboard v4
+\x1b[1mai-dashboard\x1b[0m — OCD (Omni Coder Dashboard) v5.3.0
+
+  AI memory engine with real semantic embeddings, 18 MCP tools,
+  cross-tool routing, and proactive IDE interception.
 
 \x1b[1mUsage:\x1b[0m
   ai-dashboard [options]
 
 \x1b[1mOptions:\x1b[0m
-  --port <n>     Port to listen on (default: 3030, or PORT env var)
-  --no-open      Don't open the browser automatically
-  --setup-mcp    Auto-register MCP server in Claude Code / Cursor / Windsurf
-  --help         Show this help
+  --port <n>      Port to listen on (default: 3030, or PORT env var)
+  --no-open       Don't open the browser automatically
+  --setup-mcp     Auto-register MCP server in Claude Code / Cursor / Windsurf
+  install-hook    Install shell hook for proactive IDE interception
+  --help          Show this help
+
+\x1b[1mFeatures (zero config):\x1b[0m
+  - Real 384-dim semantic embeddings via local ONNX model
+  - 18 MCP tools for any AI agent
+  - Memory dashboard with live similarity search
+  - Proactive IDE interception (run: ocd install-hook)
 
 \x1b[1mEnvironment:\x1b[0m
   Copy .env.example to .env and customize paths/API keys.
-  All tool data is auto-detected — no config needed to start.
+  All tool data + embeddings are auto-detected — no config needed to start.
 
 \x1b[1mExamples:\x1b[0m
-  npx ai-productivity-dashboard
+  npx omni-coder-dashboard
   ai-dashboard --port 4000 --no-open
+  ocd install-hook
 
-\x1b[1mDocs:\x1b[0m https://github.com/Riko5652/ai-productivity-dashboard
+\x1b[1mDocs:\x1b[0m https://github.com/Riko5652/OCD
 `);
   process.exit(0);
 }

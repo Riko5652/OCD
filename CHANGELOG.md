@@ -4,6 +4,47 @@ All notable changes to OCD (Omni Coder Dashboard) are documented here.
 
 ---
 
+## [5.3.0] — 2026-03-22
+
+### Added — True Semantic Memory & Developer Experience
+
+#### **Real Local Embeddings** (`lib/vector-store.ts`, `package.json`)
+- Bundled `@xenova/transformers` with `all-MiniLM-L6-v2` ONNX model as the default embedding provider
+- 384-dimensional real semantic embeddings with zero user configuration — no API keys, no external services
+- ~30MB model auto-downloads on first run and is cached locally
+- Embedding provider cascade: local ONNX → Ollama → OpenAI → hash fallback
+- Hash-based embedding is now the last resort, not the default
+
+#### **Match Quality Transparency** (`lib/vector-store.ts`, `mcp-handoff.ts`)
+- All similarity search results now labeled with `matchType: 'semantic' | 'keyword'`
+- MCP `get_similar_solutions` response header shows "(semantic match)" or "(keyword match)"
+- `getEmbeddingStatus()` API for provider introspection: provider name, semantic flag, dimensions
+- Removed the 1000-row cap from `VectorService.searchSimilarSessions` — all embeddings are now searched
+
+#### **Memory Dashboard** (`pages/Insights.tsx`, `routes/intelligence.ts`)
+- New "Memory" tab in the Insights page with:
+  - Active embedding provider indicator (green = semantic, yellow = keyword)
+  - Total embedded sessions count and coverage percentage
+  - Provider breakdown bar chart showing semantic vs keyword embeddings
+  - Warning banner when hash fallback is active
+  - Live similarity search box with match quality labels per result
+- New API endpoints: `GET /api/embedding/status`, `GET /api/embedding/search`
+
+#### **Shell Hook Installer** (`bin/install-hook.js`, `package.json`)
+- `ocd install-hook` CLI command for zero-config proactive IDE interception setup
+- Appends `PROMPT_COMMAND` (bash) or `precmd` (zsh) hook to shell RC file
+- Captures stderr from failed commands to `~/.ocd/terminal.log` — the path OCD watches
+- Supports `--remove` to cleanly uninstall, `--shell bash|zsh` to force shell type
+- Idempotent with marker comments for safe re-runs
+
+#### **P2P Security Transparency** (`engine/p2p-sync.ts`, `routes/intelligence.ts`, `pages/Insights.tsx`)
+- `getP2pSecurityStatus()` returns warnings about plaintext HTTP transmission
+- P2P peers API response now includes `security` field with warnings
+- Red warning banner in Memory dashboard when P2P is active over HTTP
+- Guidance to use VPN/Tailscale for sensitive environments
+
+---
+
 ## [5.2.1] — 2026-03-22
 
 ### Added — Platform Parity & Single-Tool Optimization

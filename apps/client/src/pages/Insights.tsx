@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useApi } from '../hooks/useApi';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, BarChart, Bar, CartesianGrid } from 'recharts';
-import { Brain, TrendingUp, Sparkles, Lightbulb, Target, BarChart2, Loader2, RefreshCw, Zap, AlertTriangle, FlaskConical, ShieldAlert, BookOpen } from 'lucide-react';
+import { Brain, TrendingUp, Sparkles, Lightbulb, Target, BarChart2, Loader2, RefreshCw, Zap, AlertTriangle, FlaskConical, ShieldAlert, BookOpen, Database, Search } from 'lucide-react';
 
 function MarkdownBlock({ text }: { text: string }) {
     const lines = text.split('\n');
@@ -32,15 +32,20 @@ export default function Insights() {
     const { data: recommendations } = useApi<any[]>('/api/recommendations');
     const { data: dailyPick } = useApi<any>('/api/insights/daily-pick');
     const { data: ollamaStatus } = useApi<any>('/api/ollama/status');
+    const { data: embeddingStatus } = useApi<any>('/api/embedding/status');
     const { data: effectSizes } = useApi<any>('/api/prompt-coach/effects');
+    const { data: p2pStatus } = useApi<any>('/api/p2p/peers');
     const { data: templates } = useApi<any>('/api/prompt-coach/templates');
     const { data: improvements } = useApi<any>('/api/prompt-coach/improve');
 
-    const [view, setView] = useState<'profile' | 'trends' | 'prompts' | 'daily' | 'deep' | 'recommendations'>('profile');
+    const [view, setView] = useState<'profile' | 'trends' | 'prompts' | 'daily' | 'deep' | 'recommendations' | 'memory'>('profile');
     const [promptScienceTab, setPromptScienceTab] = useState<'evidence' | 'templates' | 'antipatterns'>('evidence');
     const [deepText, setDeepText] = useState('');
     const [deepLoading, setDeepLoading] = useState(false);
     const [refreshingPick, setRefreshingPick] = useState(false);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [searchResults, setSearchResults] = useState<any[] | null>(null);
+    const [searching, setSearching] = useState(false);
 
     const tabs = [
         { id: 'profile' as const, label: 'How You Work', icon: <Target className="w-4 h-4" /> },
@@ -49,6 +54,7 @@ export default function Insights() {
         { id: 'daily' as const, label: 'Daily Pick', icon: <Sparkles className="w-4 h-4" /> },
         { id: 'deep' as const, label: 'Deep Analyze', icon: <Brain className="w-4 h-4" /> },
         { id: 'recommendations' as const, label: 'Optimize', icon: <Lightbulb className="w-4 h-4" /> },
+        { id: 'memory' as const, label: 'Memory', icon: <Database className="w-4 h-4" /> },
     ];
 
     const runDeepAnalyze = () => {
@@ -428,6 +434,140 @@ export default function Insights() {
                             </div>
                         </div>
                     ))}
+                </div>
+            )}
+
+            {/* Memory — Embedding Status */}
+            {view === 'memory' && (
+                <div className="space-y-6">
+                    {/* Provider Status */}
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <div className="glass-panel p-5 text-center">
+                            <div className={`w-3 h-3 rounded-full mx-auto mb-2 ${embeddingStatus?.isSemantic ? 'bg-neonGreen animate-pulse' : 'bg-yellow-400'}`} />
+                            <p className="text-lg font-black text-white capitalize">{embeddingStatus?.provider || '...'}</p>
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest mt-1">Provider</p>
+                        </div>
+                        <StatCard label="Embedded" value={embeddingStatus?.embeddedSessions ?? '...'} />
+                        <StatCard label="Coverage" value={embeddingStatus?.coveragePct != null ? `${embeddingStatus.coveragePct}%` : '...'} color={embeddingStatus?.coveragePct > 80 ? 'brand' : undefined} />
+                        <StatCard label="Dimensions" value={embeddingStatus?.dimensions ?? '...'} color="neonBlue" />
+                    </div>
+
+                    {/* Semantic vs keyword warning */}
+                    {embeddingStatus && !embeddingStatus.isSemantic && (
+                        <div className="glass-panel p-5 border-yellow-400/30 bg-yellow-400/5">
+                            <div className="flex items-start gap-3">
+                                <AlertTriangle className="w-5 h-5 text-yellow-400 mt-0.5 shrink-0" />
+                                <div>
+                                    <h4 className="text-sm font-bold text-yellow-400">Hash fallback active — keyword matching only</h4>
+                                    <p className="text-xs text-zinc-400 mt-1">
+                                        Similarity search uses keyword hashing, not real semantic understanding.
+                                        Install the ONNX model by restarting the server (auto-downloads ~30MB on first run),
+                                        or configure Ollama/OpenAI for higher-quality embeddings.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Provider breakdown */}
+                    {embeddingStatus?.providerBreakdown?.length > 0 && (
+                        <div className="glass-panel p-6">
+                            <h3 className="text-xs font-black text-zinc-400 mb-4 uppercase tracking-widest">Embeddings by Provider</h3>
+                            <div className="space-y-3">
+                                {embeddingStatus.providerBreakdown.map((p: any) => (
+                                    <div key={p.provider} className="flex items-center gap-3">
+                                        <span className="text-xs font-mono text-zinc-400 w-16">{p.provider}</span>
+                                        <div className="flex-1 h-6 bg-[#111] rounded overflow-hidden border border-[#222]">
+                                            <div className="h-full bg-gradient-to-r from-brand/60 to-brand rounded transition-all"
+                                                style={{ width: `${Math.min(100, (p.cnt / (embeddingStatus.embeddedSessions || 1)) * 100)}%` }}>
+                                                <span className="text-[10px] font-black text-white px-2 leading-6">{p.cnt}</span>
+                                            </div>
+                                        </div>
+                                        <span className={`text-[10px] font-black px-2 py-0.5 rounded ${p.provider === 'hash' ? 'text-yellow-400 bg-yellow-400/10' : 'text-neonGreen bg-neonGreen/10'}`}>
+                                            {p.provider === 'hash' ? 'keyword' : 'semantic'}
+                                        </span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+
+                    {/* P2P Security Warning */}
+                    {p2pStatus?.security?.enabled && p2pStatus.security.warnings?.length > 0 && (
+                        <div className="glass-panel p-5 border-red-400/30 bg-red-400/5">
+                            <div className="flex items-start gap-3">
+                                <ShieldAlert className="w-5 h-5 text-red-400 mt-0.5 shrink-0" />
+                                <div>
+                                    <h4 className="text-sm font-bold text-red-400">P2P Security Notice</h4>
+                                    {p2pStatus.security.warnings.map((w: string, i: number) => (
+                                        <p key={i} className="text-xs text-zinc-400 mt-1">{w}</p>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Live search */}
+                    <div className="glass-panel p-6 border-neonBlue/20">
+                        <h3 className="text-xs font-black text-neonBlue mb-4 uppercase tracking-widest flex items-center gap-2">
+                            <Search className="w-4 h-4" /> Try Similarity Search
+                        </h3>
+                        <div className="flex gap-2">
+                            <input
+                                type="text"
+                                value={searchQuery}
+                                onChange={e => setSearchQuery(e.target.value)}
+                                onKeyDown={e => {
+                                    if (e.key === 'Enter' && searchQuery.trim()) {
+                                        setSearching(true);
+                                        fetch(`/api/embedding/search?q=${encodeURIComponent(searchQuery)}&limit=5`)
+                                            .then(r => r.json())
+                                            .then(d => { setSearchResults(d.results || []); setSearching(false); })
+                                            .catch(() => setSearching(false));
+                                    }
+                                }}
+                                placeholder="Search your session memory..."
+                                className="flex-1 bg-[#111] border border-[#222] rounded-lg px-4 py-2 text-sm text-white placeholder:text-zinc-600 focus:outline-none focus:border-neonBlue/50"
+                            />
+                            <button
+                                onClick={() => {
+                                    if (!searchQuery.trim()) return;
+                                    setSearching(true);
+                                    fetch(`/api/embedding/search?q=${encodeURIComponent(searchQuery)}&limit=5`)
+                                        .then(r => r.json())
+                                        .then(d => { setSearchResults(d.results || []); setSearching(false); })
+                                        .catch(() => setSearching(false));
+                                }}
+                                disabled={searching || !searchQuery.trim()}
+                                className="px-4 py-2 text-xs font-black uppercase tracking-widest bg-neonBlue/10 text-neonBlue border border-neonBlue/50 rounded-lg hover:bg-neonBlue/20 transition-all disabled:opacity-40 flex items-center gap-2"
+                            >
+                                {searching ? <Loader2 className="w-3 h-3 animate-spin" /> : <Search className="w-3 h-3" />}
+                                Search
+                            </button>
+                        </div>
+                        {searchResults && (
+                            <div className="mt-4 space-y-2">
+                                {searchResults.length === 0 && (
+                                    <p className="text-zinc-600 text-sm text-center py-4">No matches found.</p>
+                                )}
+                                {searchResults.map((r: any, i: number) => (
+                                    <div key={i} className="p-3 bg-[#050505] rounded-xl border border-[#222] flex items-center gap-3">
+                                        <div className="text-center w-16 shrink-0">
+                                            <p className="text-lg font-black text-white">{(r.similarity * 100).toFixed(0)}%</p>
+                                            <p className={`text-[9px] font-black uppercase ${r.matchType === 'semantic' ? 'text-neonGreen' : 'text-yellow-400'}`}>{r.matchType}</p>
+                                        </div>
+                                        <div className="flex-1 min-w-0">
+                                            <p className="text-sm font-bold text-white truncate">{r.title}</p>
+                                            <p className="text-xs text-zinc-500 truncate">{r.tldr || 'No summary'}</p>
+                                        </div>
+                                        {r.quality && (
+                                            <span className="text-[10px] font-black text-neonGreen bg-neonGreen/10 px-2 py-0.5 rounded shrink-0">Q: {r.quality}</span>
+                                        )}
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+                    </div>
                 </div>
             )}
         </div>
