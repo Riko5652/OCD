@@ -9,7 +9,7 @@ const envSchema = z.object({
     BIND: z.string().default('127.0.0.1'),
     NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
     LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
-    AUTH_TOKEN: z.string().default(''),
+    AUTH_TOKEN: z.string().optional(),
     HISTORY_DAYS: z.coerce.number().int().min(0).default(0),
 
     // Database
@@ -76,9 +76,13 @@ export function validateEnv(logger?: { warn: (msg: string) => void }): Env {
     const env = result.data;
     const warn = logger?.warn ?? console.warn.bind(console);
 
-    // Security warnings
-    if (env.BIND !== '127.0.0.1' && env.BIND !== 'localhost' && !env.AUTH_TOKEN) {
-        warn('BIND is set to a non-localhost address but AUTH_TOKEN is not set. API endpoints are unprotected.');
+    // Security: require AUTH_TOKEN when binding to non-localhost
+    const isLocalhost = env.BIND === '127.0.0.1' || env.BIND === 'localhost' || env.BIND === '::1';
+    if (!isLocalhost && !env.AUTH_TOKEN) {
+        throw new Error(
+            'AUTH_TOKEN is required when BIND is set to a non-localhost address. ' +
+            'Set AUTH_TOKEN to a strong secret to protect API endpoints, or use BIND=127.0.0.1 for local-only access.'
+        );
     }
 
     if (env.P2P_SECRET && env.P2P_SECRET.length < 16) {
