@@ -665,7 +665,7 @@ function fmtTokenCount(n: number): string {
 async function startMcp() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error('AI Productivity Engine MCP Server v5.2.1 running on stdio');
+    console.error('AI Productivity Engine MCP Server v5.4.0 running on stdio');
 }
 
 startMcp().catch(console.error);

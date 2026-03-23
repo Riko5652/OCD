@@ -103,18 +103,30 @@ importers:
         specifier: ^3.23.0
         version: 3.25.76
     devDependencies:
+      '@eslint/js':
+        specifier: ^9.13.0
+        version: 9.39.4
       '@types/better-sqlite3':
         specifier: ^7.6.11
         version: 7.6.13
       '@types/node':
         specifier: ^22.0.0
         version: 22.19.15
+      eslint:
+        specifier: ^9.13.0
+        version: 9.39.4(jiti@1.21.7)
+      globals:
+        specifier: ^15.11.0
+        version: 15.15.0
       tsx:
         specifier: ^4.19.0
         version: 4.21.0
       typescript:
         specifier: ^5.6.0
         version: 5.6.3
+      typescript-eslint:
+        specifier: ^8.10.0
+        version: 8.57.0(eslint@9.39.4(jiti@1.21.7))(typescript@5.6.3)
       vitest:
         specifier: ^2.1.9
         version: 2.1.9(@types/node@22.19.15)

@@ -10,7 +10,7 @@ import ImportModal from './components/ImportModal';
 import ToastContainer, { toast } from './components/Toast';
 import { useSSE, triggerRefresh } from './hooks/useApi';
 
-import { Zap, Activity, FolderGit2, UserCog, Brain, Upload, Menu, X, WifiOff, Download, Sun, Moon, Crosshair } from 'lucide-react';
+import { Zap, Activity, FolderGit2, UserCog, Brain, Upload, Menu, X, WifiOff, Download, Sun, Moon, Crosshair, HelpCircle } from 'lucide-react';
 import { createContext } from 'react';
 
 export const FocusModeContext = createContext(false);
@@ -134,7 +134,7 @@ export default function App() {
                         <h1 className="text-4xl font-black tracking-tighter text-transparent bg-clip-text bg-gradient-to-r from-brand to-neonPink drop-shadow-glow-brand">
                             OCD
                         </h1>
-                        <p className="text-[10px] text-neonBlue font-mono mt-1 uppercase tracking-widest neon-text-blue">v5.2.1</p>
+                        <p className="text-[10px] text-neonBlue font-mono mt-1 uppercase tracking-widest neon-text-blue">v5.4.0</p>
                     </div>
                     <div className="flex gap-1.5">
                         <button onClick={() => setFocusMode(!focusMode)} className={`p-2 rounded-lg border transition-colors ${focusMode ? 'bg-brand/20 border-brand/50 shadow-neon-brand' : 'bg-[#111] border-[#222] hover:border-brand/50'}`} title={focusMode ? 'Exit Focus Mode' : 'Enter Focus Mode — show only key metrics'}>
@@ -161,12 +161,21 @@ export default function App() {
                     ))}
                 </nav>
                 <div className="p-4 border-t border-[#1a1a1a] space-y-2">
-                    <button
-                        onClick={() => setImportOpen(true)}
-                        className="w-full py-2 px-4 rounded-xl text-xs font-bold uppercase tracking-wider bg-neonBlue/10 text-neonBlue border border-neonBlue/30 hover:bg-neonBlue/20 hover:shadow-neon-blue transition-all flex items-center justify-center gap-2"
-                    >
-                        <Upload className="w-3.5 h-3.5" /> Import
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => setImportOpen(true)}
+                            className="flex-1 py-2 px-4 rounded-xl text-xs font-bold uppercase tracking-wider bg-neonBlue/10 text-neonBlue border border-neonBlue/30 hover:bg-neonBlue/20 hover:shadow-neon-blue transition-all flex items-center justify-center gap-2"
+                        >
+                            <Upload className="w-3.5 h-3.5" /> Import
+                        </button>
+                        <button
+                            onClick={() => { localStorage.removeItem('ocd-onboarded'); setShowOnboarding(true); }}
+                            className="py-2 px-3 rounded-xl text-xs font-bold bg-[#111] text-zinc-500 border border-[#222] hover:border-brand/50 hover:text-brand transition-all"
+                            title="Show setup guide"
+                        >
+                            <HelpCircle className="w-3.5 h-3.5" />
+                        </button>
+                    </div>
                     <button
                         onClick={handleRefresh}
                         disabled={refreshing}

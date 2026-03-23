@@ -32,13 +32,12 @@ try {
   warnings++;
 }
 
-// 3. Ollama (optional, for embeddings)
+// 3. Ollama (optional, upgrades embeddings from 384-dim to 768-dim)
 try {
   execSync('ollama --version', { stdio: 'ignore' });
-  console.log('  ✅ Ollama: installed (used for vector embeddings)');
+  console.log('  ✅ Ollama: installed (upgrades embeddings to 768-dim via nomic-embed-text)');
 } catch {
-  console.log('  ⚠️  Ollama: not found (optional — embeddings fall back to built-in hashing)');
-  warnings++;
+  console.log('  ℹ️  Ollama: not found (optional — ONNX provides 384-dim semantic embeddings out of the box)');
 }
 
 // 4. System RAM

@@ -36,6 +36,7 @@ import { startP2pSync, stopP2pSync } from './engine/p2p-sync.js';
 import { computeProfile, computeTrends, computePromptMetrics } from './engine/insights.js';
 import type { IAiAdapter, UnifiedSession } from './adapters/types.js';
 import type { CacheStore, LlmRateLimiter } from './routes/types.js';
+import { validateEnv } from './env.js';
 
 // Route modules
 import analyticsRoutes from './routes/analytics.js';
@@ -468,6 +469,40 @@ fastify.get('/api/health', async () => {
     return { status: 'ok', version: '5.4.0', uptime: Math.round(process.uptime()) };
 });
 
+// ---- MCP config status route ----
+fastify.get('/api/mcp-status', async () => {
+    const os = await import('os');
+    const fs = await import('fs');
+    const path = await import('path');
+    const HOME = os.default.homedir();
+    const SERVER_NAME = 'ai-brain';
+
+    const configs = [
+        { tool: 'Claude Code', paths: [path.join(HOME, '.claude', '.mcp.json'), path.join(HOME, '.claude', 'mcp.json')] },
+        { tool: 'Cursor', paths: [path.join(HOME, '.cursor', 'mcp.json')] },
+        { tool: 'Windsurf', paths: [path.join(HOME, '.windsurf', 'mcp.json'), path.join(HOME, '.codeium', 'windsurf', 'mcp.json')] },
+    ];
+
+    const results = configs.map(({ tool, paths: candidates }) => {
+        for (const p of candidates) {
+            try {
+                const raw = fs.readFileSync(p, 'utf-8');
+                const json = JSON.parse(raw);
+                if (json?.mcpServers?.[SERVER_NAME]) {
+                    return { tool, configured: true };
+                }
+            } catch (err) { fastify.log.debug(`MCP config check skipped for ${p}: ${err instanceof Error ? err.message : err}`); }
+        }
+        return { tool, configured: false };
+    });
+
+    return {
+        tools: results,
+        any_configured: results.some(r => r.configured),
+        setup_command: 'npx omni-coder-dashboard --setup-mcp',
+    };
+});
+
 // ---- Ingest / Refresh routes ----
 fastify.post('/api/ingest', async () => {
     const total = await ingestAll();
@@ -537,6 +572,8 @@ const BIND = /^(\d{1,3}\.){3}\d{1,3}$/.test(BIND_RAW) || BIND_RAW === 'localhost
 
 const start = async () => {
     try {
+        validateEnv(fastify.log);
+
         fastify.log.info('Initializing better-sqlite3 database...');
         initDb();
         fastify.log.info('Database initialized and migrated successfully.');

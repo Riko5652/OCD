@@ -58,7 +58,7 @@
     "PRIVACY.md"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=18.18.0"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
@@ -71,13 +71,14 @@
     }
   },
   "scripts": {
-    "dev": "pnpm --filter ./apps/* run dev",
-    "build": "pnpm --filter ./apps/* run build",
+    "dev": "pnpm --filter './apps/*' run dev",
+    "build": "pnpm --filter './apps/*' run build",
     "start": "pnpm --filter ./apps/server run start",
     "mcp": "pnpm --filter ./apps/server run mcp",
     "doctor": "node bin/doctor.mjs",
     "feedback": "node bin/feedback.mjs",
     "install-hook": "node bin/install-hook.js",
+    "lint": "pnpm -r run lint",
     "test": "pnpm --filter @ocd/server run test",
     "prepublishOnly": "pnpm run build && npm pack --dry-run",
     "prepare": "pnpm run build"

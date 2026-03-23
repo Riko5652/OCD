@@ -196,6 +196,22 @@ function main() {
 
   if (!configuredAny) {
     console.log('  No supported tool configs detected. Use --project to write to current directory.');
+  } else {
+    const configuredCount = CONFIG_LOCATIONS.filter(({ paths: candidates }) => {
+      for (const p of candidates) {
+        if (fs.existsSync(p)) {
+          try {
+            const json = JSON.parse(fs.readFileSync(p, 'utf-8'));
+            if (json?.mcpServers?.[SERVER_NAME]) return true;
+          } catch { /* skip */ }
+        }
+      }
+      return false;
+    }).length;
+    console.log(`\n  Summary: ${configuredCount}/${CONFIG_LOCATIONS.length} tools configured with ${SERVER_NAME} MCP server.`);
+    console.log('  Your AI agents now have access to 18 tools: semantic search, health checks,');
+    console.log('  routing, anti-hallucination, cost arbitrage, and more.');
+    console.log('\n  Restart your AI tools to activate the MCP connection.');
   }
 
   console.log('\nDone.');
