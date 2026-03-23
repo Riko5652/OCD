@@ -36,6 +36,7 @@ import { startP2pSync, stopP2pSync } from './engine/p2p-sync.js';
 import { computeProfile, computeTrends, computePromptMetrics } from './engine/insights.js';
 import type { IAiAdapter, UnifiedSession } from './adapters/types.js';
 import type { CacheStore, LlmRateLimiter } from './routes/types.js';
+import { validateEnv } from './env.js';
 
 // Route modules
 import analyticsRoutes from './routes/analytics.js';
@@ -571,6 +572,8 @@ const BIND = /^(\d{1,3}\.){3}\d{1,3}$/.test(BIND_RAW) || BIND_RAW === 'localhost
 
 const start = async () => {
     try {
+        validateEnv(fastify.log);
+
         fastify.log.info('Initializing better-sqlite3 database...');
         initDb();
         fastify.log.info('Database initialized and migrated successfully.');

@@ -67,7 +67,7 @@ class KnowledgeGraph {
         const errorIndex = new Map<string, string[]>();
         const chronological: Array<{ id: string; started_at: number }> = [];
 
-        let taskMap = new Map<string, any>();
+        const taskMap = new Map<string, any>();
         try {
             const tasks = db.prepare('SELECT * FROM task_classifications').all() as any[];
             for (const t of tasks) taskMap.set(t.session_id, t);
