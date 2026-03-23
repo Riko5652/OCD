@@ -71,8 +71,8 @@
     }
   },
   "scripts": {
-    "dev": "pnpm --filter ./apps/* run dev",
-    "build": "pnpm --filter ./apps/* run build",
+    "dev": "pnpm --filter './apps/*' run dev",
+    "build": "pnpm --filter './apps/*' run build",
     "start": "pnpm --filter ./apps/server run start",
     "mcp": "pnpm --filter ./apps/server run mcp",
     "doctor": "node bin/doctor.mjs",
