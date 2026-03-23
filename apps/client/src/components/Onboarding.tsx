@@ -1,6 +1,11 @@
 import { useApi } from '../hooks/useApi';
 import { CheckCircle, XCircle, AlertCircle, Zap, ArrowRight, BarChart2, Brain, Shield, Terminal, Link2 } from 'lucide-react';
 
+interface MCPToolStatus {
+    tool: string;
+    configured: boolean;
+}
+
 interface OnboardingProps {
     onDismiss: () => void;
 }
@@ -93,7 +98,7 @@ export default function Onboarding({ onDismiss }: OnboardingProps) {
                 </h3>
                 {mcpConfigured ? (
                     <div className="space-y-2">
-                        {mcpTools.map((t: any) => (
+                        {mcpTools.map((t: MCPToolStatus) => (
                             <div key={t.tool} className={`flex items-center gap-3 p-3 rounded-lg border ${t.configured ? 'bg-neonGreen/5 border-neonGreen/20' : 'bg-[#050505] border-[#222]'}`}>
                                 {t.configured ? <CheckCircle className="w-4 h-4 text-neonGreen shrink-0" /> : <XCircle className="w-3.5 h-3.5 text-zinc-600 shrink-0" />}
                                 <span className={`text-sm font-bold ${t.configured ? 'text-white' : 'text-zinc-500'}`}>{t.tool}</span>

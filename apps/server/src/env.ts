@@ -85,8 +85,8 @@ export function validateEnv(logger?: { warn: (msg: string) => void }): Env {
         );
     }
 
-    if (env.P2P_SECRET && env.P2P_SECRET.length < 16) {
-        warn('P2P_SECRET is set but shorter than 16 characters. Use a stronger secret for peer sync.');
+    if (env.P2P_SECRET && env.P2P_SECRET.length < 32) {
+        warn('P2P_SECRET is set but shorter than 32 characters. Use a stronger secret for peer sync.');
     }
 
     _env = env;

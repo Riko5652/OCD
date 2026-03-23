@@ -491,7 +491,7 @@ fastify.get('/api/mcp-status', async () => {
                 if (json?.mcpServers?.[SERVER_NAME]) {
                     return { tool, configured: true };
                 }
-            } catch { /* file doesn't exist or invalid */ }
+            } catch (err) { fastify.log.debug(`MCP config check skipped for ${p}: ${err instanceof Error ? err.message : err}`); }
         }
         return { tool, configured: false };
     });
