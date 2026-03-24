@@ -286,6 +286,31 @@ export function migrate(db: Database) {
       actual_outcome TEXT
     );
     CREATE INDEX IF NOT EXISTS idx_arb_task ON arbitrage_log(task_type, routed_to_local);
+
+    -- Feature: OCD Gatekeeper — Task Focus & Parking Lot
+    -- Tracks the current active task so MCP-connected agents stay on scope
+    CREATE TABLE IF NOT EXISTS ocd_tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT NOT NULL DEFAULT 'active',
+      project TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      completed_at INTEGER
+    );
+    CREATE INDEX IF NOT EXISTS idx_ocd_tasks_status ON ocd_tasks(status);
+
+    -- Parking lot for out-of-scope ideas captured during focused work
+    CREATE TABLE IF NOT EXISTS ocd_parking_lot (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      idea TEXT NOT NULL,
+      source_tool TEXT,
+      parked_during_task_id INTEGER REFERENCES ocd_tasks(id),
+      created_at INTEGER NOT NULL,
+      promoted INTEGER DEFAULT 0
+    );
+    CREATE INDEX IF NOT EXISTS idx_ocd_parking_promoted ON ocd_parking_lot(promoted);
   `);
 
     // Seed tools

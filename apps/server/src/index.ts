@@ -42,6 +42,7 @@ import { validateEnv } from './env.js';
 import analyticsRoutes from './routes/analytics.js';
 import sessionRoutes from './routes/sessions.js';
 import intelligenceRoutes from './routes/intelligence.js';
+import gatekeeperRoutes from './routes/gatekeeper.js';
 
 // ---- Pino structured logging ----
 const loggerConfig = process.env.NODE_ENV === 'production'
@@ -518,6 +519,7 @@ fastify.post('/api/refresh', async () => {
 await fastify.register(analyticsRoutes, { cache, historyDays: HISTORY_DAYS });
 await fastify.register(sessionRoutes, { cache, llmRateLimit, broadcast });
 await fastify.register(intelligenceRoutes, { cache, llmRateLimit, broadcast, generateDailyPick });
+await fastify.register(gatekeeperRoutes);
 
 // ---- CORS for import endpoints ----
 fastify.addHook('onRequest', (request, reply, done) => {

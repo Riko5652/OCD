@@ -656,6 +656,134 @@ server.tool(
     }
 );
 
+// ---- Tool 19: get_current_task (Gatekeeper) ----
+server.tool(
+    'get_current_task',
+    'CRITICAL: Call this tool before starting any new action to understand the current scope. Returns the active task from OCD so you do not deviate or cause scope creep.',
+    {},
+    async () => {
+        const db = getDb();
+        const task = db.prepare(
+            `SELECT id, title, description, project, status, created_at
+             FROM ocd_tasks WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1`
+        ).get() as any;
+
+        if (!task) {
+            return {
+                content: [{
+                    type: 'text' as const,
+                    text: 'No active task defined in OCD. You may proceed freely, but consider asking the user to set a task for focused work.',
+                }],
+            };
+        }
+
+        const parkedCount = db.prepare(
+            `SELECT COUNT(*) as cnt FROM ocd_parking_lot WHERE parked_during_task_id = ?`
+        ).get(task.id) as any;
+
+        let response = `Current Active Task (OCD Gatekeeper):\n\n`;
+        response += `  Task: ${task.title}\n`;
+        if (task.description) response += `  Description: ${task.description}\n`;
+        if (task.project) response += `  Project: ${task.project}\n`;
+        response += `  Status: ${task.status}\n`;
+        response += `  Parked Ideas: ${parkedCount?.cnt || 0}\n\n`;
+        response += `IMPORTANT: Do not deviate from this task. If the user suggests something out of scope, use park_out_of_scope_idea to capture it without losing focus.`;
+
+        return { content: [{ type: 'text' as const, text: response }] };
+    }
+);
+
+// ---- Tool 20: park_out_of_scope_idea (Gatekeeper) ----
+server.tool(
+    'park_out_of_scope_idea',
+    'Call this when the user suggests an idea that does not directly contribute to the current active task. Parks the idea in OCD so it is not lost, then redirects focus back to the task.',
+    {
+        idea: z.string().describe('Description of the out-of-scope idea to park'),
+        source_tool: z.string().optional().describe('Which tool captured this (e.g., "claude-code", "cursor")'),
+    },
+    async ({ idea, source_tool }) => {
+        const db = getDb();
+        const activeTask = db.prepare(
+            `SELECT id, title FROM ocd_tasks WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1`
+        ).get() as any;
+
+        db.prepare(
+            `INSERT INTO ocd_parking_lot (idea, source_tool, parked_during_task_id, created_at)
+             VALUES (?, ?, ?, ?)`
+        ).run(idea, source_tool || null, activeTask?.id || null, Date.now());
+
+        const taskRef = activeTask ? `"${activeTask.title}"` : 'your current work';
+        return {
+            content: [{
+                type: 'text' as const,
+                text: `Idea parked in OCD: "${idea}"\n\nInform the user: "I've parked this idea in OCD so we don't lose it. Let's stay focused on ${taskRef}."`,
+            }],
+        };
+    }
+);
+
+// ---- Tool 21: update_task_status (Gatekeeper) ----
+server.tool(
+    'update_task_status',
+    'Update the status of the current OCD task. Use this to mark tasks as completed, paused, or to set a new active task.',
+    {
+        action: z.enum(['complete', 'pause', 'new']).describe('"complete" finishes current task, "pause" puts it on hold, "new" creates a new active task'),
+        title: z.string().optional().describe('Required when action is "new" — the title of the new task'),
+        description: z.string().optional().describe('Optional description for new tasks'),
+        project: z.string().optional().describe('Optional project name for new tasks'),
+    },
+    async ({ action, title, description, project }) => {
+        const db = getDb();
+        const now = Date.now();
+
+        if (action === 'complete') {
+            const updated = db.prepare(
+                `UPDATE ocd_tasks SET status = 'completed', completed_at = ?, updated_at = ? WHERE status = 'active'`
+            ).run(now, now);
+            if (!updated.changes) {
+                return { content: [{ type: 'text' as const, text: 'No active task to complete.' }] };
+            }
+            const parked = db.prepare(
+                `SELECT COUNT(*) as cnt FROM ocd_parking_lot WHERE promoted = 0`
+            ).get() as any;
+            let response = 'Task marked as completed in OCD.';
+            if (parked?.cnt > 0) {
+                response += `\n\nYou have ${parked.cnt} parked idea(s) waiting for review. Consider promoting one to the next active task.`;
+            }
+            return { content: [{ type: 'text' as const, text: response }] };
+        }
+
+        if (action === 'pause') {
+            db.prepare(
+                `UPDATE ocd_tasks SET status = 'paused', updated_at = ? WHERE status = 'active'`
+            ).run(now);
+            return { content: [{ type: 'text' as const, text: 'Active task paused in OCD.' }] };
+        }
+
+        if (action === 'new') {
+            if (!title) {
+                return { content: [{ type: 'text' as const, text: 'Error: title is required when creating a new task.' }], isError: true };
+            }
+            // Pause any existing active task
+            db.prepare(
+                `UPDATE ocd_tasks SET status = 'paused', updated_at = ? WHERE status = 'active'`
+            ).run(now);
+            db.prepare(
+                `INSERT INTO ocd_tasks (title, description, project, status, created_at, updated_at)
+                 VALUES (?, ?, ?, 'active', ?, ?)`
+            ).run(title, description || null, project || null, now, now);
+            return {
+                content: [{
+                    type: 'text' as const,
+                    text: `New active task set in OCD: "${title}"\n\nAll connected agents will now scope their work to this task.`,
+                }],
+            };
+        }
+
+        return { content: [{ type: 'text' as const, text: 'Unknown action.' }], isError: true };
+    }
+);
+
 function fmtTokenCount(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
