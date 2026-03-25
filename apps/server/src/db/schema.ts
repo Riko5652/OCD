@@ -293,7 +293,7 @@ export function migrate(db: Database) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       title TEXT NOT NULL,
       description TEXT,
-      status TEXT NOT NULL DEFAULT 'active',
+      status TEXT NOT NULL DEFAULT 'active' CHECK (status IN ('active', 'paused', 'completed')),
       project TEXT,
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
@@ -308,7 +308,7 @@ export function migrate(db: Database) {
       source_tool TEXT,
       parked_during_task_id INTEGER REFERENCES ocd_tasks(id),
       created_at INTEGER NOT NULL,
-      promoted INTEGER DEFAULT 0
+      promoted INTEGER DEFAULT 0 CHECK (promoted IN (0, 1))
     );
     CREATE INDEX IF NOT EXISTS idx_ocd_parking_promoted ON ocd_parking_lot(promoted);
   `);

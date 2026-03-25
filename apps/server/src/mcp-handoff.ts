@@ -656,6 +656,22 @@ server.tool(
     }
 );
 
+// ---- Gatekeeper types ----
+interface OcdTask {
+    id: number;
+    title: string;
+    description: string | null;
+    project: string | null;
+    status: string;
+    created_at: number;
+    updated_at: number;
+    completed_at: number | null;
+}
+
+interface CountRow {
+    cnt: number;
+}
+
 // ---- Tool 19: get_current_task (Gatekeeper) ----
 server.tool(
     'get_current_task',
@@ -666,7 +682,7 @@ server.tool(
         const task = db.prepare(
             `SELECT id, title, description, project, status, created_at
              FROM ocd_tasks WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1`
-        ).get() as any;
+        ).get() as OcdTask | undefined;
 
         if (!task) {
             return {
@@ -679,7 +695,7 @@ server.tool(
 
         const parkedCount = db.prepare(
             `SELECT COUNT(*) as cnt FROM ocd_parking_lot WHERE parked_during_task_id = ?`
-        ).get(task.id) as any;
+        ).get(task.id) as CountRow | undefined;
 
         let response = `Current Active Task (OCD Gatekeeper):\n\n`;
         response += `  Task: ${task.title}\n`;
@@ -705,7 +721,7 @@ server.tool(
         const db = getDb();
         const activeTask = db.prepare(
             `SELECT id, title FROM ocd_tasks WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1`
-        ).get() as any;
+        ).get() as Pick<OcdTask, 'id' | 'title'> | undefined;
 
         db.prepare(
             `INSERT INTO ocd_parking_lot (idea, source_tool, parked_during_task_id, created_at)
@@ -738,16 +754,17 @@ server.tool(
 
         if (action === 'complete') {
             const updated = db.prepare(
-                `UPDATE ocd_tasks SET status = 'completed', completed_at = ?, updated_at = ? WHERE status = 'active'`
+                `UPDATE ocd_tasks SET status = 'completed', completed_at = ?, updated_at = ?
+                 WHERE id = (SELECT id FROM ocd_tasks WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1)`
             ).run(now, now);
             if (!updated.changes) {
                 return { content: [{ type: 'text' as const, text: 'No active task to complete.' }] };
             }
             const parked = db.prepare(
                 `SELECT COUNT(*) as cnt FROM ocd_parking_lot WHERE promoted = 0`
-            ).get() as any;
+            ).get() as CountRow | undefined;
             let response = 'Task marked as completed in OCD.';
-            if (parked?.cnt > 0) {
+            if (parked && parked.cnt > 0) {
                 response += `\n\nYou have ${parked.cnt} parked idea(s) waiting for review. Consider promoting one to the next active task.`;
             }
             return { content: [{ type: 'text' as const, text: response }] };
@@ -755,7 +772,8 @@ server.tool(
 
         if (action === 'pause') {
             db.prepare(
-                `UPDATE ocd_tasks SET status = 'paused', updated_at = ? WHERE status = 'active'`
+                `UPDATE ocd_tasks SET status = 'paused', updated_at = ?
+                 WHERE id = (SELECT id FROM ocd_tasks WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1)`
             ).run(now);
             return { content: [{ type: 'text' as const, text: 'Active task paused in OCD.' }] };
         }
@@ -764,14 +782,15 @@ server.tool(
             if (!title) {
                 return { content: [{ type: 'text' as const, text: 'Error: title is required when creating a new task.' }], isError: true };
             }
-            // Pause any existing active task
-            db.prepare(
-                `UPDATE ocd_tasks SET status = 'paused', updated_at = ? WHERE status = 'active'`
-            ).run(now);
-            db.prepare(
-                `INSERT INTO ocd_tasks (title, description, project, status, created_at, updated_at)
-                 VALUES (?, ?, ?, 'active', ?, ?)`
-            ).run(title, description || null, project || null, now, now);
+            db.transaction(() => {
+                db.prepare(
+                    `UPDATE ocd_tasks SET status = 'paused', updated_at = ? WHERE status = 'active'`
+                ).run(now);
+                db.prepare(
+                    `INSERT INTO ocd_tasks (title, description, project, status, created_at, updated_at)
+                     VALUES (?, ?, ?, 'active', ?, ?)`
+                ).run(title, description || null, project || null, now, now);
+            })();
             return {
                 content: [{
                     type: 'text' as const,

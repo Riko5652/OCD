@@ -4,25 +4,27 @@ import Performance from './pages/Performance';
 import Workspaces from './pages/Workspaces';
 import Profile from './pages/Profile';
 import Insights from './pages/Insights';
+import Gatekeeper from './pages/Gatekeeper';
 import Onboarding from './components/Onboarding';
 import CommandPalette from './components/CommandPalette';
 import ImportModal from './components/ImportModal';
 import ToastContainer, { toast } from './components/Toast';
 import { useSSE, triggerRefresh } from './hooks/useApi';
 
-import { Zap, Activity, FolderGit2, UserCog, Brain, Upload, Menu, X, WifiOff, Download, Sun, Moon, Crosshair, HelpCircle } from 'lucide-react';
+import { Zap, Activity, FolderGit2, UserCog, Brain, Shield, Upload, Menu, X, WifiOff, Download, Sun, Moon, Crosshair, HelpCircle } from 'lucide-react';
 import { createContext } from 'react';
 
 export const FocusModeContext = createContext(false);
 import { useTheme } from './hooks/useTheme';
 
-type Page = 'command' | 'performance' | 'workspaces' | 'profile' | 'insights';
+type Page = 'command' | 'performance' | 'workspaces' | 'profile' | 'insights' | 'gatekeeper';
 
 const NAV_ITEMS: { id: Page; label: string; shortLabel: string; icon: React.ReactNode }[] = [
     { id: 'command', label: 'Command Center', shortLabel: 'Command', icon: <Zap className="w-5 h-5" /> },
     { id: 'insights', label: 'Insights', shortLabel: 'Insights', icon: <Brain className="w-5 h-5" /> },
     { id: 'performance', label: 'Performance', shortLabel: 'Perf', icon: <Activity className="w-5 h-5" /> },
     { id: 'workspaces', label: 'Workspaces', shortLabel: 'Work', icon: <FolderGit2 className="w-5 h-5" /> },
+    { id: 'gatekeeper', label: 'Gatekeeper', shortLabel: 'Gate', icon: <Shield className="w-5 h-5" /> },
     { id: 'profile', label: 'Profile', shortLabel: 'Profile', icon: <UserCog className="w-5 h-5" /> },
 ];
 
@@ -210,6 +212,7 @@ export default function App() {
                         {page === 'insights' && <Insights />}
                         {page === 'performance' && <Performance />}
                         {page === 'workspaces' && <Workspaces />}
+                        {page === 'gatekeeper' && <Gatekeeper />}
                         {page === 'profile' && <Profile />}
                     </>
                 )}
