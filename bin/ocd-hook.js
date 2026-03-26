@@ -437,8 +437,8 @@ function stopGuard() {
 
 function sessionDigest() {
   const args = parseArgs();
-  const workspace = args.workspace || process.env.OCD_WORKSPACE || 'C:/Projects/pm-dashboard';
-  const transcriptsDir = args['transcripts-dir'] || process.env.OCD_TRANSCRIPTS_DIR || 'C:/Users/DorLipetz/.cursor/projects/c-Projects-pm-dashboard/agent-transcripts';
+  const workspace = args.workspace || process.env.OCD_WORKSPACE;
+  const transcriptsDir = args['transcripts-dir'] || process.env.OCD_TRANSCRIPTS_DIR;
   const sessionId = args['session-id'] || process.env.CLAUDE_SESSION_ID || process.env.CURSOR_SESSION_ID || '';
 
   const digestScript = join(workspace, 'scripts', 'ai', 'auto-session-digest.mjs');
