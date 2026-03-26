@@ -34,6 +34,29 @@ if (args.includes('--setup-mcp')) {
   // setup-mcp.js handles its own process.exit
 }
 
+// --mcp: start MCP stdio server (used by Claude Code / Cursor / Windsurf)
+if (args.includes('--mcp')) {
+  const { existsSync } = await import('fs');
+  const { join, dirname } = await import('path');
+  const { fileURLToPath, pathToFileURL } = await import('url');
+  const __bindir = dirname(fileURLToPath(import.meta.url));
+  const mcpDist = join(__bindir, '..', 'apps', 'server', 'dist', 'mcp-handoff.js');
+  if (existsSync(mcpDist)) {
+    await import(pathToFileURL(mcpDist).href);
+  } else {
+    try {
+      await import('tsx');
+      await import('../apps/server/src/mcp-handoff.ts');
+    } catch {
+      console.error('\x1b[31m✖ MCP server not built.\x1b[0m');
+      console.error('  Run: pnpm run build');
+      process.exit(1);
+    }
+  }
+  // MCP server runs until the transport closes — prevent falling through to HTTP server
+  await new Promise(() => {});
+}
+
 if (args.includes('--help') || args.includes('-h')) {
   console.log(`
 \x1b[1mai-dashboard\x1b[0m — OCD (Omni Coder Dashboard) v5.4.0
@@ -47,6 +70,7 @@ if (args.includes('--help') || args.includes('-h')) {
 \x1b[1mOptions:\x1b[0m
   --port <n>      Port to listen on (default: 3030, or PORT env var)
   --no-open       Don't open the browser automatically
+  --mcp           Start as MCP stdio server (for AI tool integration)
   --setup-mcp     Auto-register MCP server in Claude Code / Cursor / Windsurf
   install-hook    Install shell hook for proactive IDE interception
   --help          Show this help
@@ -95,13 +119,13 @@ if (!noOpen) {
 // Try compiled JS first, fall back to tsx for development
 import { existsSync } from 'fs';
 import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
 
 const __bindir = dirname(fileURLToPath(import.meta.url));
 const distEntry = join(__bindir, '..', 'apps', 'server', 'dist', 'index.js');
 
 if (existsSync(distEntry)) {
-  await import(distEntry);
+  await import(pathToFileURL(distEntry).href);
 } else {
   // Development mode: try tsx for TypeScript execution
   try {

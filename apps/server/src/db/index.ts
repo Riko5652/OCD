@@ -1,14 +1,13 @@
 import Database from 'better-sqlite3';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import { migrate } from './schema.js';
 
-const DB_DIR = join(process.cwd(), '.data');
+const DB_PATH = process.env.DB_PATH || join(process.cwd(), '.data', 'ai-productivity.db');
+const DB_DIR = dirname(DB_PATH);
 if (!existsSync(DB_DIR)) {
     mkdirSync(DB_DIR, { recursive: true, mode: 0o700 });
 }
-
-const DB_PATH = join(DB_DIR, 'ai-productivity.db');
 
 let db: ReturnType<typeof Database> | null = null;
 
