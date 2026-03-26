@@ -444,18 +444,18 @@ function sessionDigest() {
   const digestScript = join(workspace, 'scripts', 'ai', 'auto-session-digest.mjs');
   if (!existsSync(digestScript)) return;
 
-  const cmd = [
-    'node',
-    `"${digestScript}"`,
+  const cmdArgs = [
+    digestScript,
     '--workspace',
-    `"${workspace}"`,
+    workspace,
     '--transcripts-dir',
-    `"${transcriptsDir}"`,
-    ...(sessionId ? ['--session-id', `"${sessionId}"`] : []),
-  ].join(' ');
+    transcriptsDir,
+  ];
+  if (sessionId) {
+    cmdArgs.push('--session-id', sessionId);
+  }
 
-  const result = spawnSync(cmd, {
-    shell: true,
+  const result = spawnSync('node', cmdArgs, {
     encoding: 'utf8',
     cwd: workspace,
     timeout: 25000,
