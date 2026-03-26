@@ -34,6 +34,12 @@ ai_best_practices.md
 # Claude Code local data
 .claude/
 
+# OCD hook runtime state (machine-specific, regenerated each session)
+.hook-state/
+
+# TypeScript build cache
+*.tsbuildinfo
+
 # Local MCP config (user-specific paths)
 .mcp.json
 

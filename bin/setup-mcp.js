@@ -5,10 +5,10 @@ import fs from 'fs';
 import path from 'path';
 import os from 'os';
 
-const SERVER_NAME = 'ai-brain';
+const SERVER_NAME = 'ocd';
 const SERVER_ENTRY = {
   command: 'npx',
-  args: ['ai-productivity-dashboard', '--mcp'],
+  args: ['ocd', '--mcp'],
 };
 
 const HOME = os.homedir();

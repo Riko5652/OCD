@@ -18,6 +18,22 @@ const GEMINI_CASCADE = (process.env.GEMINI_MODEL ? [process.env.GEMINI_MODEL] : 
     'gemini-3-flash-preview',
 ]);
 
+function isLikelyOllamaChatModel(modelName: string): boolean {
+    const lower = (modelName || '').toLowerCase();
+    const embeddingOrRerankSignals = [
+        'embed',
+        'embedding',
+        'text-embedding',
+        'nomic-embed',
+        'mxbai-embed',
+        'snowflake-arctic-embed',
+        'all-minilm',
+        'rerank',
+        'colbert',
+    ];
+    return !embeddingOrRerankSignals.some(s => lower.includes(s));
+}
+
 function sanitize(text: string, maxLen = 200): string {
     return (text || '').replace(/[\x00-\x1f]/g, ' ').replace(/[<>&"']/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#x27;' }[c] || c)).slice(0, maxLen);
 }
@@ -33,8 +49,9 @@ export async function detectProvider() {
         if (r.ok) {
             const data = await r.json() as any;
             const models = (data.models || []).map((m: any) => m.name);
+            const chatModels = models.filter((m: string) => isLikelyOllamaChatModel(m));
             const preferred = [OLLAMA_MODEL, 'gemma2:2b', 'gemma2:9b', 'llama3.2:3b'];
-            const model = preferred.find(m => models.includes(m)) || models[0];
+            const model = preferred.find(m => chatModels.includes(m)) || chatModels[0];
             if (model) return { provider: 'ollama' as const, model, available: true };
         }
     } catch { /* not available */ }
@@ -329,7 +346,7 @@ export async function streamDeepAnalysis(res: any) {
 
     const prompt = buildPrompt(sessions);
     let fullText = '';
-    let actualModel = GEMINI_CASCADE[0];
+    let actualModel = model || 'unknown';
     try {
         const stream = provider === 'gemini' ? streamGeminiCascade(prompt)
             : provider === 'ollama' ? streamOllama(model!, prompt)
@@ -394,7 +411,7 @@ Provide a concise analysis (under 250 words) covering:
 Format using Markdown with bold headers.`;
 
     let fullText = '';
-    let actualModel = GEMINI_CASCADE[0];
+    let actualModel = model || 'unknown';
     try {
         const stream = provider === 'gemini' ? streamGeminiCascade(prompt)
             : provider === 'ollama' ? streamOllama(model!, prompt)
