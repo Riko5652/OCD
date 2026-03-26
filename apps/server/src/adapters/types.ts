@@ -30,7 +30,7 @@ export const UnifiedSessionSchema = z.object({
     cache_hit_pct: z.number().optional(),
     avg_latency_ms: z.number().optional(),
     top_tools: z.array(z.tuple([z.string(), z.number()])).optional(), // [toolName, count]
-    raw: z.record(z.any()).optional(),
+    raw: z.record(z.string(), z.any()).optional(),
 
     // Custom metrics for agentic workflow tracking
     quality_score: z.number().optional(),
