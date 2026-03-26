@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useApi } from '../hooks/useApi';
-import { Shield, Plus, ParkingCircle, CheckCircle, Pause, Play, ChevronRight, Sparkles, Trash2, Loader2 } from 'lucide-react';
+import { Shield, Plus, ParkingCircle, CheckCircle, Pause, Play, Sparkles, Loader2 } from 'lucide-react';
 
 interface OcdTask {
     id: number;
