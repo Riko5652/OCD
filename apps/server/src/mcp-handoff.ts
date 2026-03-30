@@ -18,6 +18,17 @@ import { listTemplates } from './engine/audit-templates.js';
 
 initDb();
 
+// Project-awareness: when OCD_PROJECT is set, tools filter results to that project.
+// Set via .mcp.json env or CLI: OCD_PROJECT=pm-dashboard
+const ACTIVE_PROJECT = process.env.OCD_PROJECT || null;
+
+/** Build a SQL WHERE clause fragment that filters sessions to the active project (if set). */
+function projectFilter(alias = ''): { clause: string; params: string[] } {
+    if (!ACTIVE_PROJECT) return { clause: '', params: [] };
+    const col = alias ? `${alias}.raw_data` : 'raw_data';
+    return { clause: ` AND ${col} LIKE ? ESCAPE '\\'`, params: [`%"project":"${escapeLike(ACTIVE_PROJECT)}"%`] };
+}
+
 const server = new McpServer({
     name: 'AI Productivity Engine',
     version: '5.4.0',
@@ -255,36 +266,87 @@ server.tool(
     'Get a quick efficiency snapshot of your AI coding productivity.',
     {},
     async () => {
-        const overview = computeOverview();
-        const costs = computeCostAnalysis();
-        const g = overview.global as any;
+        const db = getDb();
+        const pf = projectFilter();
+        const scope = ACTIVE_PROJECT ? ` [project: ${ACTIVE_PROJECT}]` : '';
 
-        let response = 'Efficiency Snapshot:\n';
+        const g = db.prepare(`
+            SELECT COUNT(*) as total_sessions, SUM(total_turns) as total_turns,
+                SUM(total_input_tokens) as total_input, SUM(total_output_tokens) as total_output,
+                SUM(total_cache_read) as total_cache, AVG(cache_hit_pct) as avg_cache_hit,
+                AVG(quality_score) as avg_quality, SUM(code_lines_added) as total_lines_added,
+                SUM(files_touched) as total_files_touched
+            FROM sessions WHERE 1=1${pf.clause}
+        `).get(...pf.params) as any;
+
+        const toolStats = db.prepare(`
+            SELECT tool_id, COUNT(*) as sessions FROM sessions WHERE 1=1${pf.clause} GROUP BY tool_id
+        `).all(...pf.params) as any[];
+
+        // Cost analysis with project filter
+        const byModel = db.prepare(`
+            SELECT primary_model as model, SUM(total_input_tokens) as input_tokens,
+                SUM(total_output_tokens) as output_tokens, SUM(total_cache_read) as cache_read,
+                COUNT(*) as sessions
+            FROM sessions WHERE primary_model IS NOT NULL${pf.clause}
+            GROUP BY primary_model ORDER BY output_tokens DESC
+        `).all(...pf.params) as any[];
+
+        const grouped: Record<string, any> = {};
+        for (const m of byModel) {
+            const canonical = normalizeModel(m.model);
+            if (!grouped[canonical]) grouped[canonical] = { model: canonical, input: 0, output: 0, cache: 0, sessions: 0 };
+            grouped[canonical].input += m.input_tokens || 0;
+            grouped[canonical].output += m.output_tokens || 0;
+            grouped[canonical].cache += m.cache_read || 0;
+            grouped[canonical].sessions += m.sessions;
+        }
+        const costs = Object.values(grouped).map((m: any) => {
+            const c = estimateModelCost(m.model, m.input, m.output, m.cache);
+            return { ...m, totalCost: c.totalCost, cacheSavings: c.cacheSavings };
+        }).sort((a: any, b: any) => b.totalCost - a.totalCost);
+        const totalCost = costs.reduce((s: number, c: any) => s + c.totalCost, 0);
+        const totalSavings = costs.reduce((s: number, c: any) => s + c.cacheSavings, 0);
+
+        let response = `Efficiency Snapshot${scope}:\n`;
         response += `  Sessions: ${g.total_sessions} | Turns: ${g.total_turns}\n`;
         response += `  Output Tokens: ${g.total_output} | Cache Hit: ${(g.avg_cache_hit || 0).toFixed(1)}%\n`;
         response += `  Lines Generated: ${g.total_lines_added} | Files Touched: ${g.total_files_touched}\n`;
         response += `  Avg Quality: ${(g.avg_quality || 0).toFixed(0)}\n`;
-        response += `  Estimated Cost: $${costs.totalCost.toFixed(2)} | Cache Savings: $${costs.totalSavings.toFixed(2)}\n`;
-        response += `\nTools: ${overview.tools.map((t: any) => `${t.tool_id}(${t.sessions})`).join(', ')}\n`;
+        response += `  Estimated Cost: $${totalCost.toFixed(2)} | Cache Savings: $${totalSavings.toFixed(2)}\n`;
+        response += `\nTools: ${toolStats.map((t: any) => `${t.tool_id}(${t.sessions})`).join(', ')}\n`;
 
-        // Top spenders by model (normalized)
-        if (costs.costs.length > 0) {
+        if (costs.length > 0) {
             response += '\nTop Spenders (by model):\n';
-            const topModels = costs.costs.slice(0, 5);
-            for (const m of topModels) {
-                const pct = costs.totalCost > 0 ? ((m.totalCost / costs.totalCost) * 100).toFixed(1) : '0';
+            for (const m of costs.slice(0, 5)) {
+                const pct = totalCost > 0 ? ((m.totalCost / totalCost) * 100).toFixed(1) : '0';
                 response += `  ${m.model}: $${m.totalCost.toFixed(2)} (${pct}%) — ${m.sessions} sessions\n`;
             }
         }
 
-        // Last 7 days daily spend
-        if (costs.daily && costs.daily.length > 0) {
-            const last7 = costs.daily.slice(-7);
+        // Daily spend (last 7 days)
+        const dailyRaw = db.prepare(`
+            SELECT date(started_at / 1000, 'unixepoch') as date, primary_model as model,
+                SUM(total_input_tokens) as input_tokens, SUM(total_output_tokens) as output_tokens,
+                SUM(total_cache_read) as cache_read
+            FROM sessions WHERE started_at > ?${pf.clause}
+            GROUP BY date, primary_model ORDER BY date
+        `).all(Date.now() - 7 * 86400000, ...pf.params) as any[];
+
+        if (dailyRaw.length > 0) {
+            const dailyCosts: Record<string, { cost: number; models: Record<string, number> }> = {};
+            for (const row of dailyRaw) {
+                if (!dailyCosts[row.date]) dailyCosts[row.date] = { cost: 0, models: {} };
+                const canonical = normalizeModel(row.model);
+                const c = estimateModelCost(canonical, row.input_tokens || 0, row.output_tokens || 0, row.cache_read || 0);
+                dailyCosts[row.date].cost += c.totalCost;
+                dailyCosts[row.date].models[canonical] = (dailyCosts[row.date].models[canonical] || 0) + c.totalCost;
+            }
             response += '\nDaily Spend (last 7 days):\n';
-            for (const d of last7) {
-                const topModel = Object.entries(d.models || {}).sort((a: any, b: any) => b[1] - a[1])[0];
-                const topStr = topModel ? ` (top: ${topModel[0]} $${(topModel[1] as number).toFixed(2)})` : '';
-                response += `  ${d.date}: $${d.cost.toFixed(2)}${topStr}\n`;
+            for (const [date, d] of Object.entries(dailyCosts)) {
+                const topModel = Object.entries(d.models).sort((a, b) => b[1] - a[1])[0];
+                const topStr = topModel ? ` (top: ${topModel[0]} $${topModel[1].toFixed(2)})` : '';
+                response += `  ${date}: $${d.cost.toFixed(2)}${topStr}\n`;
             }
         }
 
@@ -335,14 +397,15 @@ server.tool(
     { models: z.array(z.string()).optional().describe('Specific models to compare (default: all)') },
     async ({ models }) => {
         const db = getDb();
+        const pf = projectFilter();
         const rows = db.prepare(`
             SELECT primary_model as model, COUNT(*) as sessions, AVG(quality_score) as avg_quality,
                 AVG(agentic_score) as avg_agentic,
                 SUM(total_input_tokens) as total_input, SUM(total_output_tokens) as total_output,
                 SUM(total_cache_read) as total_cache, AVG(cache_hit_pct) as avg_cache
-            FROM sessions WHERE primary_model IS NOT NULL
+            FROM sessions WHERE primary_model IS NOT NULL${pf.clause}
             GROUP BY primary_model
-        `).all() as any[];
+        `).all(...pf.params) as any[];
 
         // Aggregate by normalized model name
         const grouped: Record<string, any> = {};
