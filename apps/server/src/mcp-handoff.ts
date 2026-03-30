@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { initDb, getDb, escapeLike } from './db/index.js';
 import { VectorService, getEmbeddingStatus } from './lib/vector-store.js';
 import { computeOverview, computeCostAnalysis, computePersonalInsights } from './engine/analytics.js';
+import { normalizeModel, estimateCost as estimateModelCost } from './engine/model-normalizer.js';
 import { getAgenticLeaderboard } from './engine/agentic-scorer.js';
 import { getNegativeConstraints } from './engine/anti-pattern-graph.js';
 import { makeArbitrageDecision, getArbitrageSummary } from './engine/token-arbiter.js';
@@ -12,6 +13,8 @@ import { submitTrace } from './engine/ide-interceptor.js';
 import { computeEffectSizes, getAttributionReport } from './engine/prompt-coach.js';
 import { computeTokenBudget } from './engine/token-budget.js';
 import { getSessionHealthCheck } from './engine/session-coach.js';
+import { runTraceAudit, getAuditHistory } from './engine/trace-auditor.js';
+import { listTemplates } from './engine/audit-templates.js';
 
 initDb();
 
@@ -263,6 +266,28 @@ server.tool(
         response += `  Avg Quality: ${(g.avg_quality || 0).toFixed(0)}\n`;
         response += `  Estimated Cost: $${costs.totalCost.toFixed(2)} | Cache Savings: $${costs.totalSavings.toFixed(2)}\n`;
         response += `\nTools: ${overview.tools.map((t: any) => `${t.tool_id}(${t.sessions})`).join(', ')}\n`;
+
+        // Top spenders by model (normalized)
+        if (costs.costs.length > 0) {
+            response += '\nTop Spenders (by model):\n';
+            const topModels = costs.costs.slice(0, 5);
+            for (const m of topModels) {
+                const pct = costs.totalCost > 0 ? ((m.totalCost / costs.totalCost) * 100).toFixed(1) : '0';
+                response += `  ${m.model}: $${m.totalCost.toFixed(2)} (${pct}%) — ${m.sessions} sessions\n`;
+            }
+        }
+
+        // Last 7 days daily spend
+        if (costs.daily && costs.daily.length > 0) {
+            const last7 = costs.daily.slice(-7);
+            response += '\nDaily Spend (last 7 days):\n';
+            for (const d of last7) {
+                const topModel = Object.entries(d.models || {}).sort((a: any, b: any) => b[1] - a[1])[0];
+                const topStr = topModel ? ` (top: ${topModel[0]} $${(topModel[1] as number).toFixed(2)})` : '';
+                response += `  ${d.date}: $${d.cost.toFixed(2)}${topStr}\n`;
+            }
+        }
+
         return { content: [{ type: 'text' as const, text: response }] };
     }
 );
@@ -306,25 +331,57 @@ server.tool(
 // ---- Tool 8: get_model_comparison ----
 server.tool(
     'get_model_comparison',
-    'Compare AI model performance across your sessions.',
+    'Compare AI model performance and cost across your sessions. Models are normalized (e.g., kimi-k2.5 variants are merged).',
     { models: z.array(z.string()).optional().describe('Specific models to compare (default: all)') },
     async ({ models }) => {
         const db = getDb();
-        let sql = `SELECT primary_model as model, COUNT(*) as sessions, AVG(quality_score) as avg_quality,
-            AVG(agentic_score) as avg_agentic, SUM(total_output_tokens) as total_output,
-            AVG(cache_hit_pct) as avg_cache FROM sessions WHERE primary_model IS NOT NULL`;
-        const params: any[] = [];
-        if (models?.length) {
-            sql += ` AND primary_model IN (${models.map(() => '?').join(',')})`;
-            params.push(...models);
-        }
-        sql += ' GROUP BY primary_model ORDER BY avg_quality DESC';
-        const rows = db.prepare(sql).all(...params) as any[];
+        const rows = db.prepare(`
+            SELECT primary_model as model, COUNT(*) as sessions, AVG(quality_score) as avg_quality,
+                AVG(agentic_score) as avg_agentic,
+                SUM(total_input_tokens) as total_input, SUM(total_output_tokens) as total_output,
+                SUM(total_cache_read) as total_cache, AVG(cache_hit_pct) as avg_cache
+            FROM sessions WHERE primary_model IS NOT NULL
+            GROUP BY primary_model
+        `).all() as any[];
 
-        let response = 'Model Comparison:\n\n';
+        // Aggregate by normalized model name
+        const grouped: Record<string, any> = {};
         for (const r of rows) {
-            response += `${r.model}:\n  Sessions: ${r.sessions} | Quality: ${(r.avg_quality || 0).toFixed(0)}`;
-            response += ` | Agentic: ${(r.avg_agentic || 0).toFixed(0)} | Cache: ${(r.avg_cache || 0).toFixed(0)}%\n`;
+            const canonical = normalizeModel(r.model);
+            if (models?.length && !models.some(m => canonical.includes(m.toLowerCase()))) continue;
+            if (!grouped[canonical]) {
+                grouped[canonical] = { model: canonical, sessions: 0, quality_sum: 0, agentic_sum: 0, input: 0, output: 0, cache: 0, cache_hit_sum: 0, cache_hit_count: 0 };
+            }
+            const g = grouped[canonical];
+            g.sessions += r.sessions;
+            g.quality_sum += (r.avg_quality || 0) * r.sessions;
+            g.agentic_sum += (r.avg_agentic || 0) * r.sessions;
+            g.input += r.total_input || 0;
+            g.output += r.total_output || 0;
+            g.cache += r.total_cache || 0;
+            if (r.avg_cache != null) { g.cache_hit_sum += r.avg_cache * r.sessions; g.cache_hit_count += r.sessions; }
+        }
+
+        const results = Object.values(grouped).map((g: any) => {
+            const cost = estimateModelCost(g.model, g.input, g.output, g.cache);
+            return {
+                model: g.model, sessions: g.sessions,
+                avg_quality: g.sessions > 0 ? g.quality_sum / g.sessions : 0,
+                avg_agentic: g.sessions > 0 ? g.agentic_sum / g.sessions : 0,
+                avg_cache: g.cache_hit_count > 0 ? g.cache_hit_sum / g.cache_hit_count : 0,
+                cost: cost.totalCost,
+                cost_per_session: g.sessions > 0 ? cost.totalCost / g.sessions : 0,
+            };
+        }).sort((a: any, b: any) => b.cost - a.cost);
+
+        const totalCost = results.reduce((s: number, r: any) => s + r.cost, 0);
+
+        let response = `Model Comparison (normalized, total: $${totalCost.toFixed(2)}):\n\n`;
+        for (const r of results) {
+            const pct = totalCost > 0 ? ((r.cost / totalCost) * 100).toFixed(1) : '0';
+            response += `${r.model}:\n`;
+            response += `  Sessions: ${r.sessions} | Quality: ${r.avg_quality.toFixed(0)} | Agentic: ${r.avg_agentic.toFixed(0)} | Cache: ${r.avg_cache.toFixed(0)}%\n`;
+            response += `  Cost: $${r.cost.toFixed(2)} (${pct}%) | $/session: $${r.cost_per_session.toFixed(2)}\n`;
         }
         return { content: [{ type: 'text' as const, text: response }] };
     }
@@ -800,6 +857,85 @@ server.tool(
         }
 
         return { content: [{ type: 'text' as const, text: 'Unknown action.' }], isError: true };
+    }
+);
+
+// ---- Tool 22: run_trace_audit ----
+server.tool(
+    'run_trace_audit',
+    'Run a Trace-to-Evidence audit: accepts a question (e.g. "Why is quality misreported?"), gathers evidence from code grep, session memory, anti-patterns, config, and handoff notes, then returns a structured report with verified paths, broken links, missing evidence, and degraded warnings. Results are persisted for cross-session recall.',
+    {
+        question: z.string().describe('The audit question, e.g. "Why is Antigravity quality misreported?" or "Where does the MAS seed data flow?"'),
+        template: z.string().optional().describe('Template key: mapping_validation, ingestion_throttle, fallback_behavior (or omit for freeform)'),
+        project_path: z.string().optional().describe('Project root to grep (defaults to cwd)'),
+        scope_globs: z.array(z.string()).optional().describe('File patterns to limit search scope, e.g. ["src/services/**/*.ts"]'),
+    },
+    async ({ question, template, project_path, scope_globs }) => {
+        try {
+            const result = await runTraceAudit({ question, template, project_path, scope_globs });
+
+            let response = result.report;
+            response += `\n**Audit ID**: ${result.id} | **Duration**: ${result.duration_ms}ms | **Status**: ${result.status}`;
+
+            return { content: [{ type: 'text' as const, text: response }] };
+        } catch (e: any) {
+            return { content: [{ type: 'text' as const, text: 'Audit error: ' + e.message }], isError: true };
+        }
+    }
+);
+
+// ---- Tool 23: get_audit_templates ----
+server.tool(
+    'get_audit_templates',
+    'List available audit templates for the Trace-to-Evidence system. Templates define evidence-gathering strategies for common audit patterns (mapping validation, ingestion throttling, fallback behavior).',
+    {
+        include_custom: z.boolean().optional().describe('Include user-created templates (default: true)'),
+    },
+    async ({ include_custom = true }) => {
+        const templates = listTemplates(include_custom);
+        if (!templates.length) {
+            return { content: [{ type: 'text' as const, text: 'No audit templates found.' }] };
+        }
+
+        let response = 'Available Audit Templates:\n\n';
+        for (const t of templates) {
+            response += `**${t.key}** — ${t.name}${t.built_in ? ' (built-in)' : ''}\n`;
+            response += `  ${t.description}\n`;
+            response += `  Sources: ${t.evidence_sources.join(', ')}\n`;
+            response += `  Patterns: ${t.grep_patterns.slice(0, 5).join(', ')}${t.grep_patterns.length > 5 ? '...' : ''}\n`;
+            response += `  Globs: ${t.file_globs.join(', ')}\n\n`;
+        }
+
+        return { content: [{ type: 'text' as const, text: response }] };
+    }
+);
+
+// ---- Tool 24: get_audit_history ----
+server.tool(
+    'get_audit_history',
+    'Retrieve past Trace-to-Evidence audit runs and their results. Useful for tracking recurring issues, comparing audit outcomes across sessions, and avoiding re-investigating solved problems.',
+    {
+        question_search: z.string().optional().describe('Search audit questions containing this text'),
+        limit: z.number().optional().describe('Max results (default: 10)'),
+        status_filter: z.enum(['verified', 'broken', 'all']).optional().describe('Filter: "verified" (had verified evidence), "broken" (had broken/missing evidence), "all" (default)'),
+    },
+    async ({ question_search, limit = 10, status_filter = 'all' }) => {
+        const history = getAuditHistory({ question_search, limit, status_filter });
+        if (!history.length) {
+            return { content: [{ type: 'text' as const, text: 'No audit history found.' }] };
+        }
+
+        let response = `Audit History (${history.length} runs):\n\n`;
+        for (const h of history) {
+            const date = new Date(h.created_at).toISOString().split('T')[0];
+            response += `**${h.id}** (${date}) — ${h.status}\n`;
+            response += `  Q: "${h.question}"\n`;
+            if (h.template_key) response += `  Template: ${h.template_key}\n`;
+            response += `  Evidence: ${h.verified_count} verified, ${h.broken_count} broken, ${h.missing_count} missing, ${h.suggestions_count} degraded\n`;
+            response += `  Duration: ${h.duration_ms}ms\n\n`;
+        }
+
+        return { content: [{ type: 'text' as const, text: response }] };
     }
 );
 

@@ -382,12 +382,20 @@ function rebuildProjectIndex() {
 
     for (const s of sessions) {
         let project = 'Unknown';
-        if (s.title) project = s.title.split('/')[0].split(':')[0].trim().slice(0, 40);
-        else {
-            try {
-                const raw = JSON.parse(s.raw_data || '{}');
-                project = raw.workspace || raw.project || raw.repo || 'Unknown';
-            } catch { /* */ }
+        // Priority: raw_data.project (set by adapters) > title-based inference
+        try {
+            const raw = JSON.parse(s.raw_data || '{}');
+            if (raw.project) project = raw.project;
+            else if (raw.workspace) project = raw.workspace;
+            else if (raw.repo) project = raw.repo;
+        } catch { /* */ }
+        // Fall back to title only if raw didn't provide a project
+        if (project === 'Unknown' && s.title) {
+            // Avoid splitting user messages as project names for Cursor
+            // Only use title for Claude Code sessions where title is a real project path
+            if (s.tool_id === 'claude-code') {
+                project = s.title.split('/')[0].split(':')[0].trim().slice(0, 40);
+            }
         }
         if (!project || project.length < 2) project = s.tool_id;
 
