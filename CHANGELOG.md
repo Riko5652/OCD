@@ -4,6 +4,52 @@ All notable changes to OCD (Omni Coder Dashboard) are documented here.
 
 ---
 
+## [5.5.0] — 2026-03-30
+
+### Added — Trace Auditing, Antigravity Intelligence & Cost Visibility
+
+#### **Trace-to-Evidence Audit Bot** (`engine/trace-auditor.ts`, `engine/audit-templates.ts`, `mcp-handoff.ts`)
+- Accept freeform questions like "Is rate limiting actually enforced?" and produce structured audit reports
+- Parallel evidence gathering from 5 sources: code grep (via ripgrep), session memory (vector search), anti-patterns, config files, handoff notes
+- Structured verdicts per evidence item: `verified` / `broken` / `missing` / `degraded` with confidence scores
+- Built-in audit templates: `mapping_validation`, `ingestion_throttle`, `fallback_behavior`
+- Entity extraction from natural language questions (quoted strings, file refs, identifiers)
+- New DB tables: `audit_runs`, `audit_evidence`, `audit_templates`
+- 3 new MCP tools: **`run_trace_audit`**, **`get_audit_history`**, **`list_audit_templates`**
+
+#### **Antigravity Deep Intelligence** (`adapters/antigravity.ts`, `pages/Workspaces.tsx`)
+- Resolved artifact versioning with line-level version deltas
+- Intent classification per turn: `plan` / `implement` / `verify` / `rollback` / `investigate`
+- File impact analysis by extension and module
+- Protobuf `.pb` conversation reconstruction with gzip/inflate decompression
+- New dashboard panel: "Antigravity Intelligence" with version delta, intent distribution bars, and file impact grid
+- Color-coded intent badges (plan=cyan, implement=green, verify=blue, rollback=amber, investigate=purple)
+
+#### **Cost Visibility** (`engine/model-normalizer.ts`, `engine/analytics.ts`, `mcp-handoff.ts`)
+- Model normalizer: canonical model family mapping across tools (e.g., `gpt-4o-2024-05-13` → `gpt-4o`)
+- Per-model and per-day cost estimation with token pricing tables
+- Cost alerting thresholds
+- Cursor token estimation with cache savings calculation
+- Billing actuals from Cursor CSV import with `scripts/import-cursor-billing.js`
+- MCP tools prefer real billing data over estimates when available
+
+#### **Project-Aware MCP Filtering** (`mcp-handoff.ts`, `env.ts`)
+- `OCD_PROJECT` env var scopes all MCP queries to a specific project
+- Session, analytics, and intelligence endpoints filter by project context
+
+### Security
+- Patched 8 Dependabot vulnerabilities: `fastify` 5.8.2→5.8.4, `path-to-regexp` 8.3.0→8.4.0, `brace-expansion` 5.0.4→5.0.5, `picomatch` 4.0.3→4.0.4
+- All audit grep uses `execFileSync` (no shell) + `--fixed-strings` to prevent injection
+- Parameterized SQL throughout audit engine
+- `clampInt` bounds on all user-supplied query limits
+
+### Changed
+- MCP server expanded from **18 tools → 21 tools**
+- DB schema updated with 3 new tables: `audit_runs`, `audit_evidence`, `audit_templates`
+- Version bumped to 5.5.0 across all packages
+
+---
+
 ## [5.4.0] — 2026-03-22
 
 ### Added — True Semantic Memory & Developer Experience
