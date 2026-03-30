@@ -1,19 +1,8 @@
 // Savings report engine — quantifies cost, time, and efficiency gains
 import { getDb } from '../db/index.js';
-
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-    'claude-opus-4-6': { input: 15.00, output: 75.00 },
-    'claude-sonnet-4-6': { input: 3.00, output: 15.00 },
-    'claude-haiku-4-5-20251001': { input: 0.80, output: 4.00 },
-    'gpt-5.1-codex-max': { input: 2.50, output: 10.00 },
-    '_default': { input: 1.00, output: 4.00 },
-};
+import { pricingFor } from './model-normalizer.js';
 
 const MINUTES_PER_TURN = 2;
-
-function pricingFor(model: string | null) {
-    return MODEL_PRICING[model || ''] || MODEL_PRICING['_default'];
-}
 
 function median(values: number[]): number {
     if (!values.length) return 0;

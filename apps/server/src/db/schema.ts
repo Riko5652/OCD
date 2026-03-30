@@ -311,6 +311,53 @@ export function migrate(db: Database) {
       promoted INTEGER DEFAULT 0 CHECK (promoted IN (0, 1))
     );
     CREATE INDEX IF NOT EXISTS idx_ocd_parking_promoted ON ocd_parking_lot(promoted);
+
+    -- Feature: Trace-to-Evidence Audit Bot
+    -- Runs structured audit pipelines to trace questions through code, sessions, and config
+    CREATE TABLE IF NOT EXISTS audit_runs (
+      id TEXT PRIMARY KEY,
+      question TEXT NOT NULL,
+      template_key TEXT,
+      project TEXT,
+      project_path TEXT,
+      status TEXT NOT NULL DEFAULT 'running' CHECK (status IN ('running', 'completed', 'failed')),
+      evidence_summary TEXT,
+      verified_count INTEGER DEFAULT 0,
+      broken_count INTEGER DEFAULT 0,
+      missing_count INTEGER DEFAULT 0,
+      suggestions_count INTEGER DEFAULT 0,
+      duration_ms INTEGER,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_runs_created ON audit_runs(created_at);
+    CREATE INDEX IF NOT EXISTS idx_audit_runs_status ON audit_runs(status);
+
+    CREATE TABLE IF NOT EXISTS audit_evidence (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      audit_id TEXT NOT NULL REFERENCES audit_runs(id),
+      evidence_type TEXT NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('verified', 'broken', 'missing', 'degraded')),
+      source TEXT NOT NULL,
+      description TEXT NOT NULL,
+      file_path TEXT,
+      line_number INTEGER,
+      raw_content TEXT,
+      confidence REAL DEFAULT 1.0,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_audit_evidence_audit ON audit_evidence(audit_id);
+    CREATE INDEX IF NOT EXISTS idx_audit_evidence_status ON audit_evidence(status);
+
+    CREATE TABLE IF NOT EXISTS audit_templates (
+      key TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      description TEXT,
+      evidence_sources TEXT NOT NULL,
+      grep_patterns TEXT,
+      file_globs TEXT,
+      built_in INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
   `);
 
     // Seed tools
@@ -327,5 +374,41 @@ export function migrate(db: Database) {
         upsert.run('copilot', 'GitHub Copilot');
         upsert.run('continue', 'Continue.dev');
         upsert.run('manual-import', 'Imported Sessions');
+    })();
+
+    // Seed built-in audit templates
+    const upsertTemplate = db.prepare(
+        `INSERT OR REPLACE INTO audit_templates (key, name, description, evidence_sources, grep_patterns, file_globs, built_in, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, 1, ?)`
+    );
+    const now = Date.now();
+    db.transaction(() => {
+        upsertTemplate.run(
+            'mapping_validation',
+            'Mapping Validation',
+            'Trace a field or value through DB tables, seed scripts, service layers, and production config to verify end-to-end correctness',
+            JSON.stringify(['code_grep', 'session_search', 'anti_patterns', 'config_check']),
+            JSON.stringify(['mapping', 'seed', 'migration', 'INSERT INTO', 'createPostgresDB', 'schema']),
+            JSON.stringify(['src/services/**/*.ts', 'scripts/seed*.ts', 'migrations/**/*.sql', 'src/routes/**/*.ts']),
+            now,
+        );
+        upsertTemplate.run(
+            'ingestion_throttle',
+            'Ingestion Throttle Audit',
+            'Audit sync source config, error rates, throttle logic, and log volume patterns for data ingestion pipelines',
+            JSON.stringify(['code_grep', 'session_search', 'anti_patterns']),
+            JSON.stringify(['sync', 'throttle', 'rate.limit', 'worker', 'queue', 'SYNC_SOURCES', 'batch']),
+            JSON.stringify(['src/services/**/*.ts', 'src/workers/**/*.ts', 'src/lib/**/*.ts', 'docker-compose*.yml']),
+            now,
+        );
+        upsertTemplate.run(
+            'fallback_behavior',
+            'Fallback Behavior Audit',
+            'Trace provider chains, circuit breaker state, model availability, and routing decisions for AI/service fallback paths',
+            JSON.stringify(['code_grep', 'session_search', 'anti_patterns', 'config_check']),
+            JSON.stringify(['fallback', 'circuit.breaker', 'provider', 'failover', 'retry', 'callAI', 'FALLBACK']),
+            JSON.stringify(['src/services/ai-provider*.ts', 'src/services/**/*.ts', 'src/lib/**/*.ts', '.env*']),
+            now,
+        );
     })();
 }

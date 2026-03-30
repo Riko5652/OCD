@@ -73,7 +73,7 @@ export default async function sessionRoutes(fastify: FastifyInstance, opts: { ca
         const params: any[] = [];
         if (tool) { sql += ' WHERE tool_id = ?'; params.push(tool); }
         sql += ' ORDER BY started_at DESC LIMIT ?';
-        params.push(clampInt(limit, 1, 1000, 100));
+        params.push(clampInt(limit, 1, 10000, 1000));
         return db.prepare(sql).all(...params);
     });
 

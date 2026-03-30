@@ -1,4 +1,5 @@
 import { getDb } from '../db/index.js';
+import { estimateCost, normalizeModel } from './model-normalizer.js';
 
 interface PatternResult {
     severity: string; title: string; description: string;
@@ -107,6 +108,103 @@ const PATTERNS: Pattern[] = [
                 severity: 'warning', title: 'AI authorship declining',
                 description: `Recent AI authorship ${recentAvg.toFixed(0)}% vs earlier ${olderAvg.toFixed(0)}%.`,
                 metric_value: recentAvg, threshold: olderAvg - 15
+            };
+            return null;
+        },
+    },
+    // ---- Cost alerting patterns ----
+    {
+        id: 'daily-spend-spike', category: 'cost',
+        checkCohort: sessions => {
+            // Check if any single day in last 7 days exceeds $20
+            const sevenDaysAgo = Date.now() - 7 * 86400000;
+            const recent = sessions.filter((s: any) => s.started_at > sevenDaysAgo);
+            if (recent.length < 3) return null;
+
+            const dailyCosts: Record<string, number> = {};
+            for (const s of recent) {
+                const date = new Date(s.started_at).toISOString().slice(0, 10);
+                const cost = estimateCost(s.primary_model, s.total_input_tokens || 0, s.total_output_tokens || 0, s.total_cache_read || 0);
+                dailyCosts[date] = (dailyCosts[date] || 0) + cost.totalCost;
+            }
+
+            const maxDay = Object.entries(dailyCosts).sort((a, b) => b[1] - a[1])[0];
+            if (maxDay && maxDay[1] > 20) return {
+                severity: maxDay[1] > 50 ? 'critical' : 'warning',
+                title: `High daily spend: $${maxDay[1].toFixed(2)} on ${maxDay[0]}`,
+                description: `Single-day AI spend hit $${maxDay[1].toFixed(2)} on ${maxDay[0]}. Review model selection — cheaper models may produce equivalent quality for this task type.`,
+                metric_value: maxDay[1], threshold: 20,
+            };
+            return null;
+        },
+    },
+    {
+        id: 'model-concentration', category: 'cost',
+        checkCohort: sessions => {
+            // Alert if one model accounts for >40% of total cost
+            if (sessions.length < 10) return null;
+            const modelCosts: Record<string, number> = {};
+            let totalCost = 0;
+            for (const s of sessions) {
+                const canonical = normalizeModel(s.primary_model);
+                const cost = estimateCost(canonical, s.total_input_tokens || 0, s.total_output_tokens || 0, s.total_cache_read || 0);
+                modelCosts[canonical] = (modelCosts[canonical] || 0) + cost.totalCost;
+                totalCost += cost.totalCost;
+            }
+            if (totalCost < 10) return null; // Not enough spend to matter
+
+            const top = Object.entries(modelCosts).sort((a, b) => b[1] - a[1])[0];
+            if (top) {
+                const pct = (top[1] / totalCost) * 100;
+                if (pct > 40) return {
+                    severity: pct > 60 ? 'warning' : 'info',
+                    title: `${top[0]} is ${pct.toFixed(0)}% of total spend ($${top[1].toFixed(2)})`,
+                    description: `${top[0]} accounts for ${pct.toFixed(0)}% of your $${totalCost.toFixed(2)} total AI spend. Consider routing simpler tasks to cheaper models.`,
+                    metric_value: pct, threshold: 40,
+                };
+            }
+            return null;
+        },
+    },
+    {
+        id: 'expensive-low-quality', category: 'cost',
+        check: session => {
+            // Flag sessions that cost a lot but scored poorly
+            const cost = estimateCost(session.primary_model, session.total_input_tokens || 0, session.total_output_tokens || 0, session.total_cache_read || 0);
+            if (cost.totalCost < 2) return null; // Ignore cheap sessions
+            const quality = session.quality_score || 0;
+            if (quality > 0 && quality < 200 && cost.totalCost > 5) return {
+                severity: 'warning',
+                title: `$${cost.totalCost.toFixed(2)} session with low quality (${quality.toFixed(0)})`,
+                description: `Session "${session.title || session.id}" cost ~$${cost.totalCost.toFixed(2)} using ${normalizeModel(session.primary_model)} but scored only ${quality.toFixed(0)} quality. Review if a cheaper model could handle this task type.`,
+                metric_value: cost.totalCost, threshold: 5,
+            };
+            return null;
+        },
+    },
+    {
+        id: 'weekly-spend-trend', category: 'cost',
+        checkCohort: sessions => {
+            // Compare last 7 days vs prior 7 days
+            const now = Date.now();
+            const thisWeek = sessions.filter((s: any) => s.started_at > now - 7 * 86400000);
+            const lastWeek = sessions.filter((s: any) => s.started_at > now - 14 * 86400000 && s.started_at <= now - 7 * 86400000);
+            if (thisWeek.length < 3 || lastWeek.length < 3) return null;
+
+            const costOf = (arr: any[]) => arr.reduce((sum: number, s: any) => {
+                return sum + estimateCost(s.primary_model, s.total_input_tokens || 0, s.total_output_tokens || 0, s.total_cache_read || 0).totalCost;
+            }, 0);
+
+            const thisWeekCost = costOf(thisWeek);
+            const lastWeekCost = costOf(lastWeek);
+            if (lastWeekCost < 5) return null; // Not enough baseline
+
+            const increase = ((thisWeekCost - lastWeekCost) / lastWeekCost) * 100;
+            if (increase > 50) return {
+                severity: increase > 100 ? 'critical' : 'warning',
+                title: `Weekly spend up ${increase.toFixed(0)}%: $${thisWeekCost.toFixed(2)} vs $${lastWeekCost.toFixed(2)}`,
+                description: `This week's AI spend ($${thisWeekCost.toFixed(2)}) is ${increase.toFixed(0)}% higher than last week ($${lastWeekCost.toFixed(2)}). Check if new models or increased usage are driving the spike.`,
+                metric_value: increase, threshold: 50,
             };
             return null;
         },

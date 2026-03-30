@@ -81,15 +81,20 @@ export class CursorAdapter implements IAiAdapter {
                     let assistantTurns = 0;
                     const filePaths: string[] = [];
                     let firstUserText = '';
+                    let bubbleInputTokens = 0;
+                    let bubbleOutputTokens = 0;
+                    const modelsUsed = new Set<string>();
 
                     for (const h of headers) {
                         if (h.type === 1) {
                             userTurns++;
                             if (!firstUserText && h.text) firstUserText = extractLabel(h.text);
+                            // Estimate input tokens from user message text
+                            if (h.text) bubbleInputTokens += Math.round(h.text.length / 4);
                         }
                         if (h.type === 2) assistantTurns++;
 
-                        // Collect file paths from bubble for project inference
+                        // Collect file paths and token counts from bubble
                         if (h.bubbleId) {
                             try {
                                 const bRow = db.prepare('SELECT value FROM cursorDiskKV WHERE key = ?').get(`bubbleId:${composerId}:${h.bubbleId}`) as CursorStateDb | undefined;
@@ -102,13 +107,30 @@ export class CursorAdapter implements IAiAdapter {
                                         ...(bubble['composer-done'] || []).map((e: any) => e.filepath || e.path || '').filter(Boolean),
                                     ];
                                     filePaths.push(...bPaths);
+
+                                    // Aggregate token counts from bubbles
+                                    const tc = bubble.tokenCount || {};
+                                    const bInput = tc.inputTokens || bubble.inputTokenCount || bubble.promptTokens || 0;
+                                    const bOutput = tc.outputTokens || bubble.outputTokenCount || bubble.completionTokens ||
+                                        (bubble.text?.length ? Math.round(bubble.text.length / 4) : 0);
+                                    bubbleInputTokens += bInput;
+                                    bubbleOutputTokens += bOutput;
+
+                                    // Track model per bubble if available
+                                    if (bubble.modelSlug || bubble.model) modelsUsed.add(bubble.modelSlug || bubble.model);
                                 }
                             } catch { /* skip */ }
                         }
                     }
 
                     const model = data.modelSlug || data.model || data.modelConfig?.modelName || data.modelConfig?.modelSlug || 'unknown';
+                    modelsUsed.add(model);
                     const projectName = inferProjectFromPaths(filePaths);
+
+                    // Use session-level estimates if available, fall back to bubble aggregation,
+                    // then estimate from turn counts as last resort
+                    const inputTokens = data.estimatedInput || bubbleInputTokens || (userTurns * 2000);
+                    const outputTokens = data.estimatedOutput || bubbleOutputTokens || (assistantTurns * 1500);
 
                     const session: UnifiedSession = {
                         id: `cur-${composerId}`,
@@ -116,14 +138,14 @@ export class CursorAdapter implements IAiAdapter {
                         title: firstUserText || projectName || undefined,
                         started_at: data.createdAt || Date.now(),
                         total_turns: Math.max(userTurns + assistantTurns, 1),
-                        total_input_tokens: data.estimatedInput || 0,
-                        total_output_tokens: data.estimatedOutput || (assistantTurns * 800),
+                        total_input_tokens: inputTokens,
+                        total_output_tokens: outputTokens,
                         total_cache_read: 0,
                         total_cache_create: 0,
                         error_count: 0,
                         files_touched: filePaths.length,
                         primary_model: model,
-                        models_used: [model],
+                        models_used: [...modelsUsed],
                         code_lines_added: data.totalLinesAdded || 0,
                         code_lines_removed: data.totalLinesRemoved || 0,
                         raw: {

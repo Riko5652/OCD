@@ -1,24 +1,8 @@
 // Cross-tool analytics engine — KPIs, aggregation, comparisons
 import { getDb } from '../db/index.js';
+import { estimateCost, normalizeModel } from './model-normalizer.js';
 
-// Estimated pricing per 1M tokens (USD)
-const MODEL_PRICING: Record<string, { input: number; output: number }> = {
-    'claude-opus-4-6': { input: 15.00, output: 75.00 },
-    'claude-sonnet-4-6': { input: 3.00, output: 15.00 },
-    'claude-haiku-4-5-20251001': { input: 0.80, output: 4.00 },
-    'gpt-5.1-codex-max': { input: 2.50, output: 10.00 },
-    'auto': { input: 1.00, output: 4.00 },
-    'gemini': { input: 0.15, output: 0.60 },
-    '_default': { input: 1.00, output: 4.00 },
-};
-
-export function estimateCost(model: string | null, inputTokens: number, outputTokens: number, cacheReadTokens = 0) {
-    const pricing = MODEL_PRICING[model || ''] || MODEL_PRICING['_default'];
-    const inputCost = (inputTokens / 1_000_000) * pricing.input;
-    const outputCost = (outputTokens / 1_000_000) * pricing.output;
-    const cacheSavings = (cacheReadTokens / 1_000_000) * pricing.input * 0.9;
-    return { inputCost, outputCost, cacheSavings, totalCost: inputCost + outputCost };
-}
+export { estimateCost };
 
 export function computeOverview() {
     const db = getDb();
@@ -91,16 +75,50 @@ export function computeToolComparison() {
 
 export function computeModelUsage() {
     const db = getDb();
-    return db.prepare(`
+    const raw = db.prepare(`
         SELECT primary_model as model,
             COUNT(*) as sessions,
             SUM(total_turns) as total_turns,
+            SUM(total_input_tokens) as input_tokens,
             SUM(total_output_tokens) as output_tokens,
+            SUM(total_cache_read) as cache_read,
             AVG(quality_score) as avg_quality
         FROM sessions
         WHERE primary_model IS NOT NULL
         GROUP BY primary_model ORDER BY sessions DESC
-    `).all();
+    `).all() as any[];
+
+    // Aggregate by normalized model name
+    const grouped: Record<string, any> = {};
+    for (const r of raw) {
+        const canonical = normalizeModel(r.model);
+        if (!grouped[canonical]) {
+            grouped[canonical] = { model: canonical, sessions: 0, total_turns: 0, input_tokens: 0, output_tokens: 0, cache_read: 0, quality_sum: 0, raw_slugs: [] };
+        }
+        const g = grouped[canonical];
+        g.sessions += r.sessions;
+        g.total_turns += r.total_turns || 0;
+        g.input_tokens += r.input_tokens || 0;
+        g.output_tokens += r.output_tokens || 0;
+        g.cache_read += r.cache_read || 0;
+        g.quality_sum += (r.avg_quality || 0) * r.sessions;
+        g.raw_slugs.push(r.model);
+    }
+
+    return Object.values(grouped).map((g: any) => {
+        const cost = estimateCost(g.model, g.input_tokens, g.output_tokens, g.cache_read);
+        return {
+            model: g.model,
+            sessions: g.sessions,
+            total_turns: g.total_turns,
+            input_tokens: g.input_tokens,
+            output_tokens: g.output_tokens,
+            avg_quality: g.sessions > 0 ? g.quality_sum / g.sessions : 0,
+            estimated_cost: Math.round(cost.totalCost * 100) / 100,
+            cache_savings: Math.round(cost.cacheSavings * 100) / 100,
+            raw_slugs: g.raw_slugs,
+        };
+    }).sort((a: any, b: any) => b.estimated_cost - a.estimated_cost);
 }
 
 export function computeCodeGeneration() {
@@ -173,15 +191,58 @@ export function computeCostAnalysis() {
         GROUP BY primary_model ORDER BY output_tokens DESC
     `).all() as any[];
 
-    const costs = byModel.map(m => ({
+    // Aggregate by normalized model name for accurate cost
+    const grouped: Record<string, any> = {};
+    for (const m of byModel) {
+        const canonical = normalizeModel(m.model);
+        if (!grouped[canonical]) {
+            grouped[canonical] = { model: canonical, input_tokens: 0, output_tokens: 0, cache_read: 0, sessions: 0 };
+        }
+        grouped[canonical].input_tokens += m.input_tokens || 0;
+        grouped[canonical].output_tokens += m.output_tokens || 0;
+        grouped[canonical].cache_read += m.cache_read || 0;
+        grouped[canonical].sessions += m.sessions;
+    }
+
+    const costs = Object.values(grouped).map((m: any) => ({
         ...m,
         ...estimateCost(m.model, m.input_tokens, m.output_tokens, m.cache_read),
     }));
 
-    const totalCost = costs.reduce((s, c) => s + c.totalCost, 0);
-    const totalSavings = costs.reduce((s, c) => s + c.cacheSavings, 0);
+    costs.sort((a: any, b: any) => b.totalCost - a.totalCost);
+    const totalCost = costs.reduce((s: number, c: any) => s + c.totalCost, 0);
+    const totalSavings = costs.reduce((s: number, c: any) => s + c.cacheSavings, 0);
 
-    return { costs, totalCost: Math.round(totalCost * 100) / 100, totalSavings: Math.round(totalSavings * 100) / 100 };
+    // Daily cost breakdown (last 30 days)
+    const dailyRaw = db.prepare(`
+        SELECT date(started_at / 1000, 'unixepoch') as date,
+            primary_model as model,
+            SUM(total_input_tokens) as input_tokens,
+            SUM(total_output_tokens) as output_tokens,
+            SUM(total_cache_read) as cache_read
+        FROM sessions
+        WHERE started_at > ?
+        GROUP BY date, primary_model ORDER BY date
+    `).all(Date.now() - 30 * 86400000) as any[];
+
+    const dailyCosts: Record<string, { date: string; cost: number; models: Record<string, number> }> = {};
+    for (const row of dailyRaw) {
+        if (!dailyCosts[row.date]) dailyCosts[row.date] = { date: row.date, cost: 0, models: {} };
+        const canonical = normalizeModel(row.model);
+        const cost = estimateCost(canonical, row.input_tokens || 0, row.output_tokens || 0, row.cache_read || 0);
+        dailyCosts[row.date].cost += cost.totalCost;
+        dailyCosts[row.date].models[canonical] = (dailyCosts[row.date].models[canonical] || 0) + cost.totalCost;
+    }
+
+    return {
+        costs,
+        totalCost: Math.round(totalCost * 100) / 100,
+        totalSavings: Math.round(totalSavings * 100) / 100,
+        daily: Object.values(dailyCosts).map(d => ({
+            ...d,
+            cost: Math.round(d.cost * 100) / 100,
+        })),
+    };
 }
 
 export function computePersonalInsights() {
