@@ -63,6 +63,23 @@ function SessionDetailsDrawer({ sessionId }: { sessionId: string }) {
     const { data, loading } = useApi<any>(`/api/sessions/${sessionId}`);
     const [insightText, setInsightText] = useState('');
     const [isAnalyzing, setIsAnalyzing] = useState(false);
+    const getIntentStyle = (intent: string | null) => {
+        const key = (intent || '').toLowerCase();
+        if (key === 'plan') return { text: 'text-[#00f3ff]', bar: 'from-[#00f3ff]/70 to-[#00f3ff]/40' };
+        if (key === 'implement') return { text: 'text-[#39ff14]', bar: 'from-[#39ff14]/70 to-[#22c55e]/50' };
+        if (key === 'verify') return { text: 'text-[#60a5fa]', bar: 'from-[#60a5fa]/70 to-[#3b82f6]/50' };
+        if (key === 'rollback') return { text: 'text-[#f59e0b]', bar: 'from-[#f59e0b]/75 to-[#f97316]/55' };
+        if (key === 'investigate') return { text: 'text-[#a78bfa]', bar: 'from-[#a78bfa]/70 to-[#8b5cf6]/50' };
+        return { text: 'text-slate-400', bar: 'from-slate-500/60 to-slate-700/50' };
+    };
+    const sessionRaw = useMemo(() => {
+        const raw = data?.session?.raw_data;
+        if (!raw) return null;
+        if (typeof raw === 'string') {
+            try { return JSON.parse(raw); } catch { return null; }
+        }
+        return raw;
+    }, [data?.session?.raw_data]);
 
     const runAnalysis = () => {
         if (isAnalyzing || insightText) return;
@@ -102,6 +119,9 @@ function SessionDetailsDrawer({ sessionId }: { sessionId: string }) {
             <div className="space-y-4">
                 {data.turns.map((t: any, i: number) => {
                     const tools = typeof t.tools_used === 'string' ? JSON.parse(t.tools_used || '[]') : (t.tools_used || []);
+                    const intent = typeof t.stop_reason === 'string' && t.stop_reason.startsWith('intent:')
+                        ? t.stop_reason.replace('intent:', '')
+                        : null;
                     return (
                         <div key={i} className="flex flex-col md:flex-row md:items-start gap-4 p-4 rounded-xl bg-surface border border-slate-800/60 hover:border-brand/30 transition-all shadow-md group">
                             <div className="flex-shrink-0 w-16 text-[10px] text-slate-500 font-mono mt-1 group-hover:text-brand transition-colors">
@@ -135,6 +155,12 @@ function SessionDetailsDrawer({ sessionId }: { sessionId: string }) {
                                     })()}
                                     {/* Metrics row */}
                                     <div className="flex flex-wrap items-center gap-3 md:gap-5 text-[10px] uppercase tracking-wider font-bold">
+                                        {intent && (
+                                            <div className={`flex items-center gap-1.5 ${getIntentStyle(intent).text}`}>
+                                                <Brain className="w-3 h-3" />
+                                                {intent}
+                                            </div>
+                                        )}
                                         {t.input_tokens > 0 && (
                                             <div className="flex items-center gap-1.5 text-blue-400">
                                                 <div className="w-1.5 h-1.5 rounded-full bg-blue-400 shadow-[0_0_8px_rgba(96,165,250,0.6)]" />
@@ -214,6 +240,107 @@ function SessionDetailsDrawer({ sessionId }: { sessionId: string }) {
                         <div className="flex items-center gap-2">
                             <Activity className="w-3 h-3" />
                             Cache Success: <span className="text-emerald-400 font-mono font-bold">{Math.round(data.session.cache_hit_pct || 0)}%</span>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Antigravity Intelligence */}
+            {(sessionRaw?.delta_summary || sessionRaw?.file_impact || sessionRaw?.intents) && (
+                <div className="mt-8 pt-6 border-t border-slate-800/60">
+                    <h5 className="text-xs font-bold uppercase tracking-widest text-[#39ff14] flex items-center gap-2 mb-4">
+                        <Zap className="w-3.5 h-3.5" /> Antigravity Intelligence
+                    </h5>
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                        {/* Delta */}
+                        <div className="bg-[#050505] border border-slate-800 rounded-xl p-4">
+                            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-3">Version Delta</p>
+                            {sessionRaw?.delta_summary ? (
+                                <div className="space-y-2 text-xs">
+                                    <div className="flex items-center justify-between"><span className="text-slate-400">Pairs</span><span className="text-white font-mono">{sessionRaw.delta_summary.pairs || 0}</span></div>
+                                    <div className="flex items-center justify-between"><span className="text-slate-400">Added</span><span className="text-emerald-400 font-mono">+{sessionRaw.delta_summary.added || 0}</span></div>
+                                    <div className="flex items-center justify-between"><span className="text-slate-400">Removed</span><span className="text-rose-400 font-mono">-{sessionRaw.delta_summary.removed || 0}</span></div>
+                                    <div className="flex items-center justify-between"><span className="text-slate-400">Changed</span><span className="text-brand font-mono">{sessionRaw.delta_summary.changed || 0}</span></div>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-slate-600">No delta data available.</p>
+                            )}
+                        </div>
+
+                        {/* Intents */}
+                        <div className="bg-[#050505] border border-slate-800 rounded-xl p-4">
+                            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-3">Intent Distribution</p>
+                            {sessionRaw?.intents && Object.keys(sessionRaw.intents).length > 0 ? (
+                                <div className="space-y-2">
+                                    {(() => {
+                                        const rows = Object.entries(sessionRaw.intents)
+                                            .filter(([, count]: any) => (count || 0) > 0)
+                                            .sort((a: any, b: any) => (b[1] || 0) - (a[1] || 0))
+                                            .slice(0, 6);
+                                        const maxCount = rows.length > 0 ? Math.max(...rows.map(([, c]: any) => c || 0)) : 1;
+                                        return rows.map(([intent, count]: any) => (
+                                            <div key={intent} className="space-y-1">
+                                                <div className="flex items-center justify-between text-xs">
+                                                    <span className={`${getIntentStyle(intent).text} capitalize`}>{intent}</span>
+                                                    <span className={`${getIntentStyle(intent).text} font-mono`}>{count}</span>
+                                                </div>
+                                                <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden border border-slate-800/50">
+                                                    <div
+                                                        className={`h-full bg-gradient-to-r ${getIntentStyle(intent).bar} rounded-full`}
+                                                        style={{ width: `${Math.max(8, Math.round(((count || 0) / (maxCount || 1)) * 100))}%` }}
+                                                    />
+                                                </div>
+                                            </div>
+                                        ));
+                                    })()}
+                                </div>
+                            ) : (
+                                <p className="text-xs text-slate-600">No intent tags available.</p>
+                            )}
+                        </div>
+
+                        {/* File impact */}
+                        <div className="bg-[#050505] border border-slate-800 rounded-xl p-4">
+                            <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold mb-3">File Impact</p>
+                            {sessionRaw?.file_impact ? (
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between text-xs">
+                                        <span className="text-slate-400">Unique files</span>
+                                        <span className="text-white font-mono">{sessionRaw.file_impact.total_unique_files || 0}</span>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] text-slate-500 uppercase tracking-wide mb-1">Top extensions</p>
+                                        <div className="space-y-1">
+                                            {Object.entries(sessionRaw.file_impact.by_extension || {})
+                                                .sort((a: any, b: any) => (b[1] || 0) - (a[1] || 0))
+                                                .slice(0, 5)
+                                                .map(([ext, count]: any) => (
+                                                    <div key={ext} className="flex items-center justify-between text-xs">
+                                                        <span className="text-slate-300 font-mono">.{ext}</span>
+                                                        <span className="text-purple-400">{count}</span>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <p className="text-[10px] text-slate-500 uppercase tracking-wide mb-1">Top modules</p>
+                                        <div className="space-y-1">
+                                            {Object.entries(sessionRaw.file_impact.by_module || {})
+                                                .sort((a: any, b: any) => (b[1] || 0) - (a[1] || 0))
+                                                .slice(0, 5)
+                                                .map(([mod, count]: any) => (
+                                                    <div key={mod} className="flex items-center justify-between text-xs gap-2">
+                                                        <span className="text-slate-300 truncate max-w-[180px]" title={mod}>{mod}</span>
+                                                        <span className="text-emerald-400 font-mono">{count}</span>
+                                                    </div>
+                                                ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            ) : (
+                                <p className="text-xs text-slate-600">No file impact data available.</p>
+                            )}
                         </div>
                     </div>
                 </div>
@@ -327,7 +454,7 @@ function ProjectDrilldown({ projectName, onClose }: { projectName: string; onClo
 
 export default function Workspaces() {
     const { data: projects } = useApi<any[]>('/api/projects');
-    const { data: sessions } = useApi<any[]>('/api/sessions?limit=50');
+    const { data: sessions } = useApi<any[]>('/api/sessions?limit=1000');
     const { data: commits } = useApi<any[]>('/api/commit-scores');
     const { data: topics } = useApi<any[]>('/api/topics/summary');
     const { data: cursorStats } = useApi<any>('/api/cursor/deep');

@@ -1,14 +1,14 @@
-# OCD — Omni Coder Dashboard v5.4.0
+# OCD — Omni Coder Dashboard v5.5.0
 
 ### The open-source AI memory engine for coding tools
 
-> A self-building brain across all your AI coding tools. Real semantic embeddings out of the box, 18 MCP tools, cross-tool routing, prompt science, proactive IDE interception, and a Memory dashboard — all 100% local, zero API keys required.
+> A self-building brain across all your AI coding tools. Real semantic embeddings out of the box, 21 MCP tools, cross-tool routing, prompt science, proactive IDE interception, trace auditing, and a Memory dashboard — all 100% local, zero API keys required.
 
 [![npm](https://img.shields.io/npm/v/omni-coder-dashboard)](https://www.npmjs.com/package/omni-coder-dashboard)
 [![Node](https://img.shields.io/badge/node-%3E%3D18-brightgreen)](https://nodejs.org)
 [![License](https://img.shields.io/badge/license-AGPL--3.0--or--later-green)](LICENSE)
 [![Tools](https://img.shields.io/badge/tools-7%20adapters-blue)](#what-gets-tracked)
-[![MCP](https://img.shields.io/badge/MCP-18%20tools-purple)](#mcp-setup-30-seconds-no-api-key)
+[![MCP](https://img.shields.io/badge/MCP-21%20tools-purple)](#mcp-setup-30-seconds-no-api-key)
 [![Docker](https://img.shields.io/badge/docker-supported-blue)](docker-compose.yml)
 [![GitHub stars](https://img.shields.io/github/stars/Riko5652/OCD?style=social)](https://github.com/Riko5652/OCD)
 
@@ -18,9 +18,19 @@
 
 ---
 
-## What's New in v5.4.0
+## What's New in v5.5.0
 
-> **True semantic memory out of the box** — no Ollama, no API keys, no config.
+> **Trace-to-Evidence Audit Bot, Antigravity session intelligence, cost visibility, and a Windows launcher.**
+
+- **Trace-to-Evidence Audit Bot** — New audit engine that accepts a question (e.g. "is our mapping seed data correct?") and orchestrates parallel evidence gathering from code grep, session memory, anti-patterns, and config files. Produces structured reports with verified/broken/missing verdicts. 3 built-in templates (Mapping Validation, Ingestion Throttle, Fallback Behavior) plus ad-hoc question support. Exposed via MCP tools `run_trace_audit`, `get_audit_history`, and `list_audit_templates`.
+- **Antigravity Session Intelligence** — Deep session analysis for Gemini/Antigravity sessions: resolved artifact versioning, intent classification (plan/implement/verify/rollback/investigate), line-level version deltas, file impact analysis (by extension and module), and protobuf conversation reconstruction with gzip/inflate decompression.
+- **Antigravity Intelligence UI** — New Workspaces panel showing version delta summaries, intent distribution bars (color-coded), and file impact breakdowns for Antigravity sessions.
+- **Cost Visibility** — Model normalizer that maps vendor-specific model names to canonical families, cost alerting thresholds, and accurate Cursor token estimation from actual conversation data.
+- **Windows Launcher** — `ocd-start.bat` double-click script that builds server + client, kills stale processes, starts the dashboard, verifies MCP configuration, and opens the browser.
+- **Session Query Scaling** — Session list endpoint now supports up to 10,000 results (was 1,000) for power users with large session histories.
+
+<details>
+<summary><strong>v5.4.0 additions</strong> (click to expand)</summary>
 
 - **Real Local Embeddings** — Ships `all-MiniLM-L6-v2` via ONNX runtime (`@xenova/transformers`). Every session gets 384-dimensional semantic vectors automatically. The hash-based fallback is now a last resort, not the default. Your "semantic memory" is actually semantic now.
 - **Memory Dashboard** — New "Memory" tab in Insights showing: active embedding provider, coverage %, provider breakdown, quality labels (semantic vs keyword), and a live similarity search box to test your memory bank.
@@ -28,6 +38,8 @@
 - **Match Quality Labels** — MCP search results now say "(semantic match)" or "(keyword match)" so you know whether you're getting real vector similarity or just keyword overlap.
 - **P2P Security Transparency** — Dashboard shows a warning banner when P2P sync is active over plaintext HTTP, with guidance to use VPN/Tailscale for sensitive environments.
 - **No More 1000-Row Cap** — Similarity search now scans all embeddings, not an arbitrary subset.
+
+</details>
 
 <details>
 <summary><strong>v5.2.x additions</strong> (click to expand)</summary>
@@ -105,7 +117,7 @@ P2P_SECRET=your-team-key npx omni-coder-dashboard
 docker compose up -d
 ```
 
-- **Agent-grade MCP integration:** All 18 MCP tools are designed for autonomous agent consumption — structured JSON responses, confidence scores, and action signals (`continue/compact/new_session`).
+- **Agent-grade MCP integration:** All 21 MCP tools are designed for autonomous agent consumption — structured JSON responses, confidence scores, and action signals (`continue/compact/new_session`).
 - **Token arbitrage:** Route prompts to local Ollama when your historical success rate is high enough, saving API costs automatically. Full audit trail via `get_arbitrage_recommendation`.
 - **P2P team memory:** Share embeddings (never source code) across your team with HMAC-SHA256 authentication. Query teammate solutions with `get_team_memory`. Dashboard shows security warnings when running over plaintext HTTP.
 - **Proactive IDE interception:** Run `ocd install-hook` to auto-configure your shell. Errors are captured to `~/.ocd/terminal.log` and matched against your vector store in real time. Solutions are pushed via OS notifications + SSE before you open a new prompt.
@@ -192,6 +204,8 @@ This is not a passive analytics dashboard. It's a system that makes you faster �
 
 **AI Attribution Reporting** — Every commit is scored with an `ai_percentage` (0–100%) tracking how much code was AI-assisted vs. human-authored. Query per-project, per-branch, or per-timeframe via the `get_attribution_report` MCP tool or REST API. Built for engineering managers who need velocity tracking, code review prep, and impact reporting.
 
+**Trace-to-Evidence Audit Bot** — Ask a question like "is our database seeding correct?" and the audit engine parallelizes evidence gathering from 5 sources: code grep (via ripgrep), session memory (semantic search), anti-pattern history, config file inspection, and handoff notes. Returns a structured report with verified/broken/missing/degraded verdicts and file locations. Three built-in templates (Mapping Validation, Ingestion Throttle, Fallback Behavior) cover the most common audit patterns — or ask any freeform question.
+
 ---
 
 ## Compliance & Data Governance
@@ -260,6 +274,9 @@ This writes the correct config to Claude Code, Cursor, and Windsurf automaticall
 | **`get_team_memory`** | **NEW — search peer-synced embeddings for solutions from your teammates** |
 | **`submit_ide_trace`** | **NEW — manually submit a stack trace for instant proactive analysis** |
 | **`get_session_health_check`** | **NEW — cross-session health signals: status, suggested action, quality baselines, nudges** |
+| **`run_trace_audit`** | **NEW — run a trace audit: ask a question, get evidence from code, sessions, config, and anti-patterns** |
+| **`get_audit_history`** | **NEW — retrieve past audit runs with filter by status or question** |
+| **`list_audit_templates`** | **NEW — list built-in and custom audit templates (Mapping Validation, Ingestion Throttle, Fallback Behavior)** |
 
 ---
 
@@ -527,6 +544,9 @@ apps/
       anti-pattern-graph.ts  # NEW — failure mining + negative constraint injection
       token-arbiter.ts       # NEW — cost routing proxy + Ollama arbitrage log
       p2p-sync.ts            # NEW — UDP peer discovery + HMAC-authenticated embedding sync
+      model-normalizer.ts    # NEW — canonical model family mapping + cost normalization
+      audit-templates.ts     # NEW — built-in + custom audit template definitions
+      trace-auditor.ts       # NEW — trace-to-evidence audit engine (grep, sessions, config)
     lib/
       vector-store.ts  # Embedding cascade: local ONNX → Ollama → OpenAI → hash
       knowledge-graph.ts # In-memory session relationship graph
@@ -576,6 +596,10 @@ bin/
 - [x] **Memory dashboard** (provider status, coverage, live similarity search)
 - [x] **Shell hook installer** (auto-capture terminal errors for IDE interception)
 - [x] **Match quality transparency** (semantic vs keyword labels in search results)
+- [x] **Trace-to-Evidence Audit Bot** (parallel evidence gathering + structured reports + 3 built-in templates)
+- [x] **Antigravity session intelligence** (intent classification, version deltas, file impact, protobuf parsing)
+- [x] **Cost visibility** (model normalizer, cost alerting, accurate Cursor token estimation)
+- [x] **Windows launcher** (`ocd-start.bat` build + start + MCP verify)
 - [ ] Enterprise: secure team sync with anonymized aggregation
 - [ ] PM integration: Jira/Linear/GitHub Issues velocity correlation
 - [ ] Cross-regional benchmarking
