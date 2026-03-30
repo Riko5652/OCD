@@ -29,6 +29,47 @@ function projectFilter(alias = ''): { clause: string; params: string[] } {
     return { clause: ` AND ${col} LIKE ? ESCAPE '\\'`, params: [`%"project":"${escapeLike(ACTIVE_PROJECT)}"%`] };
 }
 
+/** Check if billing_actuals table exists (CSV import) and query real costs from it. */
+function hasBillingActuals(): boolean {
+    try {
+        const db = getDb();
+        const row = db.prepare("SELECT COUNT(*) as cnt FROM sqlite_master WHERE type='table' AND name='billing_actuals'").get() as any;
+        return row?.cnt > 0;
+    } catch { return false; }
+}
+
+function getBillingCostsByModel(): { model: string; requests: number; input_tokens: number; cache_tokens: number; output_tokens: number; total_tokens: number; cost: number }[] {
+    if (!hasBillingActuals()) return [];
+    const db = getDb();
+    return db.prepare(`
+        SELECT model_normalized as model, COUNT(*) as requests,
+            SUM(input_tokens_no_cache) as input_tokens, SUM(cache_read_tokens) as cache_tokens,
+            SUM(output_tokens) as output_tokens, SUM(total_tokens) as total_tokens,
+            ROUND(SUM(cost_usd), 2) as cost
+        FROM billing_actuals GROUP BY model_normalized ORDER BY cost DESC
+    `).all() as any[];
+}
+
+function getBillingCostsDaily(days = 7): { date: string; cost: number; requests: number; models: Record<string, number> }[] {
+    if (!hasBillingActuals()) return [];
+    const db = getDb();
+    const rows = db.prepare(`
+        SELECT date, model_normalized as model, ROUND(SUM(cost_usd), 2) as cost, COUNT(*) as requests
+        FROM billing_actuals
+        WHERE date >= date('now', '-' || ? || ' days')
+        GROUP BY date, model_normalized ORDER BY date
+    `).all(days) as any[];
+
+    const daily: Record<string, { date: string; cost: number; requests: number; models: Record<string, number> }> = {};
+    for (const r of rows) {
+        if (!daily[r.date]) daily[r.date] = { date: r.date, cost: 0, requests: 0, models: {} };
+        daily[r.date].cost += r.cost;
+        daily[r.date].requests += r.requests;
+        daily[r.date].models[r.model] = (daily[r.date].models[r.model] || 0) + r.cost;
+    }
+    return Object.values(daily);
+}
+
 const server = new McpServer({
     name: 'AI Productivity Engine',
     version: '5.4.0',
@@ -313,40 +354,41 @@ server.tool(
         response += `  Output Tokens: ${g.total_output} | Cache Hit: ${(g.avg_cache_hit || 0).toFixed(1)}%\n`;
         response += `  Lines Generated: ${g.total_lines_added} | Files Touched: ${g.total_files_touched}\n`;
         response += `  Avg Quality: ${(g.avg_quality || 0).toFixed(0)}\n`;
-        response += `  Estimated Cost: $${totalCost.toFixed(2)} | Cache Savings: $${totalSavings.toFixed(2)}\n`;
-        response += `\nTools: ${toolStats.map((t: any) => `${t.tool_id}(${t.sessions})`).join(', ')}\n`;
 
-        if (costs.length > 0) {
-            response += '\nTop Spenders (by model):\n';
-            for (const m of costs.slice(0, 5)) {
-                const pct = totalCost > 0 ? ((m.totalCost / totalCost) * 100).toFixed(1) : '0';
-                response += `  ${m.model}: $${m.totalCost.toFixed(2)} (${pct}%) — ${m.sessions} sessions\n`;
+        // Prefer billing_actuals (real Cursor billing CSV) over session-based estimates
+        const billingModels = getBillingCostsByModel();
+        const useBilling = billingModels.length > 0;
+
+        if (useBilling) {
+            const billingTotal = billingModels.reduce((s, r) => s + r.cost, 0);
+            response += `  Actual Cost (Cursor billing): $${billingTotal.toFixed(2)} — ${billingModels.reduce((s, r) => s + r.requests, 0)} requests\n`;
+            response += `\nTools: ${toolStats.map((t: any) => `${t.tool_id}(${t.sessions})`).join(', ')}\n`;
+
+            response += '\nTop Spenders (billing actuals):\n';
+            for (const m of billingModels.slice(0, 7)) {
+                const pct = billingTotal > 0 ? ((m.cost / billingTotal) * 100).toFixed(1) : '0';
+                response += `  ${m.model}: $${m.cost.toFixed(2)} (${pct}%) — ${m.requests} requests, ${(m.total_tokens || 0).toLocaleString()} tokens\n`;
             }
-        }
 
-        // Daily spend (last 7 days)
-        const dailyRaw = db.prepare(`
-            SELECT date(started_at / 1000, 'unixepoch') as date, primary_model as model,
-                SUM(total_input_tokens) as input_tokens, SUM(total_output_tokens) as output_tokens,
-                SUM(total_cache_read) as cache_read
-            FROM sessions WHERE started_at > ?${pf.clause}
-            GROUP BY date, primary_model ORDER BY date
-        `).all(Date.now() - 7 * 86400000, ...pf.params) as any[];
-
-        if (dailyRaw.length > 0) {
-            const dailyCosts: Record<string, { cost: number; models: Record<string, number> }> = {};
-            for (const row of dailyRaw) {
-                if (!dailyCosts[row.date]) dailyCosts[row.date] = { cost: 0, models: {} };
-                const canonical = normalizeModel(row.model);
-                const c = estimateModelCost(canonical, row.input_tokens || 0, row.output_tokens || 0, row.cache_read || 0);
-                dailyCosts[row.date].cost += c.totalCost;
-                dailyCosts[row.date].models[canonical] = (dailyCosts[row.date].models[canonical] || 0) + c.totalCost;
+            const billingDaily = getBillingCostsDaily(7);
+            if (billingDaily.length > 0) {
+                response += '\nDaily Spend (last 7 days, billing actuals):\n';
+                for (const d of billingDaily) {
+                    const topModel = Object.entries(d.models).sort((a, b) => b[1] - a[1])[0];
+                    const topStr = topModel ? ` (top: ${topModel[0]} $${topModel[1].toFixed(2)})` : '';
+                    response += `  ${d.date}: $${d.cost.toFixed(2)} (${d.requests} req)${topStr}\n`;
+                }
             }
-            response += '\nDaily Spend (last 7 days):\n';
-            for (const [date, d] of Object.entries(dailyCosts)) {
-                const topModel = Object.entries(d.models).sort((a, b) => b[1] - a[1])[0];
-                const topStr = topModel ? ` (top: ${topModel[0]} $${topModel[1].toFixed(2)})` : '';
-                response += `  ${date}: $${d.cost.toFixed(2)}${topStr}\n`;
+        } else {
+            response += `  Estimated Cost: $${totalCost.toFixed(2)} | Cache Savings: $${totalSavings.toFixed(2)}\n`;
+            response += `\nTools: ${toolStats.map((t: any) => `${t.tool_id}(${t.sessions})`).join(', ')}\n`;
+
+            if (costs.length > 0) {
+                response += '\nTop Spenders (estimated):\n';
+                for (const m of costs.slice(0, 5)) {
+                    const pct = totalCost > 0 ? ((m.totalCost / totalCost) * 100).toFixed(1) : '0';
+                    response += `  ${m.model}: $${m.totalCost.toFixed(2)} (${pct}%) — ${m.sessions} sessions\n`;
+                }
             }
         }
 
@@ -437,14 +479,35 @@ server.tool(
             };
         }).sort((a: any, b: any) => b.cost - a.cost);
 
-        const totalCost = results.reduce((s: number, r: any) => s + r.cost, 0);
+        // Merge billing actuals with session data for comprehensive view
+        const billingModels = getBillingCostsByModel();
+        const billingMap = new Map(billingModels.map(b => [b.model, b]));
+        const totalEstimated = results.reduce((s: number, r: any) => s + r.cost, 0);
+        const totalBilled = billingModels.reduce((s, r) => s + r.cost, 0);
+        const useBilling = totalBilled > 0;
+        const totalCost = useBilling ? totalBilled : totalEstimated;
+        const costLabel = useBilling ? 'billing actuals' : 'estimated';
 
-        let response = `Model Comparison (normalized, total: $${totalCost.toFixed(2)}):\n\n`;
-        for (const r of results) {
-            const pct = totalCost > 0 ? ((r.cost / totalCost) * 100).toFixed(1) : '0';
-            response += `${r.model}:\n`;
-            response += `  Sessions: ${r.sessions} | Quality: ${r.avg_quality.toFixed(0)} | Agentic: ${r.avg_agentic.toFixed(0)} | Cache: ${r.avg_cache.toFixed(0)}%\n`;
-            response += `  Cost: $${r.cost.toFixed(2)} (${pct}%) | $/session: $${r.cost_per_session.toFixed(2)}\n`;
+        let response = `Model Comparison (${costLabel}, total: $${totalCost.toFixed(2)}):\n\n`;
+        if (useBilling) {
+            // Show billing actuals enriched with session quality data
+            for (const b of billingModels) {
+                if (models?.length && !models.some(m => b.model.includes(m.toLowerCase()))) continue;
+                const sessionData = results.find((r: any) => r.model === b.model);
+                const pct = totalCost > 0 ? ((b.cost / totalCost) * 100).toFixed(1) : '0';
+                response += `${b.model}:\n`;
+                response += `  Requests: ${b.requests} | Tokens: ${(b.total_tokens || 0).toLocaleString()} | Cost: $${b.cost.toFixed(2)} (${pct}%)\n`;
+                if (sessionData) {
+                    response += `  Sessions: ${sessionData.sessions} | Quality: ${sessionData.avg_quality.toFixed(0)} | Agentic: ${sessionData.avg_agentic.toFixed(0)}\n`;
+                }
+            }
+        } else {
+            for (const r of results) {
+                const pct = totalCost > 0 ? ((r.cost / totalCost) * 100).toFixed(1) : '0';
+                response += `${r.model}:\n`;
+                response += `  Sessions: ${r.sessions} | Quality: ${r.avg_quality.toFixed(0)} | Agentic: ${r.avg_agentic.toFixed(0)} | Cache: ${r.avg_cache.toFixed(0)}%\n`;
+                response += `  Cost: $${r.cost.toFixed(2)} (${pct}%) | $/session: $${r.cost_per_session.toFixed(2)}\n`;
+            }
         }
         return { content: [{ type: 'text' as const, text: response }] };
     }
