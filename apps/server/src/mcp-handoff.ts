@@ -12,8 +12,9 @@ import { getShareableEmbeddings, getKnownPeers } from './engine/p2p-sync.js';
 import { submitTrace } from './engine/ide-interceptor.js';
 import { computeEffectSizes, getAttributionReport } from './engine/prompt-coach.js';
 import { computeTokenBudget } from './engine/token-budget.js';
-import { getSessionHealthCheck } from './engine/session-coach.js';
+import { getSessionHealthCheck, getDirective } from './engine/session-coach.js';
 import { runTraceAudit, getAuditHistory } from './engine/trace-auditor.js';
+import { getProductionErrors } from './engine/error-bridge.js';
 import { listTemplates } from './engine/audit-templates.js';
 
 initDb();
@@ -1062,6 +1063,111 @@ server.tool(
         }
 
         return { content: [{ type: 'text' as const, text: response }] };
+    }
+);
+
+// ---- Tool 25: get_context_stitch (Unified Session Bootstrap) ----
+server.tool(
+    'get_context_stitch',
+    'Single-call session bootstrap. Returns last session context, unfinished work (handoff notes), production errors, anti-pattern constraints, health baseline, and a DIRECTIVE (CONTINUE/REDIRECT/NEW_SESSION) with suggested prompt. Call this once at the start of every session instead of multiple individual tools.',
+    {
+        task_description: z.string().optional().describe('What you plan to work on — enables repeat-failure detection and scope checking'),
+        tool_id: z.string().optional().describe('Filter sessions by tool (e.g., "claude-code", "cursor")'),
+    },
+    async ({ task_description, tool_id }) => {
+        const db = getDb();
+        const pf = projectFilter();
+        const sections: string[] = ['═══ CONTEXT STITCH ═══\n'];
+
+        // ── 1. Directive ─────────────────────────────────────────────────
+        const dir = await getDirective(task_description);
+        sections.push(`▸ DIRECTIVE: ${dir.directive}`);
+        if (dir.reason) sections.push(`  ${dir.reason}`);
+        if (dir.suggested_prompt) sections.push(`  Suggested: "${dir.suggested_prompt}"`);
+        sections.push('');
+
+        // ── 2. Last Session ──────────────────────────────────────────────
+        let sessionSql = 'SELECT * FROM sessions';
+        const sessionParams: any[] = [];
+        const clauses: string[] = [];
+        if (tool_id) { clauses.push('tool_id = ?'); sessionParams.push(tool_id); }
+        if (pf.clause) { clauses.push(pf.clause.replace(/^ AND /, '')); sessionParams.push(...pf.params); }
+        if (clauses.length) sessionSql += ' WHERE ' + clauses.join(' AND ');
+        sessionSql += ' ORDER BY started_at DESC LIMIT 1';
+        const session = db.prepare(sessionSql).get(...sessionParams) as any;
+
+        if (session) {
+            const raw = (() => { try { return JSON.parse(session.raw_data || '{}'); } catch { return {}; } })();
+            const dateStr = session.started_at ? new Date(session.started_at).toISOString().split('T')[0] : 'unknown';
+            sections.push(`▸ LAST SESSION (${dateStr}, ${session.tool_id}, ${session.total_turns} turns)`);
+            sections.push(`  Title: "${session.title || 'Untitled'}"`);
+            if (raw.filesEdited?.length) {
+                const files = raw.filesEdited.slice(0, 5);
+                const extra = raw.filesEdited.length > 5 ? `, +${raw.filesEdited.length - 5}` : '';
+                sections.push(`  Files: ${files.join(', ')}${extra}`);
+            }
+            sections.push(`  Quality: ${session.quality_score ?? 'N/A'} | Errors: ${session.error_count ?? 0} | Lines: +${session.code_lines_added ?? 0}/-${session.code_lines_removed ?? 0}`);
+            sections.push('');
+        }
+
+        // ── 3. Unfinished Work (handoff notes) ──────────────────────────
+        const handoffs = db.prepare(`
+            SELECT title, description FROM recommendations
+            WHERE tool_id = 'handoff' AND dismissed = 0
+            ORDER BY created_at DESC LIMIT 5
+        `).all() as any[];
+
+        if (handoffs.length) {
+            sections.push('▸ UNFINISHED WORK');
+            for (const h of handoffs) {
+                sections.push(`  - [handoff] ${(h.description || h.title).slice(0, 150)}`);
+            }
+            sections.push('');
+        }
+
+        // ── 4. Production Errors (PM Dashboard) ─────────────────────────
+        const errors = await getProductionErrors();
+        if (errors && errors.total > 0) {
+            const parts: string[] = [];
+            const sev = errors.bySeverity;
+            if (sev.critical) parts.push(`${sev.critical} critical`);
+            if (sev.high) parts.push(`${sev.high} high`);
+            if (sev.medium) parts.push(`${sev.medium} med`);
+            if (sev.low) parts.push(`${sev.low} low`);
+            sections.push(`▸ ACTIVE ERRORS (24h): ${errors.total} total (${parts.join(', ')})`);
+            for (const msg of errors.topMessages) {
+                sections.push(`  - [${msg.severity}] ${msg.message}`);
+            }
+            sections.push('');
+        }
+
+        // ── 5. Anti-pattern Constraints ──────────────────────────────────
+        const constraints = getNegativeConstraints(task_description || 'general', 3);
+        if (constraints.length) {
+            sections.push('▸ CONSTRAINTS');
+            for (const c of constraints) {
+                sections.push(`  - ${c.constraint_text}`);
+            }
+            sections.push('');
+        }
+
+        // ── 6. Health Baseline ───────────────────────────────────────────
+        const health = getSessionHealthCheck();
+        const cs = health.cross_session;
+        const baselineParts: string[] = [];
+        if (cs.avg_turns_before_quality_drop) baselineParts.push(`degrade after ~${cs.avg_turns_before_quality_drop} turns`);
+        if (cs.avg_cache_hit_pct) baselineParts.push(`avg cache: ${cs.avg_cache_hit_pct}%`);
+        baselineParts.push(`today: ${cs.sessions_today} sessions, ${cs.tokens_today_k}K tokens`);
+        if (cs.daily_avg_tokens_k) baselineParts.push(`daily avg: ${cs.daily_avg_tokens_k}K`);
+        sections.push(`▸ HEALTH BASELINE: ${baselineParts.join(' | ')}`);
+
+        if (health.nudges.length) {
+            for (const nudge of health.nudges) {
+                sections.push(`  ⚠ ${nudge}`);
+            }
+        }
+
+        return { content: [{ type: 'text' as const, text: sections.join('\n') }] };
     }
 );
 

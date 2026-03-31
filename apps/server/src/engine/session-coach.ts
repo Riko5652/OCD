@@ -1,4 +1,5 @@
 import { getDb } from '../db/index.js';
+import { VectorService } from '../lib/vector-store.js';
 
 interface CoachRule {
     id: string;
@@ -229,4 +230,95 @@ export function getSessionHealthCheck(): SessionHealthCheck {
         cross_session: crossSession,
         nudges,
     };
+}
+
+// ── Directive Engine ─────────────────────────────────────────────────────────
+// Analyzes whether to CONTINUE, REDIRECT, or start NEW_SESSION based on
+// repeat-failure detection, session health, and gatekeeper scope.
+
+export type Directive = 'CONTINUE' | 'REDIRECT' | 'NEW_SESSION';
+
+export interface DirectiveResult {
+    directive: Directive;
+    reason: string | null;
+    suggested_prompt: string | null;
+}
+
+export async function getDirective(taskDescription?: string): Promise<DirectiveResult> {
+    const db = getDb();
+    const health = getSessionHealthCheck();
+
+    // 1. Session health: critical → NEW_SESSION
+    if (health.status === 'critical') {
+        const lastTitle = db.prepare(
+            `SELECT title FROM sessions ORDER BY started_at DESC LIMIT 1`
+        ).get() as any;
+        return {
+            directive: 'NEW_SESSION',
+            reason: health.nudges[0] || 'Session health is critical.',
+            suggested_prompt: `Push a handoff note, then start a new session. Focus: ${lastTitle?.title || 'continue previous work'}`,
+        };
+    }
+
+    // 2. Gatekeeper: active task mismatch → REDIRECT
+    if (taskDescription) {
+        const activeTask = db.prepare(
+            `SELECT id, title, description FROM ocd_tasks WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1`
+        ).get() as any;
+
+        if (activeTask) {
+            const taskLower = taskDescription.toLowerCase();
+            const titleLower = (activeTask.title || '').toLowerCase();
+            const descLower = (activeTask.description || '').toLowerCase();
+            const hasOverlap = titleLower.split(/\s+/).some((w: string) => w.length > 3 && taskLower.includes(w))
+                || descLower.split(/\s+/).some((w: string) => w.length > 3 && taskLower.includes(w));
+            if (!hasOverlap) {
+                return {
+                    directive: 'REDIRECT',
+                    reason: `Active task is "${activeTask.title}". Your request doesn't match — park this idea.`,
+                    suggested_prompt: null,
+                };
+            }
+        }
+    }
+
+    // 3. Repeat-failure detection via vector similarity
+    if (taskDescription) {
+        try {
+            const vs = new VectorService();
+            const similar = await vs.searchSimilarSessions(taskDescription, 3, 0.7);
+            for (const match of similar) {
+                const session = db.prepare(
+                    `SELECT id, title, quality_score, error_count, total_turns FROM sessions WHERE id = ?`
+                ).get(match.session_id) as any;
+                if (!session) continue;
+                const isFailed = (session.quality_score !== null && session.quality_score < 200)
+                    || (session.error_count > 5 && session.total_turns > 20);
+                if (isFailed) {
+                    // Check for a success alternative in anti_patterns
+                    const alt = db.prepare(
+                        `SELECT success_alternative FROM anti_patterns WHERE success_session_id = ? LIMIT 1`
+                    ).get(session.id) as any;
+                    return {
+                        directive: 'REDIRECT',
+                        reason: `Session "${session.title || session.id}" tried a similar task and failed (quality: ${session.quality_score}, errors: ${session.error_count}).`,
+                        suggested_prompt: alt?.success_alternative || `Try a different approach. The previous attempt at "${session.title}" did not succeed.`,
+                    };
+                }
+            }
+        } catch {
+            // Vector search unavailable — skip this check
+        }
+    }
+
+    // 4. Degrading session → soft warning (not a hard redirect)
+    if (health.status === 'degrading') {
+        return {
+            directive: 'CONTINUE',
+            reason: health.nudges[0] || 'Session is degrading but still viable.',
+            suggested_prompt: null,
+        };
+    }
+
+    return { directive: 'CONTINUE', reason: null, suggested_prompt: null };
 }

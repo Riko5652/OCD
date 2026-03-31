@@ -144,7 +144,7 @@ function getFileDir(filePath) {
 // Purpose: Full context load — history, handoffs, recommendations, anti-patterns
 // ══════════════════════════════════════════════════════════════════════════════
 
-function sessionStart() {
+async function sessionStart() {
   // Reset state for new session
   saveState(freshState());
   const out = [];
@@ -198,7 +198,61 @@ function sessionStart() {
     }
   }
 
+  // ── Production Errors (PM Dashboard PostgreSQL) ────────────────────────────
+  const errSummary = await getProductionErrorsSummary();
+  if (errSummary) out.push(errSummary);
+
+  // ── Directive (lightweight — no vector search) ─────────────────────────────
+  const directive = getHookDirective();
+  if (directive) out.push(directive);
+
   if (out.length) console.log(out.join('\n'));
+}
+
+/** Query PM Dashboard error summary via unauthenticated HTTP endpoint. */
+async function getProductionErrorsSummary() {
+  const baseUrl = process.env.PM_DASHBOARD_URL || 'http://localhost:3030';
+  try {
+    const res = await fetch(`${baseUrl}/api/health/error-summary`, {
+      signal: AbortSignal.timeout(3000),
+    });
+    if (!res.ok) return null;
+    const data = JSON.parse(await res.text());
+    if (!data.total) return null;
+    const parts = [];
+    if (data.bySeverity?.critical) parts.push(`${data.bySeverity.critical} critical`);
+    if (data.bySeverity?.high) parts.push(`${data.bySeverity.high} high`);
+    parts.push(`${data.total} total`);
+    const top = (data.recent || []).slice(0, 2).map(e => `[${e.severity}] ${e.message}`).join('; ');
+    return `[OCD] Errors (24h): ${parts.join(', ')}${top ? ' — ' + top : ''}`;
+  } catch { return null; }
+}
+
+/** Lightweight directive from session health (no vector search). */
+function getHookDirective() {
+  const now = Date.now();
+  const session = safeGet(`
+    SELECT total_turns, total_input_tokens, total_output_tokens, error_count, title
+    FROM sessions WHERE started_at > ? AND (ended_at IS NULL OR ended_at > ?)
+    ORDER BY started_at DESC LIMIT 1
+  `, now - 2 * 60 * 60 * 1000, now - 5 * 60 * 1000);
+  if (!session) return null;
+
+  const turns = session.total_turns || 0;
+  const totalTokens = (session.total_input_tokens || 0) + (session.total_output_tokens || 0);
+  const errorRate = turns > 0 ? (session.error_count || 0) / turns : 0;
+
+  // Critical thresholds
+  if (totalTokens > 800000) {
+    return `[OCD] ⚠ DIRECTIVE: NEW_SESSION — ${Math.round(totalTokens / 1000)}K tokens burned. Context saturated.\n[OCD] Suggested: "Push handoff, start new chat. Focus: ${(session.title || 'continue previous work').slice(0, 80)}"`;
+  }
+  if (turns > 120) {
+    return `[OCD] ⚠ DIRECTIVE: NEW_SESSION — ${turns} turns. Quality is degrading.\n[OCD] Suggested: "Push handoff, start new chat. Focus: ${(session.title || 'continue previous work').slice(0, 80)}"`;
+  }
+  if (errorRate > 0.4 && turns > 10) {
+    return `[OCD] ⚠ DIRECTIVE: REDIRECT — ${Math.round(errorRate * 100)}% error rate. Consider a different approach or model.`;
+  }
+  return null;
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -472,20 +526,21 @@ function sessionDigest() {
 // ══════════════════════════════════════════════════════════════════════════════
 
 const cmd = process.argv[2];
-switch (cmd) {
-  // New guardian commands
-  case 'session-start': sessionStart(); break;
-  case 'prompt-guard':  promptGuard(); break;
-  case 'edit-guard':    editGuard(); break;
-  case 'stop-guard':    stopGuard(); break;
-  case 'session-digest': sessionDigest(); break;
-  // Legacy aliases (backwards compat)
-  case 'trace':         editGuard(); break;
-  case 'cross-sync':    promptGuard(); break;
-  case 'session-check': stopGuard(); break;
-  default:
-    console.error('OCD Guardian commands: session-start | prompt-guard | edit-guard | stop-guard | session-digest');
-    process.exit(1);
+
+async function dispatch() {
+  switch (cmd) {
+    case 'session-start': await sessionStart(); break;
+    case 'prompt-guard':  promptGuard(); break;
+    case 'edit-guard':    editGuard(); break;
+    case 'stop-guard':    stopGuard(); break;
+    case 'session-digest': sessionDigest(); break;
+    case 'trace':         editGuard(); break;
+    case 'cross-sync':    promptGuard(); break;
+    case 'session-check': stopGuard(); break;
+    default:
+      console.error('OCD Guardian commands: session-start | prompt-guard | edit-guard | stop-guard | session-digest');
+      process.exit(1);
+  }
 }
 
-db.close();
+dispatch().catch(() => {}).finally(() => db.close());
