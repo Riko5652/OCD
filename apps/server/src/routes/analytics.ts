@@ -10,6 +10,7 @@ import { computeSavingsReport } from '../engine/savings-report.js';
 import { computeTokenBudget } from '../engine/token-budget.js';
 import { computeProfile, computeTrends, computePromptMetrics } from '../engine/insights.js';
 import { getAgenticLeaderboard } from '../engine/agentic-scorer.js';
+import { computeGuardEffectiveness } from '../engine/guard-effectiveness.js';
 import type { CacheStore } from './types.js';
 
 export default async function analyticsRoutes(fastify: FastifyInstance, opts: { cache: CacheStore; historyDays: number }) {
@@ -83,5 +84,10 @@ export default async function analyticsRoutes(fastify: FastifyInstance, opts: { 
 
     fastify.get('/api/insights/prompt-metrics', async () => {
         return cache.get('ins:prompt-metrics', computePromptMetrics);
+    });
+
+    fastify.get('/api/guard-effectiveness', async (request) => {
+        const days = (request.query as any).days ? parseInt((request.query as any).days) : 30;
+        return computeGuardEffectiveness(days);
     });
 }

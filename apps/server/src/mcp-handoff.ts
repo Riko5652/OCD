@@ -17,6 +17,7 @@ import { runTraceAudit, getAuditHistory } from './engine/trace-auditor.js';
 import { getProductionErrors } from './engine/error-bridge.js';
 import { listTemplates } from './engine/audit-templates.js';
 import { getSessionGuardReport, recordToolCall } from './engine/session-guard.js';
+import { computeGuardEffectiveness } from './engine/guard-effectiveness.js';
 
 initDb();
 
@@ -1217,6 +1218,77 @@ server.tool(
     async ({ session_id, tool_name, args_fingerprint, args_summary }) => {
         recordToolCall(session_id, tool_name, args_fingerprint, args_summary);
         return { content: [{ type: 'text' as const, text: `Recorded ${tool_name} call for session ${session_id}.` }] };
+    }
+);
+
+server.tool(
+    'get_guard_effectiveness',
+    'Get the OCD Session Guard KPI effectiveness matrix — intervention counts, token savings, quality impact, repetition loops broken, and hallucination prevention. Shows how much value the guard is delivering.',
+    {
+        days: z.number().optional().describe('Number of days to analyse (default: 30)'),
+    },
+    async ({ days = 30 }) => {
+        try {
+            const r = computeGuardEffectiveness(days);
+            let txt = `▸ Guard Effectiveness Report (${r.period.from} → ${r.period.to})\n`;
+            txt += `═══════════════════════════════════════════\n\n`;
+
+            txt += `▸ INTERVENTIONS (${r.period.days}d)\n`;
+            txt += `  Total: ${r.interventions.total} | Blocks: ${r.interventions.blocks} | Warnings: ${r.interventions.warnings} | Overrides: ${r.interventions.overrides}\n`;
+            txt += `  Override rate: ${r.interventions.override_rate_pct}% (lower = guard is accepted, not bypassed)\n`;
+            txt += `  By severity: ${r.interventions.by_severity.critical} critical, ${r.interventions.by_severity.warning} warnings, ${r.interventions.by_severity.override} overrides\n`;
+            if (Object.keys(r.interventions.by_type).length) {
+                txt += `  By type:\n`;
+                for (const [type, cnt] of Object.entries(r.interventions.by_type).sort(([, a], [, b]) => (b as number) - (a as number))) {
+                    txt += `    ${type}: ${cnt}\n`;
+                }
+            }
+            txt += `\n`;
+
+            txt += `▸ TOKEN SAVINGS\n`;
+            txt += `  Estimated tokens saved: ${fmtTokenCount(r.tokens.estimated_saved)} (~$${r.tokens.estimated_saved_dollars})\n`;
+            txt += `  Total session tokens: ${fmtTokenCount(r.tokens.total_session_tokens)}\n`;
+            txt += `  Savings %: ${r.tokens.savings_pct}% of total spend avoided\n\n`;
+
+            txt += `▸ QUALITY IMPACT\n`;
+            if (r.quality.avg_quality_with_guard > 0 || r.quality.avg_quality_without_guard > 0) {
+                txt += `  Sessions with guard interventions: avg quality ${r.quality.avg_quality_with_guard}\n`;
+                txt += `  Sessions without interventions: avg quality ${r.quality.avg_quality_without_guard}\n`;
+                txt += `  Delta: ${r.quality.quality_delta > 0 ? '+' : ''}${r.quality.quality_delta} (${r.quality.quality_delta >= 0 ? 'guard helps' : 'guard may be over-interrupting'})\n`;
+            } else {
+                txt += `  Not enough data yet (quality scores required)\n`;
+            }
+            txt += `\n`;
+
+            txt += `▸ REPETITION LOOPS\n`;
+            txt += `  Loops broken (hard block): ${r.repetition.loops_broken}\n`;
+            txt += `  Loops warned (soft): ${r.repetition.loops_warned}\n\n`;
+
+            txt += `▸ HALLUCINATION PREVENTION\n`;
+            txt += `  Edit-without-read caught: ${r.hallucination.edits_without_read_caught}\n`;
+            txt += `  SQL-without-schema caught: ${r.hallucination.sql_without_schema_caught}\n`;
+            txt += `  Total prevented: ${r.hallucination.total_prevented}\n\n`;
+
+            txt += `▸ SESSION OVERRUN\n`;
+            txt += `  Hard stops triggered: ${r.sessions.hard_stops_triggered}\n`;
+            txt += `  Sessions saved from degradation: ${r.sessions.sessions_saved_from_degradation}\n\n`;
+
+            if (r.daily_trend.length) {
+                txt += `▸ DAILY TREND (interventions)\n`;
+                for (const d of r.daily_trend.slice(-14)) {
+                    const bar = '|'.repeat(Math.min(d.interventions, 30));
+                    const saved = d.tokens_saved > 0 ? ` ~${fmtTokenCount(d.tokens_saved)} saved` : '';
+                    const blocks = d.blocks > 0 ? ` [${d.blocks} blocks]` : '';
+                    txt += `  ${d.date}: ${bar} ${d.interventions}${blocks}${saved}\n`;
+                }
+            } else {
+                txt += `▸ DAILY TREND\n  No intervention data yet for this period.\n`;
+            }
+
+            return { content: [{ type: 'text' as const, text: txt }] };
+        } catch (e: any) {
+            return { content: [{ type: 'text' as const, text: 'Error computing guard effectiveness: ' + e.message }], isError: true };
+        }
     }
 );
 

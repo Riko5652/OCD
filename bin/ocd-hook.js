@@ -79,6 +79,26 @@ try {
       CREATE INDEX IF NOT EXISTS idx_tcl_created ON tool_call_log(created_at);
     `);
   } catch {}
+  // Bootstrap guard_interventions if server hasn't run yet
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS guard_interventions (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        intervention_type TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        tool_name TEXT,
+        action_taken TEXT NOT NULL,
+        message TEXT,
+        was_overridden INTEGER DEFAULT 0,
+        estimated_tokens_saved INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_gi_session ON guard_interventions(session_id);
+      CREATE INDEX IF NOT EXISTS idx_gi_type ON guard_interventions(intervention_type, created_at);
+      CREATE INDEX IF NOT EXISTS idx_gi_created ON guard_interventions(created_at);
+    `);
+  } catch {}
 } catch { process.exit(0); }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -145,6 +165,36 @@ function parseArgs() {
 function safeAll(sql, ...p) { try { return db.prepare(sql).all(...p); } catch { return []; } }
 function safeGet(sql, ...p) { try { return db.prepare(sql).get(...p); } catch { return null; } }
 function safeRun(sql, ...p) { try { db.prepare(sql).run(...p); } catch {} }
+
+/** Token savings estimates per intervention type */
+const TOKEN_SAVINGS = {
+  overrun_block: 50000,
+  repetition_block: 10000,
+  repetition_warn: 3000,
+  hallucination_warn: 5000,
+  schema_warn: 8000,
+  overrun_warn: 5000,
+  override_granted: 0,
+};
+
+/**
+ * Record a guard intervention into the guard_interventions table.
+ * @param {object} state - Current session state (for session_id)
+ * @param {string} type - Intervention type key (e.g. 'overrun_block')
+ * @param {string} severity - 'warning' | 'critical' | 'override'
+ * @param {string|null} toolName - Tool name involved (if any)
+ * @param {string} action - 'block' | 'warn' | 'override'
+ * @param {string} message - Human-readable message
+ * @param {number} [tokensSaved] - Override default token savings estimate
+ */
+function recordIntervention(state, type, severity, toolName, action, message, tokensSaved) {
+  const sessionId = process.env.CLAUDE_SESSION_ID || process.env.CURSOR_SESSION_ID || 'hook-' + process.pid;
+  const estimated = tokensSaved !== undefined ? tokensSaved : (TOKEN_SAVINGS[type] || 0);
+  safeRun(
+    'INSERT INTO guard_interventions (session_id, intervention_type, severity, tool_name, action_taken, message, was_overridden, estimated_tokens_saved, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+    sessionId, type, severity, toolName || null, action, message || null, 0, estimated, Math.floor(Date.now() / 1000)
+  );
+}
 
 /** Only emit advice if cooldown expired. Returns true if advice should be shown. */
 function shouldAdvise(state, key, cooldownTurns = 10) {
@@ -403,6 +453,8 @@ function promptGuard() {
   if (prompt.includes('continue anyway') || prompt.includes('override session') || prompt.includes('keep going')) {
     state.override_until_turn = state.turn_count + 10;
     saveState(state);
+    recordIntervention(state, 'override_granted', 'override', null, 'override',
+      'User requested override — proceeding for 10 more turns');
     console.log('[OCD] Override accepted. Proceeding for up to 10 more turns. Use this time to wrap up and push a handoff note.');
     return;
   }
@@ -411,6 +463,8 @@ function promptGuard() {
 
   const overrideActive = state.turn_count <= (state.override_until_turn || 0);
   if ((state.turn_count >= 100 || sessionMins >= 300) && !overrideActive) {
+    recordIntervention(state, 'overrun_block', 'critical', null, 'block',
+      'Hard stop: ' + state.turn_count + ' turns / ' + sessionMins + 'min — prompt-guard triggered');
     process.stderr.write(HARD_STOP_MESSAGE);
     process.exit(2);
   }
@@ -420,8 +474,12 @@ function promptGuard() {
   // Session length warnings (escalating)
   if (state.turn_count >= 100 && shouldAdvise(state, 'session-critical', 20)) {
     out.push('[OCD] CRITICAL: Session at ' + state.turn_count + ' turns (' + sessionMins + 'min). Context is heavily compressed. START A NEW SESSION — quality is degrading. Push a handoff note first with push_handoff_note.');
+    recordIntervention(state, 'overrun_warn', 'critical', null, 'warn',
+      'Session critical: ' + state.turn_count + ' turns / ' + sessionMins + 'min');
   } else if (state.turn_count >= 60 && shouldAdvise(state, 'session-warn', 15)) {
     out.push('[OCD] WARNING: Session at ' + state.turn_count + ' turns. Consider wrapping up soon. If switching topics, start a fresh session.');
+    recordIntervention(state, 'overrun_warn', 'warning', null, 'warn',
+      'Session warning: ' + state.turn_count + ' turns / ' + sessionMins + 'min');
   } else if (state.turn_count >= 30 && shouldAdvise(state, 'session-info', 20)) {
     out.push('[OCD] Session at ' + state.turn_count + ' turns. Performance is still good but keep it focused.');
   }
@@ -432,6 +490,8 @@ function promptGuard() {
   if (repeatedTools.length >= 3 && shouldAdvise(state, 'repeat-summary', 10)) {
     const examples = repeatedTools.slice(0, 3).map(fp => `${fp.tool_name}(${fp.args_summary})`).join(', ');
     out.push('[OCD] REPETITION: ' + repeatedTools.length + ' tool calls repeated 3+ times this session: ' + examples + '. Review if this is necessary or if you are looping.');
+    recordIntervention(state, 'repetition_warn', 'warning', null, 'warn',
+      repeatedTools.length + ' tools repeated 3+ times: ' + examples.slice(0, 120));
   }
 
   // ── Delegation Advisor ─────────────────────────────────────────────────────
@@ -540,6 +600,8 @@ function preToolGuard() {
 
   const overrideActive = state.turn_count <= (state.override_until_turn || 0);
   if ((state.turn_count >= 100 || sessionMins >= 300) && !overrideActive) {
+    recordIntervention(state, 'overrun_block', 'critical', toolName || null, 'block',
+      'Session overrun: ' + state.turn_count + ' turns / ' + sessionMins + 'min — hard stop triggered');
     process.stderr.write(HARD_STOP_MESSAGE);
     process.exit(2);
   }
@@ -556,13 +618,17 @@ function preToolGuard() {
 
       if (existing.count >= 5) {
         saveState(state);
-        process.stderr.write(
-          '[OCD] BLOCKED: going in circles — ' + toolName + '(' + existing.args_summary + ') called ' + existing.count + ' times with identical args.\n' +
-          'Stop and reassess: read the error message, check the actual file, or ask for clarification.\n'
-        );
+        const blockMsg = '[OCD] BLOCKED: going in circles — ' + toolName + '(' + existing.args_summary + ') called ' + existing.count + ' times with identical args.\n' +
+          'Stop and reassess: read the error message, check the actual file, or ask for clarification.\n';
+        recordIntervention(state, 'repetition_block', 'critical', toolName, 'block',
+          toolName + '(' + existing.args_summary + ') called ' + existing.count + 'x — repetition block');
+        process.stderr.write(blockMsg);
         process.exit(2);
       } else if (existing.count >= 3) {
-        out.push('[OCD] REPEAT WARNING: ' + toolName + '(' + existing.args_summary + ') called ' + existing.count + 'x with same args. Are you looping?');
+        const warnMsg = '[OCD] REPEAT WARNING: ' + toolName + '(' + existing.args_summary + ') called ' + existing.count + 'x with same args. Are you looping?';
+        out.push(warnMsg);
+        recordIntervention(state, 'repetition_warn', 'warning', toolName, 'warn',
+          toolName + '(' + existing.args_summary + ') called ' + existing.count + 'x');
       }
     }
   }
@@ -573,7 +639,10 @@ function preToolGuard() {
     const filePath = normPath(toolInput.file_path || '');
     const filesRead = (state.files_read || []).map(normPath);
     if (filePath && !filesRead.includes(filePath)) {
-      out.push('[OCD] CAUTION: Editing ' + basename(toolInput.file_path || '') + ' without a prior Read. Verify you have current file contents to avoid overwriting changes.');
+      const warnMsg = '[OCD] CAUTION: Editing ' + basename(toolInput.file_path || '') + ' without a prior Read. Verify you have current file contents to avoid overwriting changes.';
+      out.push(warnMsg);
+      recordIntervention(state, 'hallucination_warn', 'warning', toolName, 'warn',
+        'Edit-without-read: ' + basename(toolInput.file_path || ''));
     }
   }
 
@@ -590,7 +659,10 @@ function preToolGuard() {
         fp.tool_name === 'Bash' && (fp.args_summary || '').toUpperCase().includes('INFORMATION_SCHEMA')
       );
       if (!hasSchemaQuery) {
-        out.push('[OCD] SQL-WITHOUT-SCHEMA: Running SQL without a prior schema discovery. Per CLAUDE.md: discover table schema first with: SELECT column_name, data_type FROM information_schema.columns WHERE table_name = \'<table\'>;');
+        const warnMsg = '[OCD] SQL-WITHOUT-SCHEMA: Running SQL without a prior schema discovery. Per CLAUDE.md: discover table schema first with: SELECT column_name, data_type FROM information_schema.columns WHERE table_name = \'<table\'>;';
+        out.push(warnMsg);
+        recordIntervention(state, 'schema_warn', 'warning', toolName, 'warn',
+          'SQL executed without prior INFORMATION_SCHEMA discovery');
       }
     }
   }

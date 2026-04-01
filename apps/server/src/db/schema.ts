@@ -427,4 +427,23 @@ export function migrate(db: Database) {
     CREATE INDEX IF NOT EXISTS idx_tcl_fingerprint ON tool_call_log(args_fingerprint, created_at);
     CREATE INDEX IF NOT EXISTS idx_tcl_created ON tool_call_log(created_at);
     `);
+
+    // ── Session Guard: Intervention Tracking ────────────────────────────
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS guard_interventions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      intervention_type TEXT NOT NULL,
+      severity TEXT NOT NULL,
+      tool_name TEXT,
+      action_taken TEXT NOT NULL,
+      message TEXT,
+      was_overridden INTEGER DEFAULT 0,
+      estimated_tokens_saved INTEGER DEFAULT 0,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_gi_session ON guard_interventions(session_id);
+    CREATE INDEX IF NOT EXISTS idx_gi_type ON guard_interventions(intervention_type, created_at);
+    CREATE INDEX IF NOT EXISTS idx_gi_created ON guard_interventions(created_at);
+    `);
 }
