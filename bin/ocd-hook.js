@@ -113,7 +113,9 @@ function loadState() {
     const raw = JSON.parse(readFileSync(STATE_FILE, 'utf-8'));
     // Reset if inactive for too long
     if (Date.now() - raw.last_active > INACTIVITY_RESET_MS) return freshState();
-    return raw;
+    // Merge with defaults so new fields are always present
+    const defaults = freshState();
+    return { ...defaults, ...raw };
   } catch { return freshState(); }
 }
 
