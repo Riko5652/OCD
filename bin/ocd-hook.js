@@ -3,10 +3,12 @@
 // OCD Guardian — Proactive AI Session Monitor & Optimizer
 // ══════════════════════════════════════════════════════════════════════════════
 // Hooks into Claude Code lifecycle events to provide real-time guidance:
-//   session-start  → Context injection + session history + anti-patterns
-//   prompt-guard   → Session health + delegation + focus + cross-session sync
-//   edit-guard     → File advisor + trace + test gap + conflict detection
-//   stop-guard     → Completion quality + handoff reminder + session summary
+//   session-start     → Context injection + session history + anti-patterns
+//   prompt-guard      → Session health + hard stop + delegation + cross-session sync
+//   pre-tool-guard    → Repetition detection + edit-without-read + SQL-without-schema
+//   post-tool-record  → Tool call logging + fingerprint tracking
+//   edit-guard        → File advisor + trace + test gap + conflict detection
+//   stop-guard        → Completion quality + handoff reminder + session summary
 
 import { createRequire } from 'module';
 import { dirname, join, basename } from 'path';
@@ -60,6 +62,23 @@ try {
   db = new Database(DB_PATH, { timeout: 3000 });
   db.pragma('journal_mode = WAL');
   db.pragma('busy_timeout = 3000');
+  // Bootstrap tool_call_log if server hasn't run yet
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS tool_call_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        tool_name TEXT NOT NULL,
+        args_fingerprint TEXT NOT NULL,
+        args_summary TEXT,
+        result_hash TEXT,
+        created_at INTEGER NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_tcl_session ON tool_call_log(session_id);
+      CREATE INDEX IF NOT EXISTS idx_tcl_fingerprint ON tool_call_log(args_fingerprint, created_at);
+      CREATE INDEX IF NOT EXISTS idx_tcl_created ON tool_call_log(created_at);
+    `);
+  } catch {}
 } catch { process.exit(0); }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -91,6 +110,9 @@ function freshState() {
     edits_since_test: 0,
     advice_cooldowns: {},
     last_advice: [],
+    files_read: [],               // files Read in this session (for anti-hallucination)
+    tool_fingerprints: {},        // {fingerprint: {tool_name, args_summary, ts, count}}
+    override_until_turn: 0,       // turn count until override expires
   };
 }
 
@@ -137,6 +159,112 @@ function getFileDir(filePath) {
   const parts = normalized.split('/');
   return parts.slice(0, -1).slice(-2).join('/'); // last 2 dir segments
 }
+
+// ══════════════════════════════════════════════════════════════════════════════
+// STDIN + FINGERPRINTING HELPERS
+// ══════════════════════════════════════════════════════════════════════════════
+
+/** Read JSON from stdin (fd 0). Returns {} on failure. */
+function readStdinJSON() {
+  try {
+    const raw = readFileSync(0, 'utf-8').trim();
+    if (!raw) return {};
+    return JSON.parse(raw);
+  } catch { return {}; }
+}
+
+/** Normalize path separators and lowercase for consistent fingerprinting. */
+function normPath(p) {
+  return (p || '').replace(/\\/g, '/').toLowerCase();
+}
+
+/** Normalize bash commands: trim + collapse whitespace. */
+function normBash(cmd) {
+  return (cmd || '').trim().replace(/\s+/g, ' ');
+}
+
+/** Compute djb2 hash of toolName:normalizedArgs, returns hex string. */
+function computeFingerprint(toolName, toolInput) {
+  const norm = normalizeToolInput(toolName, toolInput);
+  const key = toolName + ':' + norm;
+  let hash = 5381;
+  for (let i = 0; i < key.length; i++) {
+    hash = ((hash << 5) + hash) ^ key.charCodeAt(i);
+    hash = hash >>> 0; // keep unsigned 32-bit
+  }
+  return hash.toString(16);
+}
+
+/** Canonical form per tool for dedup fingerprinting. */
+function normalizeToolInput(toolName, input) {
+  if (!input) return '';
+  switch (toolName) {
+    case 'Read':
+      return normPath(input.file_path || '');
+    case 'Grep':
+      return [input.pattern || '', normPath(input.path || ''), input.output_mode || ''].join(':');
+    case 'Glob':
+      return [input.pattern || '', normPath(input.path || '')].join(':');
+    case 'Bash':
+      return normBash(input.command || '');
+    case 'Edit':
+      return normPath(input.file_path || '') + ':' + (input.old_string || '').slice(0, 100);
+    case 'Write':
+      return normPath(input.file_path || '');
+    case 'WebFetch':
+      return (input.url || '').toLowerCase();
+    case 'WebSearch':
+      return (input.query || '').toLowerCase();
+    default:
+      // MCP tools: sorted key=value pairs
+      return Object.keys(input).sort().map(k => k + '=' + String(input[k]).slice(0, 80)).join(',');
+  }
+}
+
+/** Short human-readable summary of tool args for display. */
+function summarizeArgs(toolName, input) {
+  if (!input) return '';
+  switch (toolName) {
+    case 'Read':
+    case 'Write':
+    case 'Edit':
+      return basename(input.file_path || '');
+    case 'Bash':
+      return normBash(input.command || '').slice(0, 80);
+    case 'Grep':
+      return (input.pattern || '').slice(0, 60);
+    case 'Glob':
+      return (input.pattern || '').slice(0, 60);
+    case 'WebFetch':
+      return (input.url || '').slice(0, 80);
+    case 'WebSearch':
+      return (input.query || '').slice(0, 80);
+    default:
+      return toolName;
+  }
+}
+
+/**
+ * Returns true if a repeated call to this tool is expected/OK and should NOT trigger
+ * the repetition block (e.g. re-reading files, safe status checks).
+ */
+function isRepeatAllowed(toolName, toolInput) {
+  if (toolName === 'Read') return true;
+  if (toolName === 'Bash') {
+    const cmd = normBash((toolInput && toolInput.command) || '');
+    return /^(git status|git diff|git log|ls |pwd|echo |npm test|npx vitest|npx tsc|npx eslint)/.test(cmd);
+  }
+  return false;
+}
+
+// Hard-stop message shown when session overruns limits
+const HARD_STOP_MESSAGE = `[OCD] HARD STOP: Session exceeded safety limits (100 turns or 300 min).
+Context is saturated — continuing will produce unreliable output.
+ACTION REQUIRED:
+  1. Push a handoff note (push_handoff_note) summarising what was done and next steps.
+  2. Start a fresh session.
+To override for 10 more turns, reply: "continue anyway"
+`;
 
 // ══════════════════════════════════════════════════════════════════════════════
 // COMMAND: session-start
@@ -258,17 +386,36 @@ function getHookDirective() {
 // ══════════════════════════════════════════════════════════════════════════════
 // COMMAND: prompt-guard
 // Fires: UserPromptSubmit hook (every user message)
-// Purpose: Session health, delegation advice, focus check, cross-session sync
+// Purpose: Session health, hard stop, delegation advice, focus check, cross-session sync
 // ══════════════════════════════════════════════════════════════════════════════
 
 function promptGuard() {
+  const input = readStdinJSON();
+  const prompt = (input.prompt || '').toLowerCase();
   const state = loadState();
   state.turn_count++;
   const out = [];
 
-  // ── Session Health ─────────────────────────────────────────────────────────
-
   const sessionMins = Math.floor((Date.now() - state.started_at) / 60000);
+
+  // ── Override Detection ─────────────────────────────────────────────────────
+
+  if (prompt.includes('continue anyway') || prompt.includes('override session') || prompt.includes('keep going')) {
+    state.override_until_turn = state.turn_count + 10;
+    saveState(state);
+    console.log('[OCD] Override accepted. Proceeding for up to 10 more turns. Use this time to wrap up and push a handoff note.');
+    return;
+  }
+
+  // ── Hard Stop ─────────────────────────────────────────────────────────────
+
+  const overrideActive = state.turn_count <= (state.override_until_turn || 0);
+  if ((state.turn_count >= 100 || sessionMins >= 300) && !overrideActive) {
+    process.stderr.write(HARD_STOP_MESSAGE);
+    process.exit(2);
+  }
+
+  // ── Session Health ─────────────────────────────────────────────────────────
 
   // Session length warnings (escalating)
   if (state.turn_count >= 100 && shouldAdvise(state, 'session-critical', 20)) {
@@ -277,6 +424,14 @@ function promptGuard() {
     out.push('[OCD] WARNING: Session at ' + state.turn_count + ' turns. Consider wrapping up soon. If switching topics, start a fresh session.');
   } else if (state.turn_count >= 30 && shouldAdvise(state, 'session-info', 20)) {
     out.push('[OCD] Session at ' + state.turn_count + ' turns. Performance is still good but keep it focused.');
+  }
+
+  // ── Repetition Summary ────────────────────────────────────────────────────
+
+  const repeatedTools = Object.values(state.tool_fingerprints || {}).filter(fp => fp.count >= 3);
+  if (repeatedTools.length >= 3 && shouldAdvise(state, 'repeat-summary', 10)) {
+    const examples = repeatedTools.slice(0, 3).map(fp => `${fp.tool_name}(${fp.args_summary})`).join(', ');
+    out.push('[OCD] REPETITION: ' + repeatedTools.length + ' tool calls repeated 3+ times this session: ' + examples + '. Review if this is necessary or if you are looping.');
   }
 
   // ── Delegation Advisor ─────────────────────────────────────────────────────
@@ -364,6 +519,159 @@ function promptGuard() {
   saveState(state);
   // Max 3 advice items per invocation to avoid noise
   if (out.length) console.log(out.slice(0, 3).join('\n'));
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COMMAND: pre-tool-guard
+// Fires: PreToolUse hook (before every tool call)
+// Purpose: Session overrun block, repetition detection, edit-without-read, SQL-without-schema
+// ══════════════════════════════════════════════════════════════════════════════
+
+function preToolGuard() {
+  const input = readStdinJSON();
+  const toolName = input.tool_name || '';
+  const toolInput = input.tool_input || {};
+  const state = loadState();
+  const out = [];
+
+  const sessionMins = Math.floor((Date.now() - state.started_at) / 60000);
+
+  // ── Session Overrun Block ──────────────────────────────────────────────────
+
+  const overrideActive = state.turn_count <= (state.override_until_turn || 0);
+  if ((state.turn_count >= 100 || sessionMins >= 300) && !overrideActive) {
+    process.stderr.write(HARD_STOP_MESSAGE);
+    process.exit(2);
+  }
+
+  // ── Repetition Detection ───────────────────────────────────────────────────
+
+  if (toolName) {
+    const fp = computeFingerprint(toolName, toolInput);
+    const existing = (state.tool_fingerprints || {})[fp];
+
+    if (existing && !isRepeatAllowed(toolName, toolInput)) {
+      existing.count = (existing.count || 1) + 1;
+      state.tool_fingerprints[fp] = existing;
+
+      if (existing.count >= 5) {
+        saveState(state);
+        process.stderr.write(
+          '[OCD] BLOCKED: going in circles — ' + toolName + '(' + existing.args_summary + ') called ' + existing.count + ' times with identical args.\n' +
+          'Stop and reassess: read the error message, check the actual file, or ask for clarification.\n'
+        );
+        process.exit(2);
+      } else if (existing.count >= 3) {
+        out.push('[OCD] REPEAT WARNING: ' + toolName + '(' + existing.args_summary + ') called ' + existing.count + 'x with same args. Are you looping?');
+      }
+    }
+  }
+
+  // ── Edit-Without-Read ─────────────────────────────────────────────────────
+
+  if (toolName === 'Edit' || toolName === 'Write') {
+    const filePath = normPath(toolInput.file_path || '');
+    const filesRead = (state.files_read || []).map(normPath);
+    if (filePath && !filesRead.includes(filePath)) {
+      out.push('[OCD] CAUTION: Editing ' + basename(toolInput.file_path || '') + ' without a prior Read. Verify you have current file contents to avoid overwriting changes.');
+    }
+  }
+
+  // ── SQL-Without-Schema ─────────────────────────────────────────────────────
+
+  if (toolName === 'Bash') {
+    const cmd = (toolInput.command || '').toUpperCase();
+    const hasSql = /\b(SELECT|INSERT|UPDATE|DELETE)\b/.test(cmd) && /\bFROM\b/.test(cmd);
+    const hasSchema = /INFORMATION_SCHEMA/.test(cmd);
+
+    if (hasSql && !hasSchema) {
+      // Check if any prior schema query exists in fingerprints
+      const hasSchemaQuery = Object.values(state.tool_fingerprints || {}).some(fp =>
+        fp.tool_name === 'Bash' && (fp.args_summary || '').toUpperCase().includes('INFORMATION_SCHEMA')
+      );
+      if (!hasSchemaQuery) {
+        out.push('[OCD] SQL-WITHOUT-SCHEMA: Running SQL without a prior schema discovery. Per CLAUDE.md: discover table schema first with: SELECT column_name, data_type FROM information_schema.columns WHERE table_name = \'<table\'>;');
+      }
+    }
+  }
+
+  saveState(state);
+  // Max 2 warnings per invocation
+  if (out.length) console.log(out.slice(0, 2).join('\n'));
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
+// COMMAND: post-tool-record
+// Fires: PostToolUse hook (after every tool call)
+// Purpose: Log tool calls, track fingerprints, track reads
+// ══════════════════════════════════════════════════════════════════════════════
+
+function postToolRecord() {
+  const input = readStdinJSON();
+  const toolName = input.tool_name || '';
+  const toolInput = input.tool_input || {};
+  const state = loadState();
+
+  // ── Record Fingerprint (init only — count stays at 1 on first call) ────────
+
+  if (toolName) {
+    const fp = computeFingerprint(toolName, toolInput);
+    if (!state.tool_fingerprints[fp]) {
+      state.tool_fingerprints[fp] = {
+        tool_name: toolName,
+        args_summary: summarizeArgs(toolName, toolInput),
+        ts: Date.now(),
+        count: 1,
+      };
+    }
+    // count increments happen in pre-tool-guard, not here
+
+    // ── Track Read Ops ─────────────────────────────────────────────────────
+
+    if (toolName === 'Read' && toolInput.file_path) {
+      const np = normPath(toolInput.file_path);
+      if (!state.files_read.includes(np)) {
+        state.files_read.push(np);
+      }
+    }
+
+    // ── Track Grep/Glob as partial reads (if targeting a specific file) ───
+
+    if ((toolName === 'Grep' || toolName === 'Glob') && toolInput.path) {
+      const np = normPath(toolInput.path);
+      // Only track if path looks like a specific file (has extension)
+      if (/\.\w+$/.test(np) && !state.files_read.includes(np)) {
+        state.files_read.push(np);
+      }
+    }
+
+    // ── Insert into tool_call_log ──────────────────────────────────────────
+
+    const sessionId = process.env.CLAUDE_SESSION_ID || process.env.CURSOR_SESSION_ID || 'hook-' + process.pid;
+    safeRun(
+      'INSERT INTO tool_call_log (session_id, tool_name, args_fingerprint, args_summary, result_hash, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      sessionId,
+      toolName,
+      fp,
+      summarizeArgs(toolName, toolInput),
+      null,
+      Math.floor(Date.now() / 1000)
+    );
+
+    // ── Prune fingerprints if > 200 entries (remove oldest by timestamp) ──
+
+    const entries = Object.entries(state.tool_fingerprints);
+    if (entries.length > 200) {
+      entries.sort(([, a], [, b]) => a.ts - b.ts);
+      const toRemove = entries.slice(0, entries.length - 200);
+      for (const [key] of toRemove) {
+        delete state.tool_fingerprints[key];
+      }
+    }
+  }
+
+  saveState(state);
+  // No output — this is a silent recorder
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -529,16 +837,18 @@ const cmd = process.argv[2];
 
 async function dispatch() {
   switch (cmd) {
-    case 'session-start': await sessionStart(); break;
-    case 'prompt-guard':  promptGuard(); break;
-    case 'edit-guard':    editGuard(); break;
-    case 'stop-guard':    stopGuard(); break;
-    case 'session-digest': sessionDigest(); break;
-    case 'trace':         editGuard(); break;
-    case 'cross-sync':    promptGuard(); break;
-    case 'session-check': stopGuard(); break;
+    case 'session-start':    await sessionStart(); break;
+    case 'prompt-guard':     promptGuard(); break;
+    case 'pre-tool-guard':   preToolGuard(); break;
+    case 'post-tool-record': postToolRecord(); break;
+    case 'edit-guard':       editGuard(); break;
+    case 'stop-guard':       stopGuard(); break;
+    case 'session-digest':   sessionDigest(); break;
+    case 'trace':            editGuard(); break;
+    case 'cross-sync':       promptGuard(); break;
+    case 'session-check':    stopGuard(); break;
     default:
-      console.error('OCD Guardian commands: session-start | prompt-guard | edit-guard | stop-guard | session-digest');
+      console.error('OCD Guardian commands: session-start | prompt-guard | pre-tool-guard | post-tool-record | edit-guard | stop-guard | session-digest');
       process.exit(1);
   }
 }

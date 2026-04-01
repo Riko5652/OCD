@@ -411,4 +411,20 @@ export function migrate(db: Database) {
             now,
         );
     })();
+
+    // ── Session Guard: Tool Call Log ─────────────────────────────────
+    db.exec(`
+    CREATE TABLE IF NOT EXISTS tool_call_log (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_id TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      args_fingerprint TEXT NOT NULL,
+      args_summary TEXT,
+      result_hash TEXT,
+      created_at INTEGER NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS idx_tcl_session ON tool_call_log(session_id);
+    CREATE INDEX IF NOT EXISTS idx_tcl_fingerprint ON tool_call_log(args_fingerprint, created_at);
+    CREATE INDEX IF NOT EXISTS idx_tcl_created ON tool_call_log(created_at);
+    `);
 }
