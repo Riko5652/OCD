@@ -16,6 +16,7 @@ import { getSessionHealthCheck, getDirective } from './engine/session-coach.js';
 import { runTraceAudit, getAuditHistory } from './engine/trace-auditor.js';
 import { getProductionErrors } from './engine/error-bridge.js';
 import { listTemplates } from './engine/audit-templates.js';
+import { getSessionGuardReport, recordToolCall } from './engine/session-guard.js';
 
 initDb();
 
@@ -1168,6 +1169,54 @@ server.tool(
         }
 
         return { content: [{ type: 'text' as const, text: sections.join('\n') }] };
+    }
+);
+
+server.tool(
+    'get_session_guard_verdict',
+    'Check session health for overrun, tool call repetition, and anti-hallucination risks. Returns verdicts (allow/warn/block). Works from any IDE.',
+    {
+        session_id: z.string().optional().describe('Session ID (defaults to most recent)'),
+    },
+    async ({ session_id }) => {
+        const report = getSessionGuardReport(session_id);
+        let response = `Session Guard Report\n════════════════════\n`;
+        response += `Status: ${report.session_status.toUpperCase()}\n`;
+        response += `Turns: ${report.stats.turn_count} | Duration: ${report.stats.duration_min}min\n`;
+        response += `Unique tools: ${report.stats.unique_tools} | Repeated calls: ${report.stats.repeated_calls}\n\n`;
+
+        if (report.verdicts.length) {
+            response += `Verdicts:\n`;
+            for (const v of report.verdicts) {
+                response += `  [${v.action.toUpperCase()}] ${v.category}: ${v.message}\n`;
+            }
+        } else {
+            response += `No issues detected. Session is healthy.\n`;
+        }
+
+        if (report.stats.top_repetitions.length) {
+            response += `\nTop Repetitions:\n`;
+            for (const r of report.stats.top_repetitions) {
+                response += `  ${r.tool_name}: ${r.args_summary} (${r.count}x)\n`;
+            }
+        }
+
+        return { content: [{ type: 'text' as const, text: response }] };
+    }
+);
+
+server.tool(
+    'report_tool_call',
+    'Log a tool call for repetition tracking. Use from IDEs without hook-based interception.',
+    {
+        session_id: z.string().describe('Current session ID'),
+        tool_name: z.string().describe('Tool name (e.g., "Read", "Bash")'),
+        args_fingerprint: z.string().describe('Stable hash of tool arguments'),
+        args_summary: z.string().describe('Human-readable summary'),
+    },
+    async ({ session_id, tool_name, args_fingerprint, args_summary }) => {
+        recordToolCall(session_id, tool_name, args_fingerprint, args_summary);
+        return { content: [{ type: 'text' as const, text: `Recorded ${tool_name} call for session ${session_id}.` }] };
     }
 );
 
