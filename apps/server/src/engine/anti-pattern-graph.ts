@@ -187,13 +187,33 @@ export function getNegativeConstraints(task: string, limit = 5): NegativeConstra
     // Also detect mentioned libraries directly in the task
     const mentionedLibs = detectLibraries(task);
 
+    // Require specific task-type match OR explicit library mention in the task.
+    // Never return generic "general" constraints unless the library is explicitly
+    // mentioned in the user's task — prevents flagging core libraries (express,
+    // graphql) that merely appeared in a session that happened to fail.
+    const conditions: string[] = [];
+    const params: any[] = [];
+
+    // Match specific task type (not 'general')
+    conditions.push(`(task_type = ? AND task_type != 'general')`);
+    params.push(taskType);
+
+    // Match explicitly mentioned libraries (regardless of task type)
+    if (mentionedLibs.length > 0) {
+        conditions.push(`(failed_library IN (${mentionedLibs.map(() => '?').join(',')}))`);
+        params.push(...mentionedLibs);
+    }
+
+    // Only include patterns with meaningful failure count (not one-off noise)
+    const MIN_FAILURE_COUNT = 3;
+
     const rows = db.prepare(`
         SELECT * FROM anti_patterns
-        WHERE (task_type = ? OR task_type = 'general')
-           OR (failed_library IS NOT NULL AND failed_library IN (${mentionedLibs.map(() => '?').join(',') || "'__none__'"}))
+        WHERE (${conditions.join(' OR ')})
+          AND failure_count >= ?
         ORDER BY failure_count DESC, last_seen_at DESC
         LIMIT ?
-    `).all(taskType, ...mentionedLibs, limit) as any[];
+    `).all(...params, MIN_FAILURE_COUNT, limit) as any[];
 
     return rows.map(r => ({
         pattern_key: r.pattern_key,
