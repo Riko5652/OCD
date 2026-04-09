@@ -4,6 +4,62 @@ All notable changes to OCD (Omni Coder Dashboard) are documented here.
 
 ---
 
+## [5.6.0] — 2026-04-09
+
+### Added — Session Guard, Guard Effectiveness KPI & Context Stitching
+
+#### **OCD Session Guard** (`bin/ocd-hook.js`)
+- Pre-tool guard with session overrun detection (hard stop at 100 turns / 300 min), repetition detection (warn at 3 repeats, block at 5), edit-without-read warning, and SQL-without-schema warning
+- Post-tool record: silent tool call logger with fingerprinting, tracks file reads and partial reads from Grep/Glob, auto-prunes at 200 fingerprints
+- Upgraded prompt guard: override detection with `process.exit(2)` hard stop, repetition summary injection
+- New DB table: `tool_call_log` with 3 indexes
+
+#### **Guard Effectiveness KPI Matrix** (`engine/guard-effectiveness.ts`, `mcp-handoff.ts`)
+- Intervention tracking: records every block, warn, and override event with per-type token savings estimates
+- `computeGuardEffectiveness(days)` engine computes intervention counts, estimated tokens saved, quality impact delta, and daily bar chart data
+- New DB table: `guard_interventions`
+- New MCP tool: **`get_guard_effectiveness`** — formatted KPI report with daily bar chart
+- New REST endpoint: `GET /api/guard-effectiveness`
+
+#### **Context Stitching** (`mcp-handoff.ts`, `engine/session-coach.ts`, `engine/error-bridge.ts`)
+- Single-call session bootstrap replacing 5 separate MCP calls
+- Returns last session context, handoff notes, production errors, anti-pattern constraints, health baseline, and a DIRECTIVE (`CONTINUE` / `REDIRECT` / `NEW_SESSION`) with suggested prompt
+- Error bridge: fetches production errors from PM Dashboard via HTTP/PG
+- New MCP tool: **`get_context_stitch`** — cross-LLM session intelligence in one call
+
+#### **Cross-IDE Session Guard MCP Tools** (`mcp-handoff.ts`)
+- New MCP tool: **`get_session_guard_verdict`** — session guard status for any IDE
+- New MCP tool: **`report_tool_call`** — report tool calls from external IDEs into the guard system
+
+### Fixed
+- Dashboard data freshness: watcher callbacks now rebuild `daily_stats` + `project_index` and invalidate cache after single-adapter ingestion
+- LLM detection: `.env` loaded via `--env-file` in dev/start scripts so Azure OpenAI creds are available
+- MCP tool accuracy: audit entity extraction now finds camelCase, snake_case, and PascalCase identifiers instead of generic question words
+- Negative constraints no longer return overly broad results — excludes generic `task_type` matches, requires minimum failure count
+- State persistence: `loadState` now merges with defaults so new fields survive state reloads
+- Added 60s WAL checkpoint so external tools can read the database concurrently
+- Added Windows auto-start scripts (`bat` + `vbs`) for the dashboard
+
+### Security
+- Patched Vite arbitrary file read via WebSocket (GHSA-p9ff-h696-f583) — override `vite >=6.4.2`
+- Patched Vite path traversal in optimized deps `.map` handling (GHSA-4w7w-66w2-5vf9)
+- Patched 5 Hono vulnerabilities: cookie name validation, non-breaking space bypass, IPv4-mapped IPv6 mismatch, path traversal in `toSSG()`, middleware bypass via repeated slashes — override `hono >=4.12.12`
+- Patched `@hono/node-server` middleware bypass via repeated slashes — override `>=1.19.13`
+
+### Changed
+- MCP server expanded from **21 tools → 25 tools**
+- DB schema updated with 2 new tables: `tool_call_log`, `guard_interventions`
+- Version bumped to 5.6.0 across all packages
+
+### Dependencies
+- Merged `pnpm/action-setup` 4 → 5 (#39)
+- Merged `actions/download-artifact` 4 → 8 (#40)
+- Merged `recharts` 3.8.0 → 3.8.1 (#51)
+- Merged dev-dependencies group update (#55)
+- Closed `@vitejs/plugin-react` 6.0.1 (#43) — project intentionally stays on v4
+
+---
+
 ## [5.5.0] — 2026-03-30
 
 ### Added — Trace Auditing, Antigravity Intelligence & Cost Visibility

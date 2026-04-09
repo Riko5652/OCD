@@ -1,8 +1,8 @@
 {
   "name": "omni-coder-dashboard",
-  "version": "5.5.0",
+  "version": "5.6.0",
   "type": "module",
-  "description": "OCD (Omni Coder Dashboard) — An AI memory engine with real semantic embeddings, 21 MCP tools, cross-tool routing, trace auditing, and proactive IDE interception. 100% local, zero API keys required.",
+  "description": "OCD (Omni Coder Dashboard) — An AI memory engine with real semantic embeddings, 25 MCP tools, cross-tool routing, session guard, trace auditing, and proactive IDE interception. 100% local, zero API keys required.",
   "author": {
     "name": "Dor Lipetz",
     "url": "https://github.com/Riko5652"
@@ -70,7 +70,10 @@
       "esbuild": ">=0.25.0",
       "path-to-regexp": ">=8.4.0",
       "brace-expansion": ">=5.0.5",
-      "picomatch": ">=4.0.4"
+      "picomatch": ">=4.0.4",
+      "hono": ">=4.12.12",
+      "@hono/node-server": ">=1.19.13",
+      "vite": ">=6.4.2 <7"
     }
   },
   "scripts": {
