@@ -99,6 +99,26 @@ try {
       CREATE INDEX IF NOT EXISTS idx_gi_created ON guard_interventions(created_at);
     `);
   } catch {}
+  // Bootstrap governor tables if server hasn't run yet
+  try {
+    db.exec(`
+      CREATE TABLE IF NOT EXISTS governor_config (
+        project TEXT PRIMARY KEY,
+        thresholds TEXT NOT NULL,
+        updated_at INTEGER NOT NULL
+      );
+      CREATE TABLE IF NOT EXISTS governor_checkpoints (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        session_id TEXT NOT NULL,
+        triggered_at INTEGER NOT NULL,
+        triggers TEXT NOT NULL,
+        action_taken TEXT,
+        override INTEGER DEFAULT 0
+      );
+      CREATE INDEX IF NOT EXISTS idx_gc_session ON governor_checkpoints(session_id);
+      CREATE INDEX IF NOT EXISTS idx_gc_triggered ON governor_checkpoints(triggered_at);
+    `);
+  } catch {}
 } catch { process.exit(0); }
 
 // ══════════════════════════════════════════════════════════════════════════════
@@ -177,7 +197,55 @@ const TOKEN_SAVINGS = {
   schema_warn: 8000,
   overrun_warn: 5000,
   override_granted: 0,
+  governor_checkpoint: 20000,
+  governor_hard_stop: 80000,
 };
+
+/**
+ * Session Governor — configurable convergence checkpoints.
+ * Reads thresholds from governor_config table (or uses defaults).
+ * Returns { action: 'checkpoint'|'hard_stop', message } or null if OK.
+ */
+function governorCheck(turnCount, sessionMins, errorCount) {
+  // Load thresholds from DB (project-aware via OCD_PROJECT env)
+  const project = process.env.OCD_PROJECT || null;
+  let thresholds = {
+    checkpoint_turns: 180, hardstop_turns: 250,
+    checkpoint_output_tokens_k: 100, hardstop_output_tokens_k: 200,
+    checkpoint_duration_min: 180, hardstop_duration_min: 300,
+    checkpoint_errors: 15, checkpoint_output_amplification: 8,
+  };
+
+  try {
+    // Try project-specific config first, then global
+    let row = project
+      ? safeGet('SELECT thresholds FROM governor_config WHERE project = ?', project)
+      : null;
+    if (!row) row = safeGet('SELECT thresholds FROM governor_config WHERE project = ?', '__global__');
+    if (row) thresholds = { ...thresholds, ...JSON.parse(row.thresholds) };
+  } catch {}
+
+  // Hard stops
+  if (turnCount >= thresholds.hardstop_turns) {
+    return { action: 'hard_stop', message: `SESSION GOVERNOR: HARD STOP at ${turnCount} turns (limit: ${thresholds.hardstop_turns}). Push handoff note and stop.` };
+  }
+  if (sessionMins >= thresholds.hardstop_duration_min) {
+    return { action: 'hard_stop', message: `SESSION GOVERNOR: HARD STOP at ${sessionMins}min (limit: ${thresholds.hardstop_duration_min}min). Push handoff note and stop.` };
+  }
+
+  // Checkpoints
+  if (turnCount >= thresholds.checkpoint_turns) {
+    return { action: 'checkpoint', message: `SESSION GOVERNOR: CHECKPOINT at ${turnCount} turns (limit: ${thresholds.checkpoint_turns}). Summarize state, then: commit+TODOs, handoff, or stop for review.` };
+  }
+  if (sessionMins >= thresholds.checkpoint_duration_min) {
+    return { action: 'checkpoint', message: `SESSION GOVERNOR: CHECKPOINT at ${sessionMins}min (limit: ${thresholds.checkpoint_duration_min}min). Summarize state, then: commit+TODOs, handoff, or stop for review.` };
+  }
+  if (errorCount >= thresholds.checkpoint_errors) {
+    return { action: 'checkpoint', message: `SESSION GOVERNOR: CHECKPOINT - ${errorCount} errors (limit: ${thresholds.checkpoint_errors}). Too many retries. Summarize state, then: commit+TODOs, handoff, or stop for review.` };
+  }
+
+  return null;
+}
 
 /**
  * Record a guard intervention into the guard_interventions table.
@@ -469,6 +537,23 @@ function promptGuard() {
       'Hard stop: ' + state.turn_count + ' turns / ' + sessionMins + 'min — prompt-guard triggered');
     process.stderr.write(HARD_STOP_MESSAGE);
     process.exit(2);
+  }
+
+  // ── Session Governor ──────────────────────────────────────────────────────
+  // Configurable convergence checkpoints (higher thresholds than basic health)
+
+  if (!overrideActive) {
+    const govVerdict = governorCheck(state.turn_count, sessionMins, state.errors_seen || 0);
+    if (govVerdict) {
+      if (govVerdict.action === 'hard_stop') {
+        recordIntervention(state, 'governor_hard_stop', 'critical', null, 'block', govVerdict.message);
+        process.stderr.write(govVerdict.message + '\n');
+        process.exit(2);
+      } else if (govVerdict.action === 'checkpoint' && shouldAdvise(state, 'governor-checkpoint', 30)) {
+        out.push('[OCD] ' + govVerdict.message);
+        recordIntervention(state, 'governor_checkpoint', 'warning', null, 'warn', govVerdict.message);
+      }
+    }
   }
 
   // ── Session Health ─────────────────────────────────────────────────────────

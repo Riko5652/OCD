@@ -18,6 +18,7 @@ import { getProductionErrors } from './engine/error-bridge.js';
 import { listTemplates } from './engine/audit-templates.js';
 import { getSessionGuardReport, recordToolCall } from './engine/session-guard.js';
 import { computeGuardEffectiveness } from './engine/guard-effectiveness.js';
+import { getGovernorVerdict, getGovernorStats, setThresholds, recordCheckpoint, type SessionMetrics, type GovernorThresholds } from './engine/session-governor.js';
 
 initDb();
 
@@ -75,7 +76,7 @@ function getBillingCostsDaily(days = 7): { date: string; cost: number; requests:
 
 const server = new McpServer({
     name: 'AI Productivity Engine',
-    version: '5.4.0',
+    version: '5.5.0',
 });
 
 const vectorService = new VectorService();
@@ -1292,6 +1293,154 @@ server.tool(
     }
 );
 
+// ---- Session Governor Tools ----
+
+server.tool(
+    'get_governor_verdict',
+    'Session Governor: checks if the current session has hit convergence limits (turns, output tokens, duration, errors). Returns continue/checkpoint/hard_stop with actionable instructions. Call this periodically or when the session feels long.',
+    {
+        turns: z.number().optional().describe('Current turn count (if known from hook state)'),
+        output_tokens_k: z.number().optional().describe('Total output tokens in thousands'),
+        input_tokens_k: z.number().optional().describe('Total input tokens in thousands'),
+        duration_min: z.number().optional().describe('Session duration in minutes'),
+        error_count: z.number().optional().describe('Total errors this session'),
+        project: z.string().optional().describe('Project name for per-project thresholds'),
+    },
+    async ({ turns, output_tokens_k, input_tokens_k, duration_min, error_count, project }) => {
+        try {
+            // If metrics not provided, pull from most recent session
+            let metrics: SessionMetrics;
+            if (turns !== undefined) {
+                metrics = {
+                    turns: turns ?? 0,
+                    output_tokens_k: output_tokens_k ?? 0,
+                    input_tokens_k: input_tokens_k ?? 0,
+                    duration_min: duration_min ?? 0,
+                    error_count: error_count ?? 0,
+                };
+            } else {
+                const db = getDb();
+                const session = db.prepare(
+                    `SELECT total_turns, total_output_tokens, total_input_tokens, error_count, started_at, id
+                     FROM sessions ORDER BY started_at DESC LIMIT 1`
+                ).get() as any;
+                metrics = {
+                    turns: session?.total_turns ?? 0,
+                    output_tokens_k: Math.round((session?.total_output_tokens ?? 0) / 1000),
+                    input_tokens_k: Math.round((session?.total_input_tokens ?? 0) / 1000),
+                    duration_min: session ? Math.round((Date.now() - session.started_at) / 60000) : 0,
+                    error_count: session?.error_count ?? 0,
+                    session_id: session?.id,
+                };
+            }
+
+            const verdict = getGovernorVerdict(metrics, project || ACTIVE_PROJECT);
+
+            let txt = `Session Governor\n================\n`;
+            txt += `Action: ${verdict.action.toUpperCase()}\n`;
+            txt += `Metrics: ${metrics.turns} turns | ${metrics.output_tokens_k}K output | ${metrics.duration_min}min | ${metrics.error_count} errors\n`;
+
+            if (verdict.triggers.length) {
+                txt += `\nTriggers:\n`;
+                for (const t of verdict.triggers) {
+                    txt += `  [${t.severity.toUpperCase()}] ${t.metric}: ${t.current}/${t.threshold}\n`;
+                }
+            }
+
+            if (verdict.message) {
+                txt += `\n${verdict.message}\n`;
+            }
+
+            if (verdict.checkpoint_prompt) {
+                txt += `\nPrompt: ${verdict.checkpoint_prompt}\n`;
+            }
+
+            // Record checkpoint if triggered
+            if (verdict.action !== 'continue' && metrics.session_id) {
+                recordCheckpoint(metrics.session_id, verdict.triggers);
+            }
+
+            return { content: [{ type: 'text' as const, text: txt }] };
+        } catch (e: any) {
+            return { content: [{ type: 'text' as const, text: 'Error: ' + e.message }], isError: true };
+        }
+    }
+);
+
+server.tool(
+    'get_governor_stats',
+    'Session Governor statistics: checkpoint history, hard stops, overrides, most common triggers, current thresholds. Use to understand session governance patterns.',
+    {
+        days: z.number().optional().describe('Days to look back (default: 30)'),
+    },
+    async ({ days = 30 }) => {
+        try {
+            const stats = getGovernorStats(days, ACTIVE_PROJECT);
+            let txt = `Session Governor Stats (${days}d)\n${'='.repeat(35)}\n\n`;
+            txt += `Checkpoints: ${stats.total_checkpoints} | Hard stops: ${stats.total_hard_stops} | Overrides: ${stats.total_overrides}\n`;
+            if (stats.most_common_trigger) {
+                txt += `Most common trigger: ${stats.most_common_trigger}\n`;
+            }
+
+            txt += `\nCurrent Thresholds:\n`;
+            const th = stats.thresholds;
+            txt += `  Checkpoint: ${th.checkpoint_turns} turns | ${th.checkpoint_output_tokens_k}K output | ${th.checkpoint_duration_min}min | ${th.checkpoint_errors} errors\n`;
+            txt += `  Hard stop:  ${th.hardstop_turns} turns | ${th.hardstop_output_tokens_k}K output | ${th.hardstop_duration_min}min\n`;
+            txt += `  Output amplification limit: ${th.checkpoint_output_amplification}x\n`;
+
+            if (stats.recent.length) {
+                txt += `\nRecent Checkpoints:\n`;
+                for (const r of stats.recent.slice(0, 10)) {
+                    const date = new Date(r.triggered_at).toISOString().slice(0, 16);
+                    const triggers = r.triggers.map(t => t.metric).join(', ');
+                    const action = r.action_taken || 'hard_stop';
+                    const override = r.override ? ' [OVERRIDDEN]' : '';
+                    txt += `  ${date} | ${action} | triggers: ${triggers}${override}\n`;
+                }
+            }
+
+            return { content: [{ type: 'text' as const, text: txt }] };
+        } catch (e: any) {
+            return { content: [{ type: 'text' as const, text: 'Error: ' + e.message }], isError: true };
+        }
+    }
+);
+
+server.tool(
+    'set_governor_thresholds',
+    'Configure Session Governor thresholds for a project. Only set fields you want to override; others keep defaults.',
+    {
+        project: z.string().optional().describe('Project name (default: __global__)'),
+        checkpoint_turns: z.number().optional(),
+        hardstop_turns: z.number().optional(),
+        checkpoint_output_tokens_k: z.number().optional(),
+        hardstop_output_tokens_k: z.number().optional(),
+        checkpoint_duration_min: z.number().optional(),
+        hardstop_duration_min: z.number().optional(),
+        checkpoint_errors: z.number().optional(),
+        checkpoint_output_amplification: z.number().optional(),
+    },
+    async (params) => {
+        try {
+            const proj = params.project || '__global__';
+            const overrides: Partial<GovernorThresholds> = {};
+            if (params.checkpoint_turns !== undefined) overrides.checkpoint_turns = params.checkpoint_turns;
+            if (params.hardstop_turns !== undefined) overrides.hardstop_turns = params.hardstop_turns;
+            if (params.checkpoint_output_tokens_k !== undefined) overrides.checkpoint_output_tokens_k = params.checkpoint_output_tokens_k;
+            if (params.hardstop_output_tokens_k !== undefined) overrides.hardstop_output_tokens_k = params.hardstop_output_tokens_k;
+            if (params.checkpoint_duration_min !== undefined) overrides.checkpoint_duration_min = params.checkpoint_duration_min;
+            if (params.hardstop_duration_min !== undefined) overrides.hardstop_duration_min = params.hardstop_duration_min;
+            if (params.checkpoint_errors !== undefined) overrides.checkpoint_errors = params.checkpoint_errors;
+            if (params.checkpoint_output_amplification !== undefined) overrides.checkpoint_output_amplification = params.checkpoint_output_amplification;
+
+            setThresholds(proj, overrides);
+            return { content: [{ type: 'text' as const, text: `Governor thresholds updated for "${proj}". ${JSON.stringify(overrides)}` }] };
+        } catch (e: any) {
+            return { content: [{ type: 'text' as const, text: 'Error: ' + e.message }], isError: true };
+        }
+    }
+);
+
 function fmtTokenCount(n: number): string {
     if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
     if (n >= 1_000) return `${(n / 1_000).toFixed(0)}K`;
@@ -1301,7 +1450,7 @@ function fmtTokenCount(n: number): string {
 async function startMcp() {
     const transport = new StdioServerTransport();
     await server.connect(transport);
-    console.error('AI Productivity Engine MCP Server v5.4.0 running on stdio');
+    console.error('AI Productivity Engine MCP Server v5.5.0 running on stdio');
 }
 
 startMcp().catch(console.error);

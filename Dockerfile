@@ -1,4 +1,4 @@
-# OCD (Omni Coder Dashboard) v5.4.0 — Docker image
+# OCD (Omni Coder Dashboard) — Docker image
 # Runs the dashboard server with built client and local ONNX embeddings.
 # Your AI tool data is mounted from the host (read-only).
 #
@@ -6,13 +6,13 @@
 #   docker compose up
 #
 # Or manually:
-#   docker build -t ai-dashboard .
+#   docker build -t ocd-dashboard .
 #   docker run -p 3030:3030 \
-#     -v ~/.claude:/root/.claude:ro \
-#     -v ~/.cursor:/root/.cursor:ro \
-#     -v ~/.gemini:/root/.gemini:ro \
+#     -v ~/.claude:/home/dashboard/.claude:ro \
+#     -v ~/.cursor:/home/dashboard/.cursor:ro \
+#     -v ~/.gemini:/home/dashboard/.gemini:ro \
 #     -v $(pwd)/data:/app/data \
-#     ai-dashboard
+#     ocd-dashboard
 
 FROM node:20-alpine
 
@@ -21,25 +21,16 @@ RUN corepack enable && corepack prepare pnpm@latest --activate
 
 WORKDIR /app
 
-# Copy workspace config and package files first (cache layer)
+# Copy everything needed for install + build (source must be present
+# before `pnpm install` because the root package.json has a `prepare`
+# lifecycle script that runs `pnpm run build`).
 COPY pnpm-workspace.yaml pnpm-lock.yaml package.json ./
-COPY apps/server/package.json ./apps/server/
-COPY apps/client/package.json ./apps/client/
-
-# Install all dependencies (including devDependencies for build)
-RUN pnpm install --frozen-lockfile
-
-# Copy source
 COPY apps/ ./apps/
 COPY bin/ ./bin/
 COPY .env.example ./
 
-# Build client (Vite) and server (TypeScript)
-RUN pnpm --filter @ocd/client run build
-RUN pnpm --filter @ocd/server run build
-
-# Remove devDependencies after build
-RUN pnpm prune --prod
+# Install all dependencies — the prepare script builds client + server
+RUN pnpm install --frozen-lockfile
 
 # Data directory for SQLite DB
 RUN mkdir -p /app/data

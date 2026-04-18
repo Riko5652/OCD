@@ -1,4 +1,4 @@
-# OCD (Omni Coder Dashboard) v5.4.0 — Docker Compose
+# OCD (Omni Coder Dashboard) — Docker Compose
 #
 # Usage:
 #   docker compose up          # start in foreground
@@ -8,8 +8,6 @@
 # The dashboard auto-discovers your AI tool data from host mounts (read-only).
 # Semantic embeddings (ONNX) work out of the box — no API keys needed.
 # Database and model cache are persisted in ./data/
-
-version: '3.8'
 
 services:
   dashboard:
@@ -42,6 +40,7 @@ services:
       - PORT=3030
       - DB_PATH=/app/data/analytics.db
       - BIND=0.0.0.0   # required for Docker — container needs to accept external connections
+      - AUTH_TOKEN=${OCD_AUTH_TOKEN:-ocd-local-dev}
       # Ollama running on host (Docker Desktop: use host.docker.internal)
       # - OLLAMA_HOST=http://host.docker.internal:11434
       # - OLLAMA_MODEL=qwen2.5-coder:7b
