@@ -76,7 +76,9 @@ function sendOsNotification(title: string, body: string): void {
         if (os === 'linux') {
             execFile('notify-send', ['-t', '8000', title, body], { timeout: 3000 }, () => {});
         } else if (os === 'darwin') {
-            const script = `display notification "${body.replace(/"/g, '\\"')}" with title "${title.replace(/"/g, '\\"')}"`;
+            // Escape backslashes before quotes so trailing backslashes can't subvert the quote.
+            const esc = (s: string) => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            const script = `display notification "${esc(body)}" with title "${esc(title)}"`;
             execFile('osascript', ['-e', script], { timeout: 3000 }, () => {});
         } else if (os === 'win32') {
             const safeTitle = title.replace(/[`$"\\]/g, '').slice(0, 100);
