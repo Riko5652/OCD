@@ -120,6 +120,35 @@ export default function CommandCenter() {
                 <KpiCard label="Avg Quality" value={(g.avg_quality || 0).toFixed(0)} icon={<Trophy className="text-neonPink w-6 h-6" />} color="pink" sub={`${fmtTokens(g.total_lines_added)} lines generated`} />
             </div>
 
+            {/* Gross vs Effective token usage — shows billing-weight savings from cache */}
+            {g.total_gross != null && g.total_effective != null && (
+                <div className="glass-panel p-6 border-[#222]">
+                    <div className="flex items-center justify-between mb-4">
+                        <h3 className="text-xs font-black text-zinc-400 uppercase tracking-widest">Gross vs Effective Usage</h3>
+                        <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-wider">Billing weight: cache read 0.1× · cache write 1.25×</span>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div className="bg-[#050505] p-4 rounded-xl border border-[#222]">
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Gross (all tokens seen)</p>
+                            <p className="text-3xl font-black text-zinc-200 mt-2">{fmtTokens(g.total_gross)}</p>
+                            <p className="text-[10px] text-zinc-500 mt-2">input + output + cache read + cache write</p>
+                        </div>
+                        <div className="bg-[#050505] p-4 rounded-xl border border-neonGreen/30">
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Effective (billed equivalent)</p>
+                            <p className="text-3xl font-black text-neonGreen drop-shadow-glow-green mt-2">{fmtTokens(g.total_effective)}</p>
+                            <p className="text-[10px] text-zinc-500 mt-2">what you actually pay for</p>
+                        </div>
+                        <div className="bg-[#050505] p-4 rounded-xl border border-brand/30">
+                            <p className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Cache Discount</p>
+                            <p className="text-3xl font-black text-brand drop-shadow-glow-brand mt-2">
+                                {g.total_gross > 0 ? `${Math.round((1 - g.total_effective / g.total_gross) * 100)}%` : '0%'}
+                            </p>
+                            <p className="text-[10px] text-zinc-500 mt-2">{fmtTokens(Math.max(0, g.total_gross - g.total_effective))} tokens saved vs gross</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {/* Token Budget & Quick Wins — always visible (universal value) */}
             {tokenBudget && (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">

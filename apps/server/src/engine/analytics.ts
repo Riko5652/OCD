@@ -32,12 +32,23 @@ export function computeOverview() {
             SUM(total_input_tokens) as total_input,
             SUM(total_output_tokens) as total_output,
             SUM(total_cache_read) as total_cache,
+            SUM(total_cache_create) as total_cache_create,
             AVG(cache_hit_pct) as avg_cache_hit,
             AVG(quality_score) as avg_quality,
             SUM(code_lines_added) as total_lines_added,
             SUM(files_touched) as total_files_touched
         FROM sessions
     `).get() as any;
+
+    // Gross = every token the model saw. Effective = billing-weight equivalent
+    // (cache reads at 0.1×, cache writes at 1.25× — Anthropic-style pricing).
+    const input = global.total_input || 0;
+    const output = global.total_output || 0;
+    const cacheRead = global.total_cache || 0;
+    const cacheCreate = global.total_cache_create || 0;
+    global.total_gross = input + output + cacheRead + cacheCreate;
+    global.total_effective = Math.round(input + output + cacheRead * 0.1 + cacheCreate * 1.25);
+    global.effective_input = Math.round(input + cacheRead * 0.1 + cacheCreate * 1.25);
 
     const daily = db.prepare(`
         SELECT date(started_at / 1000, 'unixepoch') as date,
