@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { useApi } from '../hooks/useApi';
-import { Shield, Plus, ParkingCircle, CheckCircle, Pause, Play, Sparkles, Loader2 } from 'lucide-react';
+import { Shield, Plus, ParkingCircle, CheckCircle, Pause, Play, Sparkles, Loader2, Activity } from 'lucide-react';
 
 interface OcdTask {
     id: number;
@@ -23,6 +23,20 @@ interface ParkedIdea {
     promoted: number;
 }
 
+interface LiveSession {
+    id: string;
+    tool_id: string;
+    title: string | null;
+    tldr: string | null;
+    topic: string | null;
+    started_at: number;
+    ended_at: number | null;
+    total_turns: number;
+    total_output_tokens: number;
+    primary_model: string | null;
+    quality_score: number | null;
+}
+
 type Tab = 'focus' | 'parking' | 'history';
 
 export default function Gatekeeper() {
@@ -36,12 +50,14 @@ export default function Gatekeeper() {
     const { data: activeData, refetch: refetchActive } = useApi<{ task: OcdTask | null }>('/api/gatekeeper/task');
     const { data: allTasksData, refetch: refetchTasks } = useApi<{ tasks: OcdTask[] }>('/api/gatekeeper/tasks');
     const { data: parkingData, refetch: refetchParking } = useApi<{ ideas: ParkedIdea[] }>('/api/gatekeeper/parking');
+    const { data: activityData, refetch: refetchActivity } = useApi<{ sessions: LiveSession[]; has_active_task: boolean }>('/api/gatekeeper/activity');
 
     const refetchAll = useCallback(() => {
         refetchActive();
         refetchTasks();
         refetchParking();
-    }, [refetchActive, refetchTasks, refetchParking]);
+        refetchActivity();
+    }, [refetchActive, refetchTasks, refetchParking, refetchActivity]);
 
     const activeTask = activeData?.task || null;
     const allTasks = allTasksData?.tasks || [];
@@ -49,6 +65,13 @@ export default function Gatekeeper() {
     const unpromoted = parkedIdeas.filter(i => !i.promoted);
     const completedTasks = allTasks.filter(t => t.status === 'completed');
     const pausedTasks = allTasks.filter(t => t.status === 'paused');
+    const liveSessions = activityData?.sessions || [];
+
+    async function promoteSession(s: LiveSession) {
+        const title = s.title?.trim() || s.topic?.trim() || `Session from ${s.tool_id}`;
+        const description = s.tldr?.trim() || undefined;
+        await apiPost('/api/gatekeeper/task', { title, description, project: s.tool_id });
+    }
 
     async function apiPost(url: string, body: Record<string, unknown>) {
         setBusy(true);
@@ -129,6 +152,49 @@ export default function Gatekeeper() {
             {/* Focus Tab */}
             {tab === 'focus' && (
                 <div className="space-y-6">
+                    {/* Live activity — what OCD is seeing across all ingested tools */}
+                    {liveSessions.length > 0 && (
+                        <div className="glass-panel p-5">
+                            <p className="text-xs font-bold text-neonBlue uppercase tracking-wider mb-3 flex items-center gap-2">
+                                <Activity className="w-3.5 h-3.5" /> Live Activity — last 24h
+                                <span className="ml-1 px-1.5 py-0.5 text-[10px] rounded-full bg-neonBlue/10 text-neonBlue border border-neonBlue/20">{liveSessions.length}</span>
+                            </p>
+                            <div className="space-y-2">
+                                {liveSessions.slice(0, 5).map(s => {
+                                    const isLive = !s.ended_at || Date.now() - s.ended_at < 10 * 60 * 1000;
+                                    return (
+                                        <div key={s.id} className="flex items-center justify-between p-3 rounded-lg bg-[#0a0a0a] border border-[#1a1a1a] hover:border-neonBlue/30 transition-colors group">
+                                            <div className="flex-1 min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    {isLive && (
+                                                        <span className="relative flex h-2 w-2">
+                                                            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-neonGreen opacity-75" />
+                                                            <span className="relative inline-flex rounded-full h-2 w-2 bg-neonGreen" />
+                                                        </span>
+                                                    )}
+                                                    <span className="text-[10px] text-zinc-500 font-mono uppercase">{s.tool_id}</span>
+                                                    <span className="text-[10px] text-zinc-600">{s.total_turns} turns · {Math.round(s.total_output_tokens / 1000)}K out</span>
+                                                    {s.primary_model && <span className="text-[10px] text-zinc-600 font-mono">{s.primary_model}</span>}
+                                                </div>
+                                                <p className="text-sm font-medium text-white truncate mt-1">{s.title || s.topic || '(untitled session)'}</p>
+                                                {s.tldr && <p className="text-[11px] text-zinc-500 truncate mt-0.5">{s.tldr}</p>}
+                                            </div>
+                                            <button onClick={() => promoteSession(s)} disabled={busy}
+                                                className="ml-3 px-3 py-1.5 rounded-md text-[10px] font-bold bg-brand/10 text-brand border border-brand/20 hover:bg-brand/20 transition-all opacity-0 group-hover:opacity-100 flex items-center gap-1 disabled:opacity-50 shrink-0">
+                                                <Sparkles className="w-3 h-3" /> Set as task
+                                            </button>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                            {!activityData?.has_active_task && (
+                                <p className="text-[10px] text-zinc-600 mt-3">
+                                    OCD sees this activity from ingested transcripts. Set one as the active task, or ignore and OCD will keep observing.
+                                </p>
+                            )}
+                        </div>
+                    )}
+
                     {/* Current active task */}
                     {activeTask ? (
                         <div className="glass-panel p-6 border-l-4 border-l-neonGreen">
@@ -164,7 +230,11 @@ export default function Gatekeeper() {
                         <div className="glass-panel p-8 text-center border border-dashed border-zinc-700">
                             <Shield className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
                             <p className="text-zinc-400 text-sm">No active task. Agents are running without scope constraints.</p>
-                            <p className="text-zinc-600 text-xs mt-1">Set a task below to enable the Gatekeeper.</p>
+                            <p className="text-zinc-600 text-xs mt-1">
+                                {liveSessions.length > 0
+                                    ? 'Promote a Live Activity above, or create a new task below.'
+                                    : 'Set a task below to enable the Gatekeeper.'}
+                            </p>
                         </div>
                     )}
 

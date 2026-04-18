@@ -5,6 +5,26 @@ import { getDb } from '../db/index.js';
 const VALID_STATUSES = ['active', 'paused', 'completed'] as const;
 
 export default async function gatekeeperRoutes(fastify: FastifyInstance) {
+    // GET /api/gatekeeper/activity — what agents are actually doing right now,
+    // derived from ingested session transcripts. Answers "what is OCD seeing?"
+    // even when no task has been manually set.
+    fastify.get('/api/gatekeeper/activity', async () => {
+        const db = getDb();
+        const since = Date.now() - 24 * 3600 * 1000;
+        const recent = db.prepare(`
+            SELECT id, tool_id, title, tldr, topic, started_at, ended_at,
+                total_turns, total_output_tokens, primary_model, quality_score
+            FROM sessions
+            WHERE started_at > ?
+            ORDER BY COALESCE(ended_at, started_at) DESC
+            LIMIT 10
+        `).all(since);
+        const activeTask = db.prepare(
+            `SELECT id FROM ocd_tasks WHERE status = 'active' ORDER BY updated_at DESC LIMIT 1`
+        ).get() as { id: number } | undefined;
+        return { sessions: recent, has_active_task: !!activeTask };
+    });
+
     // GET /api/gatekeeper/task — current active task
     fastify.get('/api/gatekeeper/task', async () => {
         const db = getDb();
