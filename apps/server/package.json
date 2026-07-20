@@ -13,7 +13,7 @@
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@fastify/rate-limit": "^10.0.0",
+    "@fastify/rate-limit": "^11.1.0",
     "@fastify/static": "^9.1.1",
     "@fastify/swagger": "^9.7.0",
     "@fastify/swagger-ui": "^5.2.5",
